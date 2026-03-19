@@ -13,6 +13,7 @@ from server.utils.auth_middleware import get_db, get_required_user
 from src.knowledge.indexing import process_file_to_markdown
 from src.knowledge.utils import calculate_content_hash
 from src.plugins.document_processor_base import DocumentProcessorException
+from src.services.openviking_service import openviking_service
 from src.storage.minio import aupload_file_to_minio, get_minio_client
 from src.storage.postgres.models_business import User, UserResume
 from src.utils import logger
@@ -607,6 +608,12 @@ async def upload_my_resume(
         await db.commit()
         await db.refresh(resume_record)
 
+        if openviking_service.is_enabled():
+            try:
+                await openviking_service.sync_resume(resume_record)
+            except Exception as exc:
+                logger.warning("Sync resume to OpenViking failed for user %s: %s", current_user.user_id, exc)
+
         return {
             "message": "success",
             "resume": _serialize_resume(resume_record),
@@ -643,6 +650,13 @@ async def delete_my_resume(
     try:
         minio_client = get_minio_client()
         await minio_client.adelete_file(resume_record.bucket_name, resume_record.object_name)
+
+        if openviking_service.is_enabled():
+            try:
+                await openviking_service.remove_resume(resume_record)
+            except Exception as exc:
+                logger.warning("Remove resume from OpenViking failed for user %s: %s", current_user.user_id, exc)
+
         await db.delete(resume_record)
         await db.commit()
         return {"message": "success"}

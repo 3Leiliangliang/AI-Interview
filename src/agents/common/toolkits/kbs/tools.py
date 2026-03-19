@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from src import knowledge_base
+from src.services.openviking_service import openviking_service
 from src.storage.postgres.manager import pg_manager
 from src.storage.postgres.models_business import UserResume
 from src.utils import logger
@@ -219,18 +220,39 @@ async def query_kb(kb_name: str, query_text: str, file_name: str | None = None, 
         if resume is None:
             return "未找到匹配的简历文件"
 
+        if openviking_service.is_enabled():
+            try:
+                return await openviking_service.query_resume(resume, query_text)
+            except Exception as e:
+                logger.error("OpenViking 检索“我的简历”失败: %s", e)
+                return f"OpenViking 检索“我的简历”失败: {str(e)}"
+
         return _build_resume_kb_result(resume, query_text)
 
     retrievers = knowledge_base.get_retrievers()
 
+    target_db_id = None
     target_info = None
-    for _, info in retrievers.items():
+    for db_id, info in retrievers.items():
         if info["name"] == kb_name:
+            target_db_id = db_id
             target_info = info
             break
 
     if not target_info:
         return f"知识库“{kb_name}”不存在"
+
+    if openviking_service.is_enabled() and target_db_id:
+        try:
+            return await openviking_service.query_database(
+                db_id=target_db_id,
+                kb_name=kb_name,
+                query_text=query_text,
+                file_name=file_name,
+            )
+        except Exception as e:
+            logger.error("OpenViking 知识库检索失败: %s", e)
+            return f"OpenViking 知识库检索失败: {str(e)}"
 
     try:
         retriever = target_info["retriever"]
