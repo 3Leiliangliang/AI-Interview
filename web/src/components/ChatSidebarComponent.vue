@@ -1,18 +1,22 @@
 <template>
   <div
     class="chat-sidebar"
-    :class="{ 'sidebar-open': chatUIStore.isSidebarOpen, 'no-transition': isInitialRender }"
+    :class="{
+      'sidebar-open': chatUIStore.isSidebarOpen,
+      'no-transition': isInitialRender,
+      'sidebar-right': placement === 'right'
+    }"
   >
     <div class="sidebar-content">
       <div class="sidebar-header">
-        <div class="header-title">{{ branding.name }}</div>
+        <div class="header-title">{{ title || branding.name }}</div>
         <div class="header-actions">
           <div
             class="toggle-sidebar nav-btn"
             v-if="chatUIStore.isSidebarOpen"
             @click="toggleCollapse"
           >
-            <PanelLeftClose size="20" color="var(--gray-800)" />
+            <component :is="collapseIcon" size="20" color="var(--gray-800)" />
           </div>
         </div>
       </div>
@@ -25,7 +29,7 @@
         >
           <LoaderCircle v-if="chatUIStore.creatingNewChat" size="18" class="loading-icon" />
           <MessageSquarePlus v-else size="18" />
-          创建新对话
+          {{ createChatText }}
         </button>
       </div>
       <div class="conversation-list">
@@ -79,7 +83,7 @@
             </div>
           </div>
         </template>
-        <div v-else class="empty-list">暂无对话历史</div>
+        <div v-else class="empty-list">{{ emptyText }}</div>
         <div v-if="hasMoreChats" class="load-more-wrapper">
           <a-button
             type="text"
@@ -100,6 +104,7 @@ import { computed, h, ref } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import {
   PanelLeftClose,
+  PanelRightClose,
   MessageSquarePlus,
   LoaderCircle,
   Pin,
@@ -155,6 +160,22 @@ const props = defineProps({
   isLoadingMore: {
     type: Boolean,
     default: false
+  },
+  title: {
+    type: String,
+    default: ''
+  },
+  createChatText: {
+    type: String,
+    default: '创建新对话'
+  },
+  emptyText: {
+    type: String,
+    default: '暂无对话历史'
+  },
+  placement: {
+    type: String,
+    default: 'left'
   }
 })
 
@@ -182,6 +203,10 @@ const sortedChats = computed(() => {
     return dateA.diff(dateB)
   })
 })
+
+const collapseIcon = computed(() =>
+  props.placement === 'right' ? PanelRightClose : PanelLeftClose
+)
 
 const createNewChat = () => {
   emit('create-chat')
@@ -281,6 +306,10 @@ const togglePin = (chatId) => {
     transform: translateX(-12px);
   }
 
+  &.sidebar-right:not(.sidebar-open) .sidebar-content {
+    transform: translateX(12px);
+  }
+
   &.no-transition {
     transition: none !important;
   }
@@ -289,6 +318,11 @@ const togglePin = (chatId) => {
     width: 280px;
     max-width: 300px;
     border-right: 1px solid var(--gray-200);
+  }
+
+  &.sidebar-right.sidebar-open {
+    border-right: none;
+    border-left: 1px solid var(--gray-200);
   }
 
   .sidebar-header {

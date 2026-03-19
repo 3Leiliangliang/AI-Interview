@@ -276,6 +276,39 @@ def _ensure_full_msg(full_msg: AIMessage | None, accumulated_content: list[str])
     return full_msg
 
 
+def _build_effective_agent_config(agent_id: str, config_item, runtime_config: dict | None) -> dict:
+    raw_config = config_item.config_json or {}
+    stored_context = raw_config.get("context", raw_config)
+    effective_config = dict(stored_context) if isinstance(stored_context, dict) else {}
+
+    context_overrides = (runtime_config or {}).get("context_overrides") or {}
+    if isinstance(context_overrides, dict):
+        effective_config.update(
+            {
+                key: value
+                for key, value in context_overrides.items()
+                if value is not None and str(value).strip() != ""
+            }
+        )
+
+    if agent_id == "InterviewAgent":
+        from src.agents.interview_agent.context import InterviewContext
+
+        target_position, interview_round = InterviewContext.normalize_runtime_values(
+            effective_config.get("target_position"),
+            effective_config.get("interview_round"),
+        )
+        effective_config["target_position"] = target_position
+        effective_config["interview_round"] = interview_round
+        effective_config["system_prompt"] = InterviewContext.build_runtime_system_prompt(
+            effective_config.get("system_prompt"),
+            target_position=target_position,
+            interview_round=interview_round,
+        )
+
+    return effective_config
+
+
 async def _resolve_agent_config(
     db, agent_id: str, department_id, user_id: str, agent_config_id: int | str | None
 ) -> tuple:
@@ -399,7 +432,7 @@ async def stream_agent_chat(
         thread_id = str(uuid.uuid4())
         logger.warning(f"No thread_id provided, generated new thread_id: {thread_id}")
 
-    agent_config = (config_item.config_json or {}).get("context", {})
+    agent_config = _build_effective_agent_config(agent_id, config_item, config)
     input_context = {
         "user_id": user_id,
         "thread_id": thread_id,
@@ -584,12 +617,13 @@ async def stream_agent_resume(
     agent_config_id = (config or {}).get("agent_config_id")
     config_item, agent_config_id = await _resolve_agent_config(db, agent_id, department_id, user_id, agent_config_id)
 
+    agent_config = _build_effective_agent_config(agent_id, config_item, config)
     input_context = {
         "user_id": user_id,
         "thread_id": thread_id,
         "department_id": department_id,
         "agent_config_id": agent_config_id,
-        "agent_config": (config_item.config_json or {}).get("context", config_item.config_json or {}),
+        "agent_config": agent_config,
     }
     context = agent.context_schema()
     agent_config = input_context.get("agent_config")

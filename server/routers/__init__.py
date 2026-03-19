@@ -8,6 +8,7 @@ from server.routers.knowledge_router import knowledge
 from server.routers.evaluation_router import evaluation
 from server.routers.mcp_router import mcp
 from server.routers.mindmap_router import mindmap
+from server.routers.resume_router import resume
 from server.routers.skill_router import skills
 from server.routers.system_router import system
 from server.routers.task_router import tasks
@@ -23,6 +24,7 @@ router.include_router(department)
 router.include_router(knowledge)
 router.include_router(evaluation)
 router.include_router(mindmap)
+router.include_router(resume)
 router.include_router(tasks)
 router.include_router(mcp)
 router.include_router(skills)

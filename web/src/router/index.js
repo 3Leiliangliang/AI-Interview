@@ -38,10 +38,33 @@ const router = createRouter({
           meta: { keepAlive: true, requiresAuth: true }
         },
         {
+          path: 'interview',
+          name: 'AgentInterviewComp',
+          component: () => import('../views/InterviewSessionView.vue'),
+          meta: { keepAlive: false, requiresAuth: true }
+        },
+        {
           path: ':agent_id',
-          name: 'AgentCompWithId',
-          component: () => import('../views/AgentView.vue'),
-          meta: { keepAlive: true, requiresAuth: true }
+          redirect: '/agent'
+        }
+      ]
+    },
+    {
+      path: '/resume',
+      name: 'resume',
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'ResumeListComp',
+          component: () => import('../views/MyResumeView.vue'),
+          meta: { keepAlive: false, requiresAuth: true }
+        },
+        {
+          path: ':resume_id',
+          name: 'ResumeDetailComp',
+          component: () => import('../views/ResumeDetailView.vue'),
+          meta: { keepAlive: false, requiresAuth: true }
         }
       ]
     },

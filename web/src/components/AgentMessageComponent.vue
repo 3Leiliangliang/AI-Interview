@@ -52,6 +52,8 @@
 
       <div v-else-if="parsedData.reasoning_content" class="empty-block"></div>
 
+      <InterviewScorePanel v-if="parsedData.scorecard" :scorecard="parsedData.scorecard" />
+
       <!-- 错误提示块 -->
       <div v-if="displayError" class="error-hint">
         <span v-if="getErrorMessage">{{ getErrorMessage }}</span>
@@ -110,6 +112,7 @@
 import { computed, ref } from 'vue'
 import { CaretRightOutlined, ThunderboltOutlined, LoadingOutlined } from '@ant-design/icons-vue'
 import RefsComponent from '@/components/RefsComponent.vue'
+import InterviewScorePanel from '@/components/InterviewScorePanel.vue'
 import { Copy, Check } from 'lucide-vue-next'
 import { ToolCallRenderer } from '@/components/ToolCallingResult'
 import { useAgentStore } from '@/stores/agent'
@@ -258,32 +261,116 @@ const validToolCalls = computed(() => {
   })
 })
 
-const parsedData = computed(() => {
-  // Start with default values from the prop to avoid mutation.
-  let content = props.message.content.trim() || ''
-  let reasoning_content = props.message.additional_kwargs?.reasoning_content || ''
+const normalizeScoreValue = (value) => {
+  const score = Number(value)
+  if (!Number.isFinite(score)) return null
+  return Math.max(0, Math.min(100, Math.round(score)))
+}
 
-  if (reasoning_content) {
-    return {
-      content,
-      reasoning_content
-    }
+const normalizeStringList = (value) => {
+  if (!Array.isArray(value)) return []
+  return value.map((item) => String(item || '').trim()).filter(Boolean)
+}
+
+const normalizeDimensions = (value) => {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (!item || typeof item !== 'object') return null
+        const name = String(item.name || '').trim()
+        const score = normalizeScoreValue(item.score)
+        return name && score !== null ? { name, score } : null
+      })
+      .filter(Boolean)
   }
 
-  // Regex to find <think>...</think> or an unclosed <think>... at the end of the string.
-  const thinkRegex = /<think>(.*?)<\/think>|<think>(.*?)$/s
-  const thinkMatch = content.match(thinkRegex)
+  if (value && typeof value === 'object') {
+    return Object.entries(value)
+      .map(([name, score]) => {
+        const normalizedScore = normalizeScoreValue(score)
+        return normalizedScore !== null ? { name: String(name).trim(), score: normalizedScore } : null
+      })
+      .filter((item) => item?.name)
+  }
 
-  if (thinkMatch) {
-    // The captured reasoning is in either group 1 (closed tag) or 2 (unclosed tag).
-    reasoning_content = (thinkMatch[1] || thinkMatch[2] || '').trim()
-    // Remove the entire matched <think> block from the original content.
-    content = content.replace(thinkMatch[0], '').trim()
+  return []
+}
+
+const normalizeScorecard = (value) => {
+  if (!value || typeof value !== 'object') return null
+
+  const normalized = {
+    overall: normalizeScoreValue(value.overall ?? value.total_score ?? value.total),
+    role: String(value.role || value.position || '').trim(),
+    round: String(value.round || '').trim(),
+    dimensions: normalizeDimensions(value.dimensions),
+    strengths: normalizeStringList(value.strengths),
+    risks: normalizeStringList(value.risks),
+    suggestions: normalizeStringList(value.suggestions),
+    summary: String(value.summary || '').trim()
+  }
+
+  if (
+    normalized.overall === null &&
+    !normalized.role &&
+    !normalized.round &&
+    !normalized.dimensions.length &&
+    !normalized.strengths.length &&
+    !normalized.risks.length &&
+    !normalized.suggestions.length &&
+    !normalized.summary
+  ) {
+    return null
+  }
+
+  return normalized
+}
+
+const extractInterviewScorecard = (content) => {
+  if (!content) return { content: '', scorecard: null }
+
+  const match = content.match(/```interview_scorecard\s*([\s\S]*?)```/i)
+  if (!match) {
+    return { content, scorecard: null }
+  }
+
+  let scorecard = null
+  try {
+    scorecard = normalizeScorecard(JSON.parse(match[1].trim()))
+  } catch (error) {
+    console.warn('Failed to parse interview scorecard JSON:', error)
   }
 
   return {
-    content,
-    reasoning_content
+    content: content.replace(match[0], '').replace(/\n{3,}/g, '\n\n').trim(),
+    scorecard
+  }
+}
+
+const parsedData = computed(() => {
+  // Start with default values from the prop to avoid mutation.
+  let content = typeof props.message.content === 'string' ? props.message.content.trim() : ''
+  let reasoning_content = props.message.additional_kwargs?.reasoning_content || ''
+
+  if (!reasoning_content) {
+    // Regex to find <think>...</think> or an unclosed <think>... at the end of the string.
+    const thinkRegex = /<think>(.*?)<\/think>|<think>(.*?)$/s
+    const thinkMatch = content.match(thinkRegex)
+
+    if (thinkMatch) {
+      // The captured reasoning is in either group 1 (closed tag) or 2 (unclosed tag).
+      reasoning_content = (thinkMatch[1] || thinkMatch[2] || '').trim()
+      // Remove the entire matched <think> block from the original content.
+      content = content.replace(thinkMatch[0], '').trim()
+    }
+  }
+
+  const scorecardResult = extractInterviewScorecard(content)
+
+  return {
+    content: scorecardResult.content,
+    reasoning_content,
+    scorecard: scorecardResult.scorecard
   }
 })
 </script>

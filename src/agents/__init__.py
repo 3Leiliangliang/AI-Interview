@@ -12,6 +12,7 @@ class AgentManager(metaclass=SingletonMeta):
     def __init__(self):
         self._classes = {}
         self._instances = {}  # 存储已创建的 agent 实例
+        self._disabled_runtime_modules = {"chatbot", "deep_agent", "reporter"}
 
     def register_agent(self, agent_class):
         self._classes[agent_class.__name__] = agent_class
@@ -59,6 +60,9 @@ class AgentManager(metaclass=SingletonMeta):
             # logger.info(f"尝试导入模块：{item}")
             # 跳过非目录、common 目录、__pycache__ 等
             if not item.is_dir() or item.name.startswith("_") or item.name == "common":
+                continue
+            if item.name in self._disabled_runtime_modules:
+                logger.info(f"跳过已停用的智能体模块: {item.name}")
                 continue
 
             # 检查是否有 __init__.py 文件

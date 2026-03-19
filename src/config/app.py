@@ -70,7 +70,7 @@ class Config(BaseModel):
     # ============================================================
     # 智能体配置
     # ============================================================
-    default_agent_id: str = Field(default="ChatbotAgent", description="默认智能体ID")
+    default_agent_id: str = Field(default="InterviewAgent", description="默认智能体ID")
 
     # ============================================================
     # 模型信息（只读，不持久化）
@@ -149,10 +149,10 @@ class Config(BaseModel):
                 else:
                     logger.warning(f"Unknown config key: {key}")
 
-            # 确保默认智能体为 ChatbotAgent（兼容旧配置）
+            # 确保默认智能体为 InterviewAgent（兼容旧配置）
             if not self.default_agent_id:
-                self.default_agent_id = "ChatbotAgent"
-                logger.info("default_agent_id not set, using default: ChatbotAgent")
+                self.default_agent_id = "InterviewAgent"
+                logger.info("default_agent_id not set, using default: InterviewAgent")
 
         except Exception as e:
             logger.error(f"Failed to load config from {self._config_file}: {e}")

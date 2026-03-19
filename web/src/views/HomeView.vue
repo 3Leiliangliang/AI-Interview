@@ -1,12 +1,10 @@
 <template>
-  <div class="home-container">
-    <!-- 加载中状态 -->
+  <div class="home-page">
     <div v-if="isLoading" class="loading-container">
       <a-spin size="large" />
       <p class="loading-text">正在连接服务...</p>
     </div>
 
-    <!-- 错误状态 -->
     <div v-else-if="error" class="error-container">
       <a-result status="error" :title="error.title" :sub-title="error.message">
         <template #extra>
@@ -15,130 +13,244 @@
       </a-result>
     </div>
 
-    <!-- 正常内容 -->
     <template v-else>
-      <div class="hero-section">
-        <div class="glass-header">
-          <div class="logo">
-            <img
-              :src="infoStore.organization.logo"
-              :alt="infoStore.organization.name"
-              class="logo-img"
-            />
-            <span class="logo-text">{{ infoStore.organization.name }}</span>
-          </div>
-          <div class="header-actions">
-            <div class="github-link">
-              <a href="https://github.com/xerrors/AI-interview" target="_blank">
-                <svg height="20" width="20" viewBox="0 0 16 16" version="1.1">
-                  <path
-                    fill-rule="evenodd"
-                    d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
-                  ></path>
-                </svg>
-              </a>
-            </div>
-            <UserInfoComponent :show-button="true" />
+      <header class="page-header">
+        <div class="brand">
+          <img
+            v-if="infoStore.organization.logo"
+            :src="infoStore.organization.logo"
+            :alt="infoStore.organization.name"
+            class="brand-logo"
+          />
+          <div class="brand-meta">
+            <div class="brand-name">{{ infoStore.organization.name || 'AI Interview' }}</div>
+            <div class="brand-desc">AI 模拟面试系统</div>
           </div>
         </div>
+        <UserInfoComponent :show-button="true" />
+      </header>
 
-        <div class="hero-layout">
+      <main class="page-main">
+        <section class="hero-section">
           <div class="hero-content">
-            <h1 class="title">{{ infoStore.branding.title }}</h1>
-            <p class="subtitle">{{ infoStore.branding.subtitle }}</p>
-            <!-- <p class="description">{{ infoStore.branding.description }}</p> -->
+            <div class="hero-badge">
+              <Sparkles :size="14" />
+              <span>面向真实求职场景的 AI 面试体验</span>
+            </div>
+
+            <h1 class="hero-title">
+              上传简历、选择岗位与轮次，
+              <br />
+              立即开始一轮模拟面试
+            </h1>
+
+            <p class="hero-subtitle">
+              系统会先读取你的简历，再由面试官 Agent 自动发起提问。支持岗位配置、轮次切换、逐轮追问、结束评分与面试记录查看。
+            </p>
+
             <div class="hero-actions">
-              <button class="button-base primary" @click="goToChat">开始对话</button>
-              <a
-                class="button-base secondary"
-                href="https://xerrors.github.io/AI-interview/"
-                target="_blank"
-                >查看文档</a
-              >
+              <button class="primary-btn" type="button" @click="goToInterview">
+                <PlayCircle :size="18" />
+                <span>开始模拟面试</span>
+              </button>
+              <button class="secondary-btn" type="button" @click="goToResumeCenter">
+                <FileText :size="18" />
+                <span>我的简历</span>
+              </button>
             </div>
-          </div>
-          <div class="insight-panel" v-if="featureCards.length">
-            <div class="stat-card" v-for="card in featureCards" :key="card.label">
-              <div class="stat-headline">
-                <span class="stat-icon" v-if="card.icon">
-                  <component :is="card.icon" />
-                </span>
-                <p class="stat-value">{{ card.value }}</p>
+
+            <div class="hero-points">
+              <div v-for="item in heroPoints" :key="item" class="hero-point">
+                <CheckCircle2 :size="16" />
+                <span>{{ item }}</span>
               </div>
-              <p class="stat-label">{{ card.label }}</p>
-              <p class="stat-description">{{ card.description }}</p>
             </div>
           </div>
-        </div>
-      </div>
 
-      <div class="section action-section" v-if="actionLinks.length">
-        <div class="action-grid">
-          <a
-            v-for="action in actionLinks"
-            :key="action.name"
-            class="action-card"
-            :href="action.url"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <span class="action-icon" v-if="action.icon">
-              <component :is="action.icon" />
-            </span>
-            <div class="action-meta">
-              <p class="action-title">{{ action.name }}</p>
-              <p class="action-url">{{ action.url }}</p>
+          <div class="hero-panel">
+            <div class="panel-card primary-card">
+              <div class="panel-label">当前系统能力</div>
+              <div class="panel-title">AI 面试官 + 简历知识库</div>
+              <p class="panel-text">
+                当前会话可直接读取上传简历；如果当前线程没有附件，面试官会继续从“我的简历”中读取最近上传的简历内容。
+              </p>
             </div>
-          </a>
-        </div>
-      </div>
 
-      <ProjectOverview />
+            <div class="panel-grid">
+              <div v-for="item in stats" :key="item.label" class="panel-card stat-card">
+                <div class="stat-icon">
+                  <component :is="item.icon" :size="18" />
+                </div>
+                <div class="stat-meta">
+                  <div class="stat-value">{{ item.value }}</div>
+                  <div class="stat-label">{{ item.label }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
-      <footer class="footer">
-        <div class="footer-content">
-          <p class="copyright">{{ infoStore.footer?.copyright || '© 2025 All rights reserved' }}</p>
-        </div>
+        <section class="section-block">
+          <div class="section-heading">
+            <div class="section-title">你现在可以怎么用</div>
+            <div class="section-desc">首页、配置页和面试页已经围绕模拟面试重构。</div>
+          </div>
+
+          <div class="feature-grid">
+            <div v-for="item in featureCards" :key="item.title" class="feature-card">
+              <div class="feature-icon">
+                <component :is="item.icon" :size="20" />
+              </div>
+              <div class="feature-title">{{ item.title }}</div>
+              <div class="feature-desc">{{ item.description }}</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section-block">
+          <div class="section-heading">
+            <div class="section-title">使用流程</div>
+            <div class="section-desc">按照当前系统设计，完整面试链路分为四步。</div>
+          </div>
+
+          <div class="flow-list">
+            <div v-for="(item, index) in flowSteps" :key="item.title" class="flow-card">
+              <div class="flow-index">0{{ index + 1 }}</div>
+              <div class="flow-body">
+                <div class="flow-title">{{ item.title }}</div>
+                <div class="flow-desc">{{ item.description }}</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section-block">
+          <div class="section-heading">
+            <div class="section-title">支持的面试配置</div>
+            <div class="section-desc">可先选择岗位、轮次，再进入面试界面。</div>
+          </div>
+
+          <div class="config-layout">
+            <div class="config-card">
+              <div class="config-title">岗位方向</div>
+              <div class="tag-list">
+                <span v-for="item in positions" :key="item" class="config-tag">{{ item }}</span>
+              </div>
+            </div>
+
+            <div class="config-card">
+              <div class="config-title">面试轮次</div>
+              <div class="tag-list">
+                <span v-for="item in rounds" :key="item" class="config-tag">{{ item }}</span>
+              </div>
+            </div>
+
+            <div class="config-card">
+              <div class="config-title">结果反馈</div>
+              <div class="feedback-list">
+                <div v-for="item in feedbackItems" :key="item" class="feedback-item">
+                  <CheckCircle2 :size="15" />
+                  <span>{{ item }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="page-footer">
+        <p>{{ infoStore.footer?.copyright || '© 2026 AI Interview' }}</p>
       </footer>
     </template>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useUserStore } from '@/stores/user'
-import { useInfoStore } from '@/stores/info'
-import { useAgentStore } from '@/stores/agent'
-import { useThemeStore } from '@/stores/theme'
-import { healthApi } from '@/apis/system_api'
-import { Result, Button } from 'ant-design-vue'
-import UserInfoComponent from '@/components/UserInfoComponent.vue'
-import ProjectOverview from '@/components/ProjectOverview.vue'
 import {
-  BookText,
-  Bug,
-  Video,
-  Route,
-  Github,
-  Star,
+  PlayCircle,
+  FileText,
+  Sparkles,
   CheckCircle2,
-  GitCommit,
-  ShieldCheck
+  BriefcaseBusiness,
+  ClipboardList,
+  MessageSquareQuote,
+  Database,
+  FolderClock,
+  Gauge
 } from 'lucide-vue-next'
 
-const AResult = Result
-const AButton = Button
+import UserInfoComponent from '@/components/UserInfoComponent.vue'
+import { useUserStore } from '@/stores/user'
+import { useInfoStore } from '@/stores/info'
+import { healthApi } from '@/apis/system_api'
 
 const router = useRouter()
 const userStore = useUserStore()
 const infoStore = useInfoStore()
-const agentStore = useAgentStore()
-const themeStore = useThemeStore()
 
-// 加载状态
 const isLoading = ref(true)
 const error = ref(null)
+
+const heroPoints = [
+  '支持上传 PDF 简历并统一管理',
+  '岗位 / 轮次配置后自动开始面试',
+  '面试结束后输出评分卡与反馈'
+]
+
+const stats = [
+  { label: '岗位方向', value: '7+', icon: BriefcaseBusiness },
+  { label: '面试轮次', value: '3', icon: ClipboardList },
+  { label: '追问方式', value: '逐轮', icon: MessageSquareQuote },
+  { label: '面试记录', value: '侧边栏', icon: FolderClock }
+]
+
+const featureCards = [
+  {
+    title: '面试配置页',
+    description: '先选择目标岗位和面试轮次，再进入正式面试界面。',
+    icon: BriefcaseBusiness
+  },
+  {
+    title: '我的简历',
+    description: '简历集中管理，面试官可优先读取当前会话附件，或从“我的简历”继续提问。',
+    icon: Database
+  },
+  {
+    title: 'AI 面试官',
+    description: '自动发起第一问，候选人回答后先简短点评，再继续追问。',
+    icon: MessageSquareQuote
+  },
+  {
+    title: '评分反馈',
+    description: '结束面试后输出亮点、风险点、改进建议与评分面板。',
+    icon: Gauge
+  }
+]
+
+const flowSteps = [
+  {
+    title: '上传或选择简历',
+    description: '在“我的简历”中上传 PDF 简历，系统会解析并作为面试依据。'
+  },
+  {
+    title: '选择岗位与轮次',
+    description: '支持前端、后端、产品、测试、算法、运营、通用等岗位，以及初试 / 复试 / HR。'
+  },
+  {
+    title: '进入面试会话',
+    description: '面试官 Agent 自动发起第一问，并根据简历和你的回答持续追问。'
+  },
+  {
+    title: '获取总结与评分',
+    description: '结束面试后查看整体评价、维度评分和后续改进建议。'
+  }
+]
+
+const positions = ['前端工程师', '后端工程师', '产品经理', '测试工程师', '算法工程师', '运营', '通用岗位']
+const rounds = ['初试', '复试', 'HR']
+const feedbackItems = ['亮点总结', '风险点提醒', '改进建议', '评分卡输出']
 
 const checkHealth = async () => {
   try {
@@ -149,7 +261,7 @@ const checkHealth = async () => {
   } catch (e) {
     error.value = {
       title: '服务连接失败',
-      message: '后端服务无法响应，请检查服务是否正常运行'
+      message: '后端服务暂时不可用，请检查服务是否正常运行。'
     }
     throw e
   }
@@ -160,12 +272,10 @@ const loadData = async () => {
   error.value = null
 
   try {
-    // 先检查健康状态
     await checkHealth()
-    // 健康检查通过后加载配置
     await infoStore.loadInfoConfig()
   } catch (e) {
-    console.error('加载失败:', e)
+    console.error('加载首页数据失败:', e)
   } finally {
     isLoading.value = false
   }
@@ -175,596 +285,471 @@ const retryLoad = () => {
   loadData()
 }
 
-const goToChat = async () => {
-  // 检查用户是否登录
-  if (!userStore.isLoggedIn) {
-    // 登录后应该跳转到默认智能体而不是/agent
-    sessionStorage.setItem('redirect', '/') // 设置为首页，登录后会通过路由守卫处理重定向
-    router.push('/login')
-    return
+const ensureLogin = () => {
+  if (userStore.isLoggedIn) {
+    return true
   }
 
-  // 根据用户角色进行跳转
-  if (userStore.isAdmin) {
-    // 管理员用户跳转到聊天页面
-    await agentStore.initialize()
-    router.push('/agent')
-    return
-  }
+  sessionStorage.setItem('redirect', '/')
+  router.push('/login')
+  return false
+}
 
-  // 普通用户跳转到默认智能体
-  try {
-    // 获取默认智能体
-    const defaultAgent = agentStore.defaultAgent
-    if (defaultAgent?.id) {
-      router.push(`/agent/${defaultAgent.id}`)
-    } else {
-      router.push('/agent')
-    }
-  } catch (error) {
-    console.error('跳转到智能体页面失败:', error)
-    router.push('/')
-  }
+const goToInterview = () => {
+  if (!ensureLogin()) return
+  router.push('/agent')
+}
+
+const goToResumeCenter = () => {
+  if (!ensureLogin()) return
+  router.push('/resume')
 }
 
 onMounted(() => {
-  // 加载数据
   loadData()
-})
-
-const iconKey = (value) => (typeof value === 'string' ? value.toLowerCase() : '')
-
-// region icon_mapping
-const featureIconMap = {
-  stars: Star,
-  issues: CheckCircle2,
-  resolved: CheckCircle2,
-  commits: GitCommit,
-  license: ShieldCheck,
-  default: Star
-}
-
-const actionIconMap = {
-  doc: BookText,
-  docs: BookText,
-  document: BookText,
-  issue: Bug,
-  bug: Bug,
-  roadmap: Route,
-  plan: Route,
-  demo: Video,
-  video: Video,
-  github: Github,
-  default: Github
-}
-// endregion icon_mapping
-
-const featureCards = computed(() => {
-  const list = Array.isArray(infoStore.features) ? infoStore.features : []
-  return list
-    .map((item) => {
-      if (typeof item === 'string') {
-        return {
-          label: item,
-          value: '',
-          description: '',
-          icon: featureIconMap.default
-        }
-      }
-
-      const key = iconKey(item.icon || item.type)
-      return {
-        label: item.label || item.name || '',
-        value: item.value || '',
-        description: item.description || '',
-        icon: featureIconMap[key] || featureIconMap.default
-      }
-    })
-    .filter((item) => item.label || item.value || item.description)
-})
-
-const actionLinks = computed(() => {
-  const actions = infoStore.actions
-  if (!Array.isArray(actions)) {
-    return []
-  }
-
-  return actions
-    .map((item) => {
-      const key = iconKey(item?.icon || item?.type)
-      return {
-        name: item?.name || item?.label || '',
-        url: item?.url || item?.link || '',
-        icon: actionIconMap[key] || actionIconMap.default
-      }
-    })
-    .filter((item) => item.name && item.url)
 })
 </script>
 
-<style lang="less" scoped>
-.home-container {
+<style scoped lang="less">
+.home-page {
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  color: var(--main-900);
-  background: radial-gradient(circle at top right, var(--main-50), transparent 60%), var(--main-5);
-  position: relative;
-  overflow-x: hidden;
+  background:
+    radial-gradient(circle at top right, var(--main-20), transparent 30%),
+    radial-gradient(circle at left top, var(--main-10), transparent 28%),
+    var(--gray-25);
+  color: var(--gray-900);
 }
 
-// 加载中状态
-.loading-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  gap: 1rem;
-
-  .loading-text {
-    color: var(--gray-600);
-    font-size: 0.95rem;
-  }
-}
-
-// 错误状态
+.loading-container,
 .error-container {
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
-  padding: 2rem;
-}
-.glass-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  padding: 0.75rem 2.5rem;
-  background-color: var(--color-trans-light);
-  backdrop-filter: blur(20px);
-  // border-bottom: 1px solid var(--main-30);
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 100;
-  box-shadow: 0 6px 25px rgba(3, 80, 101, 0.02);
+  flex-direction: column;
+  gap: 12px;
 }
 
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-  font-size: 1.4rem;
-  font-weight: bold;
-  color: var(--main-800);
-
-  .logo-img {
-    height: 2rem;
-    margin-right: 0.6rem;
-  }
-}
-
-.logo-text {
-  font-size: 1.3rem;
-  font-weight: 600;
-}
-
-.github-link a {
-  display: flex;
-  align-items: center;
-  text-decoration: none;
+.loading-text {
   color: var(--gray-600);
-  padding: 0.6rem 1rem;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  font-size: 0.9rem;
-  font-weight: 500;
+  font-size: 14px;
+}
 
-  &:hover {
-    color: var(--gray-700);
+.page-header {
+  height: 76px;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--gray-100);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(18px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
 
-    svg {
-      transform: scale(1.1);
-    }
-  }
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
 
-  svg {
-    margin-right: 6px;
-    transition: transform 0.3s ease;
-    fill: currentColor;
-  }
+.brand-logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  object-fit: cover;
+}
 
-  .stars-count {
-    font-weight: 600;
-  }
+.brand-meta {
+  min-width: 0;
+}
 
-  // 暗色模式样式
-  :global(.dark) & {
-    color: var(--gray-400);
+.brand-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gray-900);
+}
 
-    &:hover {
-      color: var(--gray-300);
-    }
-  }
+.brand-desc {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--gray-500);
+}
+
+.page-main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 36px 24px 56px;
 }
 
 .hero-section {
-  flex: 1;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 5rem 2rem 2rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 24px;
+  align-items: stretch;
 }
 
-.hero-layout {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 2.5rem;
-  align-items: center;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding-top: 4rem;
+.hero-content,
+.hero-panel,
+.feature-card,
+.flow-card,
+.config-card {
+  border-radius: 20px;
+  border: 1px solid var(--gray-100);
+  background: var(--gray-0);
 }
 
 .hero-content {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
+  padding: 32px;
 }
 
-.title {
-  font-size: clamp(2.5rem, 4vw, 4rem);
-  font-weight: 800;
-  margin: 0;
-  background: linear-gradient(135deg, var(--main-900), var(--main-600));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-}
-
-.hero-eyebrow {
-  color: var(--main-600);
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  font-size: 0.85rem;
-}
-
-.subtitle {
-  font-size: 1.5rem;
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--main-20);
+  color: var(--main-color);
+  font-size: 12px;
   font-weight: 600;
-  color: var(--gray-700);
-  line-height: 1.4;
 }
 
-.description {
+.hero-title {
+  margin: 18px 0 0;
+  font-size: clamp(34px, 4vw, 52px);
+  line-height: 1.15;
+  font-weight: 800;
+  color: var(--gray-900);
+}
+
+.hero-subtitle {
+  margin: 18px 0 0;
+  font-size: 15px;
+  line-height: 1.8;
   color: var(--gray-600);
-  line-height: 1.6;
 }
 
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
-  align-items: center;
+  gap: 12px;
+  margin-top: 28px;
 }
 
-.button-base {
+.primary-btn,
+.secondary-btn {
+  height: 46px;
+  padding: 0 18px;
+  border-radius: 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
-  padding: 0.5rem 2.75rem;
-  border-radius: 999px;
-  font-size: 1.05rem;
+  gap: 8px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  border: 1px solid transparent;
-  text-decoration: none;
-  transition: all 0.25s ease;
-  min-height: 52px;
+  transition: all 0.2s ease;
 }
 
-.button-base.primary {
-  background: linear-gradient(135deg, var(--main-600), var(--main-500));
+.primary-btn {
+  border: none;
+  background: var(--main-color);
   color: var(--gray-0);
-  border-color: transparent;
-
-  &:hover {
-    background: linear-gradient(135deg, var(--main-700), var(--main-600));
-  }
 }
 
-.button-base.secondary {
-  background: rgba(2, 57, 68, 0.06);
-  color: var(--main-700);
-  border-color: var(--gray-100);
-
-  &:hover {
-    border-color: var(--main-200);
-    background: var(--gray-50);
-  }
+.secondary-btn {
+  border: 1px solid var(--gray-150);
+  background: var(--gray-0);
+  color: var(--gray-700);
 }
 
-.insight-panel {
+.hero-points {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hero-point,
+.feedback-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--gray-700);
+  font-size: 14px;
+}
+
+.hero-point :deep(svg),
+.feedback-item :deep(svg) {
+  color: var(--main-color);
+  flex-shrink: 0;
+}
+
+.hero-panel {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.panel-card {
+  border-radius: 16px;
+  background: var(--gray-25);
+  border: 1px solid var(--gray-100);
+  padding: 18px;
+}
+
+.primary-card {
+  background: linear-gradient(180deg, var(--main-10), var(--gray-0));
+}
+
+.panel-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--main-color);
+}
+
+.panel-title {
+  margin-top: 10px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--gray-900);
+}
+
+.panel-text {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--gray-600);
+}
+
+.panel-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 1rem;
-  background: var(--main-0);
-  border-radius: 1.5rem;
-  padding: 1.5rem;
-  border: 1px solid var(--main-40);
-  box-shadow: 0 15px 35px rgba(3, 80, 101, 0.08);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .stat-card {
   display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.stat-headline {
-  display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 12px;
 }
 
 .stat-icon {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 12px;
-  background: var(--gray-25);
+  background: var(--gray-0);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-
-  :deep(svg) {
-    width: 24px;
-    height: 24px;
-    color: var(--main-700);
-  }
+  color: var(--main-color);
+  flex-shrink: 0;
 }
 
 .stat-value {
-  font-size: 2rem;
+  font-size: 20px;
   font-weight: 700;
-  color: var(--main-800);
-  margin: 0;
+  color: var(--gray-900);
 }
 
 .stat-label {
-  margin: 0;
-  color: var(--gray-700);
-  font-weight: 600;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--gray-500);
 }
 
-.stat-description {
-  margin: 0;
+.section-block {
+  margin-top: 24px;
+}
+
+.section-heading {
+  margin-bottom: 14px;
+}
+
+.section-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--gray-900);
+}
+
+.section-desc {
+  margin-top: 6px;
+  font-size: 14px;
   color: var(--gray-600);
-  font-size: 0.9rem;
 }
 
-.section {
-  width: 100%;
-  max-width: 1200px;
-  margin: 50px auto 0px auto;
-  padding: 2rem 0;
-}
-
-.section-header {
-  margin-bottom: 1.5rem;
-
-  h2 {
-    margin: 0 0 0.5rem;
-    font-size: 1.8rem;
-    color: var(--main-800);
-  }
-
-  p {
-    margin: 0;
-    color: var(--gray-600);
-  }
-}
-
-.action-section {
-  padding-bottom: 3rem;
-}
-
-.action-grid {
+.feature-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
 }
 
-.action-card {
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  padding: 1rem 1.25rem;
-  border-radius: 1rem;
-  text-decoration: none;
-  color: inherit;
-  border: 1px solid var(--gray-50);
-  background: var(--gray-0);
-  transition:
-    transform 0.2s ease,
-    background 0.2s ease;
-
-  &:hover {
-    background: var(--gray-0);
-    transform: translateY(-2px);
-  }
+.feature-card {
+  padding: 22px;
 }
 
-.action-icon {
-  width: 44px;
-  height: 44px;
+.feature-icon {
+  width: 42px;
+  height: 42px;
   border-radius: 12px;
-  background: var(--gray-50);
+  background: var(--main-20);
+  color: var(--main-color);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-
-  :deep(svg) {
-    width: 22px;
-    height: 22px;
-    color: var(--main-700);
-  }
 }
 
-.action-meta {
-  flex: 1;
-  overflow: hidden;
+.feature-title {
+  margin-top: 16px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gray-900);
 }
 
-.action-title {
-  margin: 0;
-  font-weight: 600;
-  color: var(--main-800);
-}
-
-.action-url {
-  margin: 0.25rem 0 0;
-  font-size: 0.9rem;
+.feature-desc {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.7;
   color: var(--gray-600);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.preview-section {
-  padding: 5rem 2rem;
-  display: flex;
+.flow-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.flow-card {
+  padding: 22px;
+}
+
+.flow-index {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: var(--main-20);
+  color: var(--main-color);
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
 }
 
-.preview-container {
-  position: relative;
-  max-width: 1000px;
-  overflow: hidden;
-  border-radius: 1rem;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
-
-  &:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
-
-    .preview-overlay {
-      opacity: 1;
-    }
-  }
-
-  img {
-    width: 100%;
-    height: auto;
-    display: block;
-    transition: transform 0.5s ease;
-  }
-
-  .preview-overlay {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
-    padding: 2rem;
-    opacity: 0.8;
-    transition: opacity 0.3s ease;
-
-    .overlay-content {
-      color: var(--gray-0);
-
-      h3 {
-        font-size: 1.5rem;
-        margin-bottom: 0.5rem;
-      }
-
-      p {
-        font-size: 1rem;
-        opacity: 0.9;
-      }
-    }
-  }
+.flow-title {
+  margin-top: 16px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gray-900);
 }
 
-.footer {
-  margin-top: auto;
-  background: var(--main-0);
-  border-top: 1px solid var(--main-20);
-  position: relative;
-  z-index: 10;
+.flow-desc {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--gray-600);
 }
 
-.footer-content {
+.config-layout {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.config-card {
+  padding: 22px;
+}
+
+.config-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gray-900);
+}
+
+.tag-list {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.config-tag {
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--gray-150);
+  background: var(--gray-25);
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  color: var(--gray-700);
+}
+
+.feedback-list {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.page-footer {
+  padding: 20px 24px 34px;
   text-align: center;
-  padding: 2rem;
-  max-width: 1200px;
-  margin: 0 auto;
+  color: var(--gray-500);
+  font-size: 13px;
 }
 
-.copyright {
-  color: var(--main-700);
-  font-size: 0.9rem;
-  font-weight: 500;
-  margin: 0;
-  opacity: 0.8;
-  transition: opacity 0.3s ease;
-}
-
-.footer:hover .copyright {
-  opacity: 1;
+@media (max-width: 1080px) {
+  .hero-section,
+  .feature-grid,
+  .flow-list,
+  .config-layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 768px) {
-  .glass-header {
-    padding: 0.8rem 1.25rem;
-    flex-wrap: wrap;
-    gap: 1rem;
+  .page-header {
+    height: auto;
+    padding: 14px 16px;
+    gap: 12px;
+    align-items: flex-start;
+    flex-direction: column;
   }
 
-  .logo {
-    font-size: 1.1rem;
+  .page-main {
+    padding: 20px 16px 40px;
   }
 
-  .title {
-    font-size: 2.4rem;
+  .hero-section,
+  .feature-grid,
+  .flow-list,
+  .config-layout,
+  .panel-grid {
+    grid-template-columns: 1fr;
   }
 
-  .subtitle {
-    font-size: 1.2rem;
+  .hero-content,
+  .hero-panel,
+  .feature-card,
+  .flow-card,
+  .config-card {
+    padding: 18px;
   }
 
-  .start-button {
+  .hero-actions {
+    flex-direction: column;
+  }
+
+  .primary-btn,
+  .secondary-btn {
     width: 100%;
-    text-align: center;
-  }
-
-  .hero-content {
-    padding: 0;
-  }
-
-  .github-link a {
-    padding: 0.5rem 0.8rem;
-    font-size: 0.85rem;
-
-    .stars-count {
-      display: none;
-    }
-  }
-
-  .hero-layout {
-    padding: 0 0.5rem;
   }
 }
 </style>

@@ -86,12 +86,15 @@ chat = APIRouter(prefix="/chat", tags=["chat"])
 async def get_default_agent(current_user: User = Depends(get_required_user)):
     """获取默认智能体ID（需要登录）"""
     try:
+        agents = await agent_manager.get_agents_info(include_configurable_items=False)
+        agent_ids = {agent.get("id", "") for agent in agents}
         default_agent_id = conf.default_agent_id
-        # 如果没有设置默认智能体，尝试获取第一个可用的智能体
-        if not default_agent_id:
-            agents = await agent_manager.get_agents_info(include_configurable_items=False)
-            if agents:
-                default_agent_id = agents[0].get("id", "")
+        # 如果没有设置默认智能体，或者配置已经失效，则回退到当前可用的第一个智能体
+        if not default_agent_id or default_agent_id not in agent_ids:
+            default_agent_id = agents[0].get("id", "") if agents else ""
+            if default_agent_id and conf.default_agent_id != default_agent_id:
+                conf.default_agent_id = default_agent_id
+                conf.save()
 
         return {"default_agent_id": default_agent_id}
     except Exception as e:

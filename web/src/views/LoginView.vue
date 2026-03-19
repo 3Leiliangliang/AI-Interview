@@ -410,23 +410,7 @@ const handleLogin = async () => {
       try {
         // 初始化agentStore并获取智能体信息
         await agentStore.initialize()
-
-        // 尝试获取默认智能体
-        if (agentStore.defaultAgentId) {
-          // 如果存在默认智能体，直接跳转
-          router.push(`/agent/${agentStore.defaultAgentId}`)
-          return
-        }
-
-        // 没有默认智能体，获取第一个可用智能体
-        const agentIds = Object.keys(agentStore.agents)
-        if (agentIds.length > 0) {
-          router.push(`/agent/${agentIds[0]}`)
-          return
-        }
-
-        // 没有可用智能体，回退到首页
-        router.push('/')
+        router.push('/agent')
       } catch (error) {
         console.error('获取智能体信息失败:', error)
         router.push('/')

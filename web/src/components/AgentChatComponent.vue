@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-container">
+  <div class="chat-container" :class="{ 'sidebar-right': props.sidebarPlacement === 'right' }">
     <ChatSidebarComponent
       :current-chat-id="currentChatId"
       :chats-list="chatsList"
@@ -11,6 +11,10 @@
       :is-creating-new-chat="chatUIStore.creatingNewChat"
       :has-more-chats="hasMoreChats"
       :is-loading-more="isLoadingMoreChats"
+      :title="props.sidebarTitle"
+      :create-chat-text="props.sidebarCreateText"
+      :empty-text="props.sidebarEmptyText"
+      :placement="props.sidebarPlacement"
       @create-chat="createNewChat"
       @select-chat="selectChat"
       @delete-chat="deleteChat"
@@ -19,10 +23,6 @@
       @toggle-sidebar="toggleSidebar"
       @open-agent-modal="openAgentModal"
       @load-more-chats="loadMoreChats"
-      :class="{
-        'sidebar-open': chatUIStore.isSidebarOpen,
-        'no-transition': localUIState.isInitialRender
-      }"
     />
     <div class="chat">
       <div class="chat-header">
@@ -34,7 +34,7 @@
             v-if="!chatUIStore.isSidebarOpen"
             @click="toggleSidebar"
           >
-            <PanelLeftOpen class="nav-btn-icon" size="18" />
+            <component :is="sidebarOpenIcon" class="nav-btn-icon" size="18" />
           </div>
           <div
             type="button"
@@ -128,7 +128,10 @@
 
               <!-- 打招呼区域 - 在输入框上方 -->
               <div v-if="!conversations.length" class="chat-examples-input">
-                <h1>👋 您好，我是{{ currentAgentName }}！</h1>
+                <h1>{{ greetingTitle }}</h1>
+                <p v-if="greetingDescription" class="greeting-description">
+                  {{ greetingDescription }}
+                </p>
               </div>
 
               <AgentInputArea
@@ -137,7 +140,7 @@
                 :is-loading="isProcessing"
                 :disabled="!currentAgent"
                 :send-button-disabled="(!userInput || !currentAgent) && !isProcessing"
-                placeholder="输入问题..."
+                :placeholder="inputPlaceholder"
                 :supports-file-upload="supportsFileUpload"
                 :agent-id="currentAgentId"
                 :thread-id="currentChatId"
@@ -168,7 +171,7 @@
               </div>
 
               <div class="bottom-actions" v-else>
-                <p class="note">请注意辨别内容的可靠性</p>
+                <p class="note">{{ footerNote }}</p>
               </div>
             </div>
           </div>
@@ -210,7 +213,14 @@ import AgentInputArea from '@/components/AgentInputArea.vue'
 import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
 import RefsComponent from '@/components/RefsComponent.vue'
-import { PanelLeftOpen, MessageCirclePlus, LoaderCircle, ChevronDown, Bot } from 'lucide-vue-next'
+import {
+  PanelLeftOpen,
+  PanelRightOpen,
+  MessageCirclePlus,
+  LoaderCircle,
+  ChevronDown,
+  Bot
+} from 'lucide-vue-next'
 import { handleChatError, handleValidationError } from '@/utils/errorHandler'
 import { ScrollController } from '@/utils/scrollController'
 import { AgentValidator } from '@/utils/agentValidator'
@@ -227,7 +237,27 @@ import AgentPanel from '@/components/AgentPanel.vue'
 // ==================== PROPS & EMITS ====================
 const props = defineProps({
   agentId: { type: String, default: '' },
-  singleMode: { type: Boolean, default: true }
+  singleMode: { type: Boolean, default: true },
+  contextOverrides: {
+    type: Object,
+    default: () => ({})
+  },
+  sidebarPlacement: {
+    type: String,
+    default: 'left'
+  },
+  sidebarTitle: {
+    type: String,
+    default: ''
+  },
+  sidebarCreateText: {
+    type: String,
+    default: '创建新对话'
+  },
+  sidebarEmptyText: {
+    type: String,
+    default: '暂无对话历史'
+  }
 })
 const emit = defineEmits(['open-config', 'open-agent-modal'])
 
@@ -357,6 +387,10 @@ const currentCapabilities = computed(() => {
   return currentAgent.value?.capabilities || []
 })
 
+const isResumeInterviewMode = computed(() => {
+  return currentCapabilities.value.includes('resume_interview')
+})
+
 // AgentState 相关计算属性
 const currentAgentState = computed(() => {
   return currentChatId.value ? getThreadState(currentChatId.value)?.agentState || null : null
@@ -379,6 +413,45 @@ const hasAgentStateContent = computed(() => {
   const todoCount = Array.isArray(s.todos) ? s.todos.length : 0
   const fileCount = countFiles(s.files)
   return todoCount > 0 || fileCount > 0
+})
+
+const hasUploadedFiles = computed(() => countFiles(currentAgentState.value?.files) > 0)
+
+const inputPlaceholder = computed(() => {
+  if (!isResumeInterviewMode.value) return '输入问题...'
+  return hasUploadedFiles.value
+    ? '请回答当前问题，或补充目标岗位 / 公司 / 面试轮次...'
+    : '先上传简历，或直接告诉我目标岗位后开始模拟面试...'
+})
+
+const greetingTitle = computed(() => {
+  if (!isResumeInterviewMode.value) {
+    return `👋 您好，我是${currentAgentName.value}！`
+  }
+  return `👋 欢迎来到 ${currentAgentName.value}`
+})
+
+const greetingDescription = computed(() => {
+  if (!isResumeInterviewMode.value) return ''
+  return hasUploadedFiles.value
+    ? '我会根据你上传的简历，从自我介绍、项目经历、技术细节到业务成果逐题追问。'
+    : '上传简历后我会自动开始提问；也可以先告诉我你想模拟的岗位方向。'
+})
+
+const footerNote = computed(() => {
+  if (!isResumeInterviewMode.value) return '请注意辨别内容的可靠性'
+  return '回答越具体，后续追问会越接近真实面试场景'
+})
+
+const sidebarOpenIcon = computed(() =>
+  props.sidebarPlacement === 'right' ? PanelRightOpen : PanelLeftOpen
+)
+
+const runtimeContextOverrides = computed(() => {
+  const overrides = props.contextOverrides || {}
+  return Object.fromEntries(
+    Object.entries(overrides).filter(([, value]) => value !== undefined && value !== null && `${value}`.trim())
+  )
 })
 
 // 监听 hasAgentStateContent 从 false → true 时，自动展开面板
@@ -1234,13 +1307,27 @@ const { handleAgentResponse, handleStreamChunk } = useAgentStreamHandler({
   supportsFiles
 })
 
+const buildAgentRequestConfig = (threadId) => {
+  const requestConfig = {
+    thread_id: threadId,
+    ...(selectedAgentConfigId.value ? { agent_config_id: selectedAgentConfigId.value } : {})
+  }
+
+  if (Object.keys(runtimeContextOverrides.value).length > 0) {
+    requestConfig.context_overrides = runtimeContextOverrides.value
+  }
+
+  return requestConfig
+}
+
 // 发送消息并处理流式响应
 const sendMessage = async ({
   agentId,
   threadId,
   text,
   signal = undefined,
-  imageData = undefined
+  imageData = undefined,
+  skipAutoTitle = false
 }) => {
   if (!agentId || !threadId || !text) {
     const error = new Error('Missing agent, thread, or message text')
@@ -1249,7 +1336,7 @@ const sendMessage = async ({
   }
 
   // 如果是新对话，用消息内容作为标题
-  if ((threadMessages.value[threadId] || []).length === 0) {
+  if (!skipAutoTitle && (threadMessages.value[threadId] || []).length === 0) {
     const autoTitle = text.replace(/\s+/g, ' ').trim().slice(0, 255)
     if (autoTitle) {
       void updateThread(threadId, autoTitle).catch(() => {})
@@ -1258,10 +1345,7 @@ const sendMessage = async ({
 
   const requestData = {
     query: text,
-    config: {
-      thread_id: threadId,
-      ...(selectedAgentConfigId.value ? { agent_config_id: selectedAgentConfigId.value } : {})
-    }
+    config: buildAgentRequestConfig(threadId)
   }
 
   // 如果有图片，添加到请求中
@@ -1305,19 +1389,24 @@ const switchToFirstChatIfEmpty = async () => {
   return false
 }
 
-const createNewChat = async () => {
+const createNewChat = async (title = '新的对话', forceCreate = false) => {
   if (
     !AgentValidator.validateAgentId(currentAgentId.value, '创建对话') ||
     chatUIStore.creatingNewChat
   )
-    return
+    return null
 
   // 如果第一个对话为空，直接切换到第一个对话而不是创建新对话
-  if (await switchToFirstChatIfEmpty()) return
+  if (!forceCreate && (await switchToFirstChatIfEmpty())) {
+    if (chatState.currentThreadId && title) {
+      void updateThread(chatState.currentThreadId, title).catch(() => {})
+    }
+    return chatState.currentThreadId ? { id: chatState.currentThreadId } : null
+  }
 
   chatUIStore.creatingNewChat = true
   try {
-    const newThread = await createThread(currentAgentId.value, '新的对话')
+    const newThread = await createThread(currentAgentId.value, title)
     if (newThread) {
       // 中断之前线程的流式输出（如果存在）
       const previousThreadId = chatState.currentThreadId
@@ -1332,8 +1421,10 @@ const createNewChat = async () => {
 
       chatState.currentThreadId = newThread.id
     }
+    return newThread
   } catch (error) {
     handleChatError(error, 'create')
+    return null
   } finally {
     chatUIStore.creatingNewChat = false
   }
@@ -1442,8 +1533,8 @@ const togglePinChat = async (chatId) => {
   }
 }
 
-const handleSendMessage = async ({ image } = {}) => {
-  const text = userInput.value.trim()
+const handleSendMessage = async ({ image, textOverride = '', skipAutoTitle = false } = {}) => {
+  const text = (textOverride || userInput.value).trim()
   if ((!text && !image) || !currentAgent.value || isProcessing.value) return
 
   let threadId = currentChatId.value
@@ -1455,7 +1546,9 @@ const handleSendMessage = async ({ image } = {}) => {
     }
   }
 
-  userInput.value = ''
+  if (!textOverride) {
+    userInput.value = ''
+  }
 
   await nextTick()
   scrollController.scrollToBottom(true)
@@ -1464,7 +1557,7 @@ const handleSendMessage = async ({ image } = {}) => {
   if (!threadState) return
 
   if (useRunsApi) {
-    if ((threadMessages.value[threadId] || []).length === 0) {
+    if (!skipAutoTitle && (threadMessages.value[threadId] || []).length === 0) {
       const autoTitle = text.replace(/\s+/g, ' ').trim().slice(0, 255)
       if (autoTitle) {
         void updateThread(threadId, autoTitle).catch(() => {})
@@ -1476,10 +1569,7 @@ const handleSendMessage = async ({ image } = {}) => {
     try {
       const runResp = await agentApi.createAgentRun(currentAgentId.value, {
         query: text,
-        config: {
-          thread_id: threadId,
-          ...(selectedAgentConfigId.value ? { agent_config_id: selectedAgentConfigId.value } : {})
-        },
+        config: buildAgentRequestConfig(threadId),
         image_content: image?.imageContent
       })
       const runId = runResp?.run_id
@@ -1504,7 +1594,8 @@ const handleSendMessage = async ({ image } = {}) => {
       threadId: threadId,
       text: text,
       signal: threadState.streamAbortController?.signal,
-      imageData: image
+      imageData: image,
+      skipAutoTitle
     })
 
     await handleAgentResponse(response, threadId)
@@ -1640,8 +1731,42 @@ const buildExportPayload = () => {
   return payload
 }
 
+const startInterviewSession = async ({
+  openingPrompt = '',
+  threadTitle = '新的面试',
+  forceNewThread = true
+} = {}) => {
+  const prompt = String(openingPrompt || '').trim()
+  if (!prompt || !currentAgent.value || isProcessing.value) return null
+
+  let waitCount = 0
+  while (chatUIStore.isLoadingThreads && waitCount < 20) {
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    waitCount += 1
+  }
+
+  let threadId = currentChatId.value
+  if (forceNewThread || !threadId) {
+    const createdThread = await createNewChat(threadTitle, forceNewThread)
+    threadId = createdThread?.id || null
+  } else if (threadTitle) {
+    void updateThread(threadId, threadTitle).catch(() => {})
+  }
+
+  if (!threadId) return null
+
+  await nextTick()
+  await handleSendMessage({
+    textOverride: prompt,
+    skipAutoTitle: true
+  })
+
+  return threadId
+}
+
 defineExpose({
-  getExportPayload: buildExportPayload
+  getExportPayload: buildExportPayload,
+  startInterviewSession
 })
 
 const toggleSidebar = () => {
@@ -1649,11 +1774,32 @@ const toggleSidebar = () => {
 }
 const openAgentModal = () => emit('open-agent-modal')
 
+const maybeAutoStartInterview = async (threadId) => {
+  if (!isResumeInterviewMode.value || isProcessing.value || !threadId) return
+
+  const threadState = getThreadState(threadId)
+  const hasHistoryMessages = (threadMessages.value[threadId] || []).length > 0
+  const hasStreamingDraft = Boolean(Object.keys(threadState?.onGoingConv?.msgChunks || {}).length)
+  const fileCount = countFiles(threadState?.agentState?.files)
+
+  if (!fileCount || hasHistoryMessages || hasStreamingDraft) return
+
+  if (chatState.currentThreadId !== threadId) {
+    chatState.currentThreadId = threadId
+  }
+
+  await handleSendMessage({
+    textOverride: '我已上传简历，请根据简历开始一轮模拟面试。',
+    skipAutoTitle: true
+  })
+}
+
 const handleAgentStateRefresh = async (threadId = null) => {
   if (!currentAgentId.value) return
   const chatId = threadId || currentChatId.value
   if (!chatId) return
   await fetchAgentState(currentAgentId.value, chatId)
+  await maybeAutoStartInterview(chatId)
 }
 
 const toggleAgentPanel = () => {
@@ -1820,6 +1966,10 @@ watch(
   position: relative;
 }
 
+.chat-container.sidebar-right {
+  flex-direction: row-reverse;
+}
+
 .chat {
   position: relative;
   flex: 1;
@@ -1835,17 +1985,35 @@ watch(
     // position: sticky; // Not needed if .chat is flex col and header is fixed height item
     // top: 0;
     z-index: 10;
-    height: var(--header-height);
+    min-height: var(--header-height);
+    height: auto;
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 1rem 8px;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 8px 8px;
     flex-shrink: 0; /* Prevent header from shrinking */
+    flex-wrap: wrap;
 
     .header__left,
     .header__right {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
+      min-width: 0;
+    }
+
+    .header__left {
+      flex: 1 1 520px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .header__right {
+      flex: 0 0 auto;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 4px;
+      margin-left: auto;
     }
 
     .switch-icon {
@@ -1924,6 +2092,14 @@ watch(
     font-size: 1.2rem;
     color: var(--gray-1000);
     margin: 0;
+  }
+
+  .greeting-description {
+    margin: 10px auto 0;
+    max-width: 620px;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--gray-600);
   }
 }
 
@@ -2135,10 +2311,20 @@ watch(
 
 @media (max-width: 768px) {
   .chat-header {
+    gap: 8px;
+
     .header__left {
+      flex-basis: 100%;
+
       .text {
         display: none;
       }
+    }
+
+    .header__right {
+      width: 100%;
+      margin-left: 0;
+      justify-content: flex-start;
     }
   }
 }

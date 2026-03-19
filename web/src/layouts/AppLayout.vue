@@ -2,7 +2,7 @@
 import { ref, reactive, onMounted, computed, provide } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { GithubOutlined } from '@ant-design/icons-vue'
-import { Bot, LibraryBig, BarChart3, CircleCheck, Blocks } from 'lucide-vue-next'
+import { Bot, LibraryBig, BarChart3, CircleCheck, Blocks, FileText } from 'lucide-vue-next'
 
 import { useConfigStore } from '@/stores/config'
 import { useDatabaseStore } from '@/stores/database'
@@ -91,10 +91,16 @@ const activeTaskCount = computed(() => activeCountRef.value || 0)
 const mainList = computed(() => {
   const items = [
     {
-      name: '智能体
+      name: '模拟面试',
       path: '/agent',
       icon: Bot,
       activeIcon: Bot
+    },
+    {
+      name: '我的简历',
+      path: '/resume',
+      icon: FileText,
+      activeIcon: FileText
     },
     {
       name: '知识库',
@@ -175,17 +181,6 @@ provide('settingsModal', {
         </div>
       </div>
       <div class="fill"></div>
-      <div class="github nav-item">
-        <a-tooltip placement="right">
-          <template #title>欢迎 Star</template>
-          <a href="https://github.com/xerrors/AI-interview" target="_blank" class="github-link">
-            <GithubOutlined class="icon" />
-            <span v-if="githubStars > 0" class="github-stars">
-              <span class="star-count">{{ (githubStars / 1000).toFixed(1) }}k</span>
-            </span>
-          </a>
-        </a-tooltip>
-      </div>
       <!-- 用户信息组件 -->
       <div class="nav-item user-info">
         <UserInfoComponent />

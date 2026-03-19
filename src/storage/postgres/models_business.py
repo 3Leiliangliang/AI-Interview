@@ -117,6 +117,41 @@ class User(Base):
         self.login_locked_until = None
 
 
+class UserResume(Base):
+    """当前用户简历及解析结果"""
+
+    __tablename__ = "user_resume_items"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    filename = Column(String(512), nullable=False)
+    content_hash = Column(String(128), nullable=False)
+    file_size = Column(Integer, nullable=False)
+    bucket_name = Column(String(128), nullable=False)
+    object_name = Column(String(512), nullable=False)
+    file_url = Column(String(1024), nullable=False)
+    parser_name = Column(String(64), nullable=False, default="mineru_official")
+    markdown_content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=utc_now_naive)
+    updated_at = Column(DateTime, default=utc_now_naive, onupdate=utc_now_naive)
+
+    def to_dict(self, include_markdown: bool = True) -> dict[str, Any]:
+        data = {
+            "id": self.id,
+            "user_id": self.user_id,
+            "filename": self.filename,
+            "content_hash": self.content_hash,
+            "file_size": self.file_size,
+            "file_url": self.file_url,
+            "parser_name": self.parser_name,
+            "created_at": format_utc_datetime(self.created_at),
+            "updated_at": format_utc_datetime(self.updated_at),
+        }
+        if include_markdown:
+            data["markdown_content"] = self.markdown_content
+        return data
+
+
 class AgentConfig(Base):
     """智能体配置（按部门共享，多份可切换）"""
 
