@@ -1,22 +1,22 @@
 /* 深色模式 */
 :root.dark {
-  --main-1000: #e1f6fb;
-  --main-900: #c4eaf5;
-  --main-800: #a3d8e8;
-  --main-700: #82c3d6;
-  --main-600: #5faec2;
-  --main-500: #4a9fb8;
-  --main-400: #3996ae;
-  --main-300: #24839a;
-  --main-200: #046a82;
-  --main-100: #035065;
-  --main-50: #023944;
-  --main-40: #01151f;
-  --main-30: #010d14;
-  --main-20: #010a0f;
-  --main-10: #00070a;
-  --main-5: #000405;
-  --main-1: #000102;
+  --main-1000: #edf7ff;
+  --main-900: #def0ff;
+  --main-800: #c3e3ff;
+  --main-700: #9ccfff;
+  --main-600: #73b6f7;
+  --main-500: #4f9fec;
+  --main-400: #3781cf;
+  --main-300: #2765a3;
+  --main-200: #1d4b79;
+  --main-100: #143254;
+  --main-50: #091a30;
+  --main-40: #061221;
+  --main-30: #040d18;
+  --main-20: #020912;
+  --main-10: #01060d;
+  --main-5: #000309;
+  --main-1: #000104;
   --main-0: #000000;
 
   --gray-10000: #fafafa;
@@ -38,15 +38,16 @@
   --gray-0: #030303;
 
   /* Standard Color System - 深色模式5档色阶系统 */
-  --color-primary-50: #023944; /* 主色调-最深 */
-  --color-primary-100: #035065; /* 主色调-深 */
-  --color-primary-500: #4a9fb8; /* 主色调-标准 */
-  --color-primary-700: #5faec2; /* 主色调-浅 */
-  --color-primary-900: #82c3d6; /* 主色调-最浅 */
+  --color-primary-50: #091a30; /* 主色调-最深 */
+  --color-primary-100: #143254; /* 主色调-深 */
+  --color-primary-500: #4f9fec; /* 主色调-标准 */
+  --color-primary-700: #73b6f7; /* 主色调-浅 */
+  --color-primary-900: #9ccfff; /* 主色调-最浅 */
 
   /* 保留原有的 main 变量 */
-  --main-color: #4a9fb8;
-  --main-bright: #5faec2;
+  --main-color: #73b6f7;
+  --main-color-rgb: 115, 182, 247;
+  --main-bright: #9ccfff;
 
   --color-secondary-50: #151616; /* 次要色-最深 */
   --color-secondary-100: #1e1f1f; /* 次要色-深 */
@@ -72,11 +73,11 @@
   --color-warning-700: #ffc53d; /* 警告色-浅 */
   --color-warning-900: #ffd666; /* 警告色-最浅 */
 
-  --color-info-50: #111b26; /* 信息色-最深 */
-  --color-info-100: #111d2c; /* 信息色-深 */
-  --color-info-500: #3d8fff; /* 信息色-标准 */
-  --color-info-700: #40a9ff; /* 信息色-浅 */
-  --color-info-900: #69c0ff; /* 信息色-最浅 */
+  --color-info-50: #091a30; /* 信息色-最深 */
+  --color-info-100: #143254; /* 信息色-深 */
+  --color-info-500: #4f9fec; /* 信息色-标准 */
+  --color-info-700: #73b6f7; /* 信息色-浅 */
+  --color-info-900: #9ccfff; /* 信息色-最浅 */
 
   --color-accent-50: #0f2e2e; /* 强调色-最深 */
   --color-accent-100: #164e63; /* 强调色-深 */
@@ -85,11 +86,11 @@
   --color-accent-900: #5cdbd3; /* 强调色-最浅 */
 
   --chart-palette-1: var(--main-300);
-  --chart-palette-2: #3ea896;
+  --chart-palette-2: #74c0fc;
   --chart-palette-3: #d6ad37;
   --chart-palette-4: #cf6666;
-  --chart-palette-5: #8672b4;
-  --chart-palette-6: #529ab8;
+  --chart-palette-5: #8d9eff;
+  --chart-palette-6: #89d8ff;
   --chart-palette-7: #d48242;
   --chart-palette-8: #82b354;
   --chart-palette-9: #c46e9e;

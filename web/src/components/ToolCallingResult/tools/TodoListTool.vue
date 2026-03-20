@@ -173,7 +173,7 @@ const todoListData = (content) => {
           color: #52c41a;
         }
         &.in-progress {
-          color: #1890ff;
+          color: var(--main-color);
         }
         &.pending {
           color: #faad14;

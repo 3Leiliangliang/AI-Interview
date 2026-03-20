@@ -214,6 +214,19 @@
       />
     </a-modal>
 
+    <a-modal
+      v-model:open="renameModalVisible"
+      :title="renameTarget?.is_folder ? '\u91cd\u547d\u540d\u6587\u4ef6\u5939' : '\u91cd\u547d\u540d\u6587\u4ef6'"
+      :confirm-loading="renameLoading"
+      @ok="handleRename"
+    >
+      <a-input
+        v-model:value="renameValue"
+        :placeholder="renameTarget?.is_folder ? '\u8bf7\u8f93\u5165\u6587\u4ef6\u5939\u540d\u79f0' : '\u8bf7\u8f93\u5165\u6587\u4ef6\u540d\u79f0'"
+        @pressEnter="handleRename"
+      />
+    </a-modal>
+
     <a-table
       :columns="columnsCompact"
       :data-source="paginatedFiles"
@@ -344,6 +357,10 @@
                     <template #icon><component :is="h(FolderPlus)" size="14" /></template>
                     新建子文件夹
                   </a-button>
+                  <a-button type="text" block @click="showRenameModal(record)">
+                    <template #icon><component :is="h(Pencil)" size="14" /></template>
+                    重命名
+                  </a-button>
                   <a-button type="text" block danger @click="handleDeleteFolder(record)">
                     <template #icon><component :is="h(Trash2)" size="14" /></template>
                     删除文件夹
@@ -400,6 +417,11 @@
                     重新入库
                   </a-button>
 
+                  <a-button type="text" block @click="showRenameModal(record)" :disabled="lock">
+                    <template #icon><component :is="h(Pencil)" size="14" /></template>
+                    重命名
+                  </a-button>
+
                   <a-button
                     type="text"
                     block
@@ -443,6 +465,7 @@ import {
   Trash2,
   Download,
   RotateCw,
+  Pencil,
   ChevronLast,
   Ellipsis,
   FolderPlus,
@@ -580,6 +603,10 @@ const createFolderModalVisible = ref(false)
 const newFolderName = ref('')
 const createFolderLoading = ref(false)
 const currentParentId = ref(null)
+const renameModalVisible = ref(false)
+const renameLoading = ref(false)
+const renameTarget = ref(null)
+const renameValue = ref('')
 
 const showCreateFolderModal = (parentId = null) => {
   if (typeof parentId === 'string') {
@@ -592,6 +619,13 @@ const showCreateFolderModal = (parentId = null) => {
   }
   currentParentId.value = parentId
   createFolderModalVisible.value = true
+}
+
+const showRenameModal = (record) => {
+  closePopover(record.file_id)
+  renameTarget.value = record
+  renameValue.value = record.filename || ''
+  renameModalVisible.value = true
 }
 
 const toggleExpand = (record) => {
@@ -633,6 +667,37 @@ const handleCreateFolder = async () => {
 }
 
 // 拖拽相关逻辑
+const handleRename = async () => {
+  const target = renameTarget.value
+  const nextName = renameValue.value.trim()
+
+  if (!target) return
+
+  if (!nextName) {
+    message.warning(target.is_folder ? '\u8bf7\u8f93\u5165\u6587\u4ef6\u5939\u540d\u79f0' : '\u8bf7\u8f93\u5165\u6587\u4ef6\u540d\u79f0')
+    return
+  }
+
+  if (nextName === target.filename) {
+    renameModalVisible.value = false
+    renameTarget.value = null
+    renameValue.value = ''
+    return
+  }
+
+  renameLoading.value = true
+  try {
+    await store.renameFile(target.file_id, nextName)
+    renameModalVisible.value = false
+    renameTarget.value = null
+    renameValue.value = ''
+  } catch (error) {
+    console.error(error)
+  } finally {
+    renameLoading.value = false
+  }
+}
+
 const customRow = (record) => {
   return {
     draggable: true,

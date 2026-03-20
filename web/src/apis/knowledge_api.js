@@ -111,6 +111,12 @@ export const documentApi = {
     })
   },
 
+  renameDocument: async (dbId, docId, newName) => {
+    return apiAdminPut(`/api/knowledge/databases/${dbId}/documents/${docId}/rename`, {
+      new_name: newName
+    })
+  },
+
   /**
    * 添加文档到知识库
    * @param {string} dbId - 知识库ID

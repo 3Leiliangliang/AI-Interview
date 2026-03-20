@@ -1,5 +1,6 @@
 import asyncio
 import os
+from types import SimpleNamespace
 
 from src.knowledge.base import KBNotFoundError, KnowledgeBase
 from src.knowledge.chunking.ragflow_like.presets import (
@@ -7,6 +8,7 @@ from src.knowledge.chunking.ragflow_like.presets import (
     ensure_chunk_defaults_in_additional_params,
 )
 from src.knowledge.factory import KnowledgeBaseFactory
+from src.services.openviking_service import openviking_service
 from src.storage.postgres.models_business import User
 from src.utils import logger
 from src.utils.datetime_utils import utc_isoformat
@@ -101,12 +103,147 @@ class KnowledgeBaseManager:
         logger.info(f"Created {kb_type} knowledge base instance")
         return kb_instance
 
+    async def _sync_openviking_kb_file(self, db_id: str, file_id: str) -> None:
+        if not openviking_service.is_enabled():
+            return
+
+        try:
+            await openviking_service.sync_kb_file_by_id(db_id, file_id)
+        except Exception as exc:
+            logger.warning(
+                "Sync knowledge file to OpenViking failed: db_id=%s file_id=%s error=%s",
+                db_id,
+                file_id,
+                exc,
+            )
+
+    async def _remove_openviking_kb_file(self, db_id: str, file_id: str) -> None:
+        if not openviking_service.is_enabled():
+            return
+
+        try:
+            await openviking_service.remove_kb_file(db_id, file_id)
+        except Exception as exc:
+            logger.warning(
+                "Remove knowledge file from OpenViking failed: db_id=%s file_id=%s error=%s",
+                db_id,
+                file_id,
+                exc,
+            )
+
+    async def _remove_openviking_database(self, db_id: str) -> None:
+        if not openviking_service.is_enabled():
+            return
+
+        try:
+            await openviking_service.remove_kb_database(db_id)
+        except Exception as exc:
+            logger.warning("Remove knowledge database from OpenViking failed: db_id=%s error=%s", db_id, exc)
+
+    def _collect_folder_file_ids(self, kb_instance: KnowledgeBase, db_id: str, folder_id: str) -> list[str]:
+        collected: list[str] = []
+
+        def walk(current_folder_id: str) -> None:
+            children = [
+                (child_id, meta)
+                for child_id, meta in kb_instance.files_meta.items()
+                if meta.get("database_id") == db_id and meta.get("parent_id") == current_folder_id
+            ]
+
+            for child_id, meta in children:
+                if meta.get("is_folder"):
+                    walk(child_id)
+                else:
+                    collected.append(child_id)
+
+        walk(folder_id)
+        return collected
+
+    def _build_openviking_uri_from_meta(
+        self,
+        db_id: str,
+        kb_instance: KnowledgeBase,
+        file_id: str,
+    ) -> str | None:
+        if not openviking_service.is_enabled():
+            return None
+
+        record_map = {}
+        for current_file_id, meta in kb_instance.files_meta.items():
+            if meta.get("database_id") != db_id:
+                continue
+            record_map[current_file_id] = SimpleNamespace(
+                file_id=current_file_id,
+                parent_id=meta.get("parent_id"),
+                filename=meta.get("filename"),
+            )
+
+        record = record_map.get(file_id)
+        if record is None:
+            return None
+
+        return openviking_service.build_kb_file_uri(db_id, record, record_map)
+
+    def _collect_sync_targets(
+        self,
+        kb_instance: KnowledgeBase,
+        db_id: str,
+        file_id: str,
+    ) -> tuple[list[str], dict[str, str]]:
+        meta = kb_instance.files_meta.get(file_id)
+        if meta is None:
+            return [], {}
+
+        sync_file_ids = (
+            self._collect_folder_file_ids(kb_instance, db_id, file_id)
+            if meta.get("is_folder")
+            else [file_id]
+        )
+        previous_uris = {
+            current_file_id: current_uri
+            for current_file_id in sync_file_ids
+            if (current_uri := self._build_openviking_uri_from_meta(db_id, kb_instance, current_file_id))
+        }
+        return sync_file_ids, previous_uris
+
+    async def _sync_openviking_path_changes(
+        self,
+        db_id: str,
+        file_ids: list[str],
+        previous_uris: dict[str, str],
+    ) -> None:
+        if not openviking_service.is_enabled():
+            return
+
+        for current_file_id in file_ids:
+            try:
+                await openviking_service.sync_kb_file_by_id(
+                    db_id,
+                    current_file_id,
+                    previous_uri=previous_uris.get(current_file_id),
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Sync moved knowledge file to OpenViking failed: db_id=%s file_id=%s error=%s",
+                    db_id,
+                    current_file_id,
+                    exc,
+                )
+
     async def move_file(self, db_id: str, file_id: str, new_parent_id: str | None) -> dict:
-        """
-        移动文件/文件夹
-        """
+        """Move a file or folder and resync its OpenViking path."""
         kb_instance = await self._get_kb_for_database(db_id)
-        return await kb_instance.move_file(db_id, file_id, new_parent_id)
+        sync_file_ids, previous_uris = self._collect_sync_targets(kb_instance, db_id, file_id)
+        result = await kb_instance.move_file(db_id, file_id, new_parent_id)
+        await self._sync_openviking_path_changes(db_id, sync_file_ids, previous_uris)
+        return result
+
+    async def rename_file(self, db_id: str, file_id: str, new_name: str) -> dict:
+        kb_instance = await self._get_kb_for_database(db_id)
+        sync_file_ids, previous_uris = self._collect_sync_targets(kb_instance, db_id, file_id)
+        result = await kb_instance.rename_file(db_id, file_id, new_name)
+        await self._sync_openviking_path_changes(db_id, sync_file_ids, previous_uris)
+        return result
 
     async def _get_kb_for_database(self, db_id: str) -> KnowledgeBase:
         """
@@ -392,10 +529,12 @@ class KnowledgeBaseManager:
             # 删除数据库记录
             kb_repo = KnowledgeBaseRepository()
             await kb_repo.delete(db_id)
+            await self._remove_openviking_database(db_id)
 
             return result
         except KBNotFoundError as e:
             logger.warning(f"Database {db_id} not found during deletion: {e}")
+            await self._remove_openviking_database(db_id)
             return {"message": "删除成功"}
 
     async def add_file_record(
@@ -413,7 +552,9 @@ class KnowledgeBaseManager:
     async def index_file(self, db_id: str, file_id: str, operator_id: str | None = None) -> dict:
         """Index parsed file"""
         kb_instance = await self._get_kb_for_database(db_id)
-        return await kb_instance.index_file(db_id, file_id, operator_id)
+        result = await kb_instance.index_file(db_id, file_id, operator_id)
+        await self._sync_openviking_kb_file(db_id, file_id)
+        return result
 
     async def update_file_params(self, db_id: str, file_id: str, params: dict, operator_id: str | None = None) -> None:
         """Update file processing params"""
@@ -470,17 +611,27 @@ class KnowledgeBaseManager:
     async def delete_folder(self, db_id: str, folder_id: str) -> None:
         """递归删除文件夹"""
         kb_instance = await self._get_kb_for_database(db_id)
+        for file_id in self._collect_folder_file_ids(kb_instance, db_id, folder_id):
+            await self._remove_openviking_kb_file(db_id, file_id)
         await kb_instance.delete_folder(db_id, folder_id)
 
     async def delete_file(self, db_id: str, file_id: str) -> None:
         """删除文件"""
+        await self._remove_openviking_kb_file(db_id, file_id)
         kb_instance = await self._get_kb_for_database(db_id)
         await kb_instance.delete_file(db_id, file_id)
 
     async def update_content(self, db_id: str, file_ids: list[str], params: dict | None = None) -> list[dict]:
         """更新内容（重新分块）"""
         kb_instance = await self._get_kb_for_database(db_id)
-        return await kb_instance.update_content(db_id, file_ids, params or {})
+        results = await kb_instance.update_content(db_id, file_ids, params or {})
+        for item in results:
+            if item.get("status") not in {"done", "indexed"}:
+                continue
+            synced_file_id = item.get("file_id")
+            if synced_file_id:
+                await self._sync_openviking_kb_file(db_id, synced_file_id)
+        return results
 
     async def get_file_basic_info(self, db_id: str, file_id: str) -> dict:
         """获取文件基本信息（仅元数据）"""

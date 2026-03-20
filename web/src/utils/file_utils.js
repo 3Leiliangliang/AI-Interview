@@ -72,16 +72,16 @@ export const getFileIconColor = (filename) => {
 
   // Check if it's a URL
   if (filename.startsWith('http://') || filename.startsWith('https://')) {
-    return '#1890ff' // Blue for links
+    return '#3781cf' // 科技浅蓝，用于链接
   }
 
   const extension = filename.toLowerCase().split('.').pop()
 
   const colorMap = {
     // 文本文件 - 蓝色
-    txt: '#1890ff',
-    text: '#1890ff',
-    log: '#1890ff',
+    txt: '#3781cf',
+    text: '#3781cf',
+    log: '#3781cf',
 
     // Markdown文件 - 深灰色
     md: '#595959',

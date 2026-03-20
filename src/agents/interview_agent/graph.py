@@ -1,7 +1,13 @@
 from deepagents.backends import StateBackend
 from deepagents.middleware.filesystem import FilesystemMiddleware
+from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
 from langchain.agents import create_agent
-from langchain.agents.middleware import AgentMiddleware, ModelRetryMiddleware
+from langchain.agents.middleware import (
+    AgentMiddleware,
+    ModelRetryMiddleware,
+    TodoListMiddleware,
+    ToolCallLimitMiddleware,
+)
 
 from src.agents.common import BaseAgent, load_chat_model
 from src.agents.common.middlewares import RuntimeConfigMiddleware, save_attachments_to_fs
@@ -21,6 +27,32 @@ INTERVIEW_READ_FILE_DESCRIPTION = """读取用户在当前会话中上传的简�
 - 只对系统提示中已经给出的附件 file_path 调用这个工具。
 - 读取完简历后再发起面试提问。
 - 如果没有可用的附件路径，就直接提醒用户上传简历，不要猜测路径或读取无关文件。
+"""
+
+INTERVIEW_TODO_PROMPT = """## `write_todos`
+
+你正在进行一场模拟面试。每一轮面试都必须维护一份固定的 5 步任务清单，并通过 `write_todos` 工具更新整份列表。
+
+固定任务必须始终保持为以下 5 项，不要新增、删除、改名，也不要扩展成更多步骤：
+1. 读取简历并确认岗位背景
+2. 发起开场并请候选人自我介绍
+3. 追问项目经历与技术细节
+4. 评估岗位匹配度与风险点
+5. 输出总结与评分卡
+
+任务状态只允许使用：
+- pending
+- in_progress
+- completed
+
+使用规则：
+- 首轮真正发问前先初始化 5 条任务：第 1 条为 in_progress，其余为 pending。
+- 简历读取成功后：第 1 条改为 completed，第 2 条改为 in_progress。
+- 第一问已经发出后：第 2 条改为 completed，第 3 条改为 in_progress。
+- 面试进行中：根据对话进度推进第 3、4 条任务状态，但始终保持总任务数为 5。
+- 当用户要求“结束面试 / 总结 / 评分 / 给我反馈”时：先将第 5 条标记为 in_progress，输出总结和评分卡后再标记为 completed。
+- 每轮回答最多调用一次 `write_todos`，避免重复刷新。
+- 除这 5 条固定任务外，不要创建任何额外 todo。
 """
 
 
@@ -44,7 +76,7 @@ class InterviewAgent(BaseAgent):
     name = "模拟面试官"
     description = "根据你上传的简历逐题发起模拟面试，并在结束后给出反馈。"
     context_schema = InterviewContext
-    capabilities = ["file_upload", "files", "resume_interview"]
+    capabilities = ["file_upload", "files", "resume_interview", "todo"]
 
     async def get_graph(self, **kwargs):
         context = self.context_schema.from_file(module_name=self.module_name)
@@ -57,6 +89,13 @@ class InterviewAgent(BaseAgent):
                 _create_interview_filesystem_middleware(),
                 InterviewKnowledgeBaseMiddleware(),
                 RuntimeConfigMiddleware(),
+                TodoListMiddleware(system_prompt=INTERVIEW_TODO_PROMPT),
+                PatchToolCallsMiddleware(),
+                ToolCallLimitMiddleware(
+                    tool_name="query_kb",
+                    run_limit=1,
+                    exit_behavior="continue",
+                ),
                 ModelRetryMiddleware(),
             ],
             checkpointer=await self._get_checkpointer(),

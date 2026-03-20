@@ -170,11 +170,20 @@ class OpenVikingService:
     def _get_saved_hash(self, uri: str) -> str | None:
         return self._load_sync_state().get(uri, {}).get("content_hash")
 
-    def _set_synced(self, uri: str, content_hash: str, display_name: str = "") -> None:
-        self._load_sync_state()[uri] = {
+    def _set_synced(
+        self,
+        uri: str,
+        content_hash: str,
+        display_name: str = "",
+        sync_metadata: dict[str, str] | None = None,
+    ) -> None:
+        payload = {
             "content_hash": content_hash,
             "display_name": display_name,
         }
+        if sync_metadata:
+            payload.update({key: value for key, value in sync_metadata.items() if value})
+        self._load_sync_state()[uri] = payload
         self._save_sync_state()
 
     def _remove_synced(self, uri: str) -> None:
@@ -192,8 +201,59 @@ class OpenVikingService:
         return f"viking://resources/kbs/{db_id}"
 
     @staticmethod
-    def build_kb_file_uri(db_id: str, file_id: str) -> str:
+    def build_legacy_kb_file_uri(db_id: str, file_id: str) -> str:
         return f"{OpenVikingService.build_kb_root_uri(db_id)}/{file_id}.md"
+
+    @staticmethod
+    def _sanitize_uri_segment(segment: str) -> str:
+        text = (segment or "").strip().strip("/")
+        if not text:
+            return "untitled"
+
+        sanitized: list[str] = []
+        for char in text:
+            if char.isalnum() or char in {"-", "_", ".", " "}:
+                sanitized.append(char)
+            else:
+                sanitized.append("_")
+
+        return "".join(sanitized).strip().replace(" ", "_") or "untitled"
+
+    @classmethod
+    def _build_kb_file_resource_key(cls, db_id: str, file_id: str) -> str:
+        return f"kb_file:{db_id}:{file_id}"
+
+    @classmethod
+    def _build_folder_segments(
+        cls,
+        record: KnowledgeFile,
+        records_by_id: dict[str, KnowledgeFile],
+    ) -> list[str]:
+        segments: list[str] = []
+        current_parent_id = record.parent_id
+
+        while current_parent_id:
+            parent = records_by_id.get(current_parent_id)
+            if parent is None:
+                break
+            segments.append(cls._sanitize_uri_segment(parent.filename or parent.file_id))
+            current_parent_id = parent.parent_id
+
+        segments.reverse()
+        return segments
+
+    @classmethod
+    def build_kb_file_uri(
+        cls,
+        db_id: str,
+        record: KnowledgeFile,
+        records_by_id: dict[str, KnowledgeFile],
+    ) -> str:
+        base_uri = cls.build_kb_root_uri(db_id)
+        folder_segments = cls._build_folder_segments(record, records_by_id)
+        file_segment = cls._sanitize_uri_segment(record.filename or record.file_id)
+        folder_prefix = f"{'/'.join(folder_segments)}/" if folder_segments else ""
+        return f"{base_uri}/{folder_prefix}{file_segment}__{record.file_id}.md"
 
     @staticmethod
     def _truncate_text(text: str, limit: int = 1200) -> str:
@@ -266,9 +326,23 @@ class OpenVikingService:
             temp_file.write(content)
             return temp_file.name
 
-    async def sync_text_resource(self, *, uri: str, content: str, content_hash: str, display_name: str = "") -> str:
+    def _find_synced_uri(self, *, resource_key: str) -> str | None:
+        for uri, item in self._load_sync_state().items():
+            if item.get("resource_key") == resource_key:
+                return uri
+        return None
+
+    async def sync_text_resource(
+        self,
+        *,
+        uri: str,
+        content: str,
+        content_hash: str,
+        display_name: str = "",
+        sync_metadata: dict[str, str] | None = None,
+    ) -> str:
         if not content.strip():
-            raise ValueError("同步到 OpenViking 的内容不能为空")
+            raise ValueError("Content synced to OpenViking cannot be empty")
 
         saved_hash = self._get_saved_hash(uri)
         if saved_hash == content_hash:
@@ -289,7 +363,12 @@ class OpenVikingService:
                 build_index=True,
                 summarize=False,
             )
-            self._set_synced(uri, content_hash=content_hash, display_name=display_name)
+            self._set_synced(
+                uri,
+                content_hash=content_hash,
+                display_name=display_name,
+                sync_metadata=sync_metadata,
+            )
         finally:
             try:
                 os.unlink(temp_path)
@@ -314,10 +393,55 @@ class OpenVikingService:
             content=resume.markdown_content or "",
             content_hash=resume.content_hash or str(resume.id),
             display_name=resume.filename,
+            sync_metadata={
+                "resource_key": f"resume:{resume.user_id}:{resume.id}",
+                "user_id": str(resume.user_id),
+                "resume_id": str(resume.id),
+            },
         )
 
     async def remove_resume(self, resume: UserResume) -> None:
         await self.remove_resource(self.build_resume_uri(resume.user_id, resume.id))
+
+    async def sync_kb_file(
+        self,
+        db_id: str,
+        record: KnowledgeFile,
+        records_by_id: dict[str, KnowledgeFile],
+        previous_uri: str | None = None,
+    ) -> str | None:
+        if record.is_folder:
+            return None
+        return await self._sync_kb_record(db_id, record, records_by_id, previous_uri=previous_uri)
+
+    async def sync_kb_file_by_id(self, db_id: str, file_id: str, previous_uri: str | None = None) -> str | None:
+        from src.repositories.knowledge_file_repository import KnowledgeFileRepository
+
+        repo = KnowledgeFileRepository()
+        record = await repo.get_by_file_id(file_id)
+        if record is None or record.db_id != db_id:
+            return None
+        records_by_id = {item.file_id: item for item in await repo.list_by_db_id(db_id)}
+        return await self.sync_kb_file(db_id, record, records_by_id, previous_uri=previous_uri)
+
+    async def remove_kb_file(self, db_id: str, file_id: str) -> None:
+        from src.repositories.knowledge_file_repository import KnowledgeFileRepository
+
+        repo = KnowledgeFileRepository()
+        record = await repo.get_by_file_id(file_id)
+        if record is not None and record.db_id == db_id:
+            records_by_id = {item.file_id: item for item in await repo.list_by_db_id(db_id)}
+            await self.remove_resource(self.build_kb_file_uri(db_id, record, records_by_id))
+
+        resource_key = self._build_kb_file_resource_key(db_id, file_id)
+        synced_uri = self._find_synced_uri(resource_key=resource_key)
+        if synced_uri:
+            await self.remove_resource(synced_uri)
+
+        await self.remove_resource(self.build_legacy_kb_file_uri(db_id, file_id))
+
+    async def remove_kb_database(self, db_id: str) -> None:
+        await self.remove_resource(self.build_kb_root_uri(db_id))
 
     async def _read_minio_text(self, file_url: str) -> str:
         bucket_name, object_name = parse_minio_url(file_url)
@@ -330,8 +454,22 @@ class OpenVikingService:
             return await self._read_minio_text(record.markdown_file)
         return ""
 
-    async def _sync_kb_record(self, db_id: str, record: KnowledgeFile) -> str | None:
-        uri = self.build_kb_file_uri(db_id, record.file_id)
+    async def _sync_kb_record(
+        self,
+        db_id: str,
+        record: KnowledgeFile,
+        records_by_id: dict[str, KnowledgeFile],
+        previous_uri: str | None = None,
+    ) -> str | None:
+        uri = self.build_kb_file_uri(db_id, record, records_by_id)
+        resource_key = self._build_kb_file_resource_key(db_id, record.file_id)
+        previous_synced_uri = previous_uri or self._find_synced_uri(resource_key=resource_key)
+        legacy_uri = self.build_legacy_kb_file_uri(db_id, record.file_id)
+
+        for stale_uri in {previous_synced_uri, legacy_uri}:
+            if stale_uri and stale_uri != uri:
+                await self.remove_resource(stale_uri)
+
         content_hash = record.content_hash or record.file_id
         if self._get_saved_hash(uri) == content_hash:
             return uri
@@ -345,6 +483,11 @@ class OpenVikingService:
             content=content,
             content_hash=content_hash,
             display_name=record.original_filename or record.filename,
+            sync_metadata={
+                "resource_key": resource_key,
+                "db_id": db_id,
+                "file_id": record.file_id,
+            },
         )
 
     async def _cleanup_stale_kb_resources(self, db_id: str, current_uris: set[str]) -> None:
@@ -401,6 +544,26 @@ class OpenVikingService:
             logger.warning("Failed to read OpenViking resource %s: %s", uri, exc)
             return ""
 
+    @staticmethod
+    def _resolve_display_name(uri: str, name_mapping: dict[str, str]) -> str:
+        if not uri:
+            return "Document excerpt"
+
+        exact_name = name_mapping.get(uri)
+        if exact_name:
+            return exact_name
+
+        for base_uri, display_name in name_mapping.items():
+            normalized_base = base_uri.rstrip("/")
+            if uri == normalized_base or uri.startswith(f"{normalized_base}/"):
+                return display_name
+
+        if uri.startswith("viking://resources/resumes/"):
+            return "Resume excerpt"
+        if uri.startswith("viking://resources/kbs/"):
+            return "Knowledge excerpt"
+        return "Document excerpt"
+
     def _format_results(
         self,
         *,
@@ -414,7 +577,7 @@ class OpenVikingService:
 
         lines = [f"知识库：{kb_name}", f"检索问题：{query_text}", "", "命中内容："]
         for index, item in enumerate(results, start=1):
-            file_label = name_mapping.get(item["uri"], item["uri"])
+            file_label = self._resolve_display_name(item.get("uri", ""), name_mapping)
             lines.append(f"{index}. 文件：{file_label}")
             score = item.get("score")
             if isinstance(score, int | float):
@@ -473,14 +636,15 @@ class OpenVikingService:
         if not matched_records:
             return f"知识库“{kb_name}”中没有匹配文件“{file_name}”"
 
-        current_uris = {self.build_kb_file_uri(db_id, record.file_id) for record in all_records}
+        records_by_id = {record.file_id: record for record in all_records}
+        current_uris = {self.build_kb_file_uri(db_id, record, records_by_id) for record in all_records}
         await self._cleanup_stale_kb_resources(db_id, current_uris=current_uris)
 
         synced_uris: list[str] = []
         name_mapping: dict[str, str] = {}
         for record in matched_records:
             try:
-                uri = await self._sync_kb_record(db_id, record)
+                uri = await self._sync_kb_record(db_id, record, records_by_id)
             except Exception as exc:
                 logger.warning("Failed to sync knowledge file %s to OpenViking: %s", record.file_id, exc)
                 continue

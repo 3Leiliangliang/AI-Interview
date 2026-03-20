@@ -364,6 +364,7 @@ async def add_documents(
                 try:
                     # 2. Parse file (PARSING -> PARSED)
                     file_meta = await knowledge_base.parse_file(db_id, file_id, operator_id=current_user.user_id)
+                    added_files[item] = (file_id, file_meta)
                     processed_items.append(file_meta)
                     parse_success_count += 1
                 except Exception as parse_error:
@@ -1166,6 +1167,24 @@ async def move_document(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"移动文件失败 {e}, {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@knowledge.put("/databases/{db_id}/documents/{doc_id}/rename")
+async def rename_document(
+    db_id: str,
+    doc_id: str,
+    new_name: str = Body(..., embed=True),
+    current_user: User = Depends(get_admin_user),
+):
+    """Rename a file or folder."""
+    logger.debug(f"Rename document {doc_id} to {new_name} in {db_id}")
+    try:
+        return await knowledge_base.rename_file(db_id, doc_id, new_name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Rename document failed {e}, {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

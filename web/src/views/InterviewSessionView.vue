@@ -34,7 +34,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { FileText, Settings, Share2, Sparkles } from 'lucide-vue-next'
+import { FileText, Settings, Share2 } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 
 import AgentChatComponent from '@/components/AgentChatComponent.vue'
@@ -50,15 +50,9 @@ const router = useRouter()
 const agentStore = useAgentStore()
 const chatComponentRef = ref(null)
 
-const { agents, selectedAgentId, defaultAgentId } = storeToRefs(agentStore)
+const { selectedAgentId, defaultAgentId } = storeToRefs(agentStore)
 
 const interviewAgentId = computed(() => selectedAgentId.value || defaultAgentId.value || '')
-
-const currentAgentName = computed(() => {
-  if (!interviewAgentId.value) return 'AI 面试官'
-  const agent = agents.value.find((item) => item.id === interviewAgentId.value)
-  return agent?.name || 'AI 面试官'
-})
 
 const selectedPosition = computed(() => {
   const value = String(route.query.position || '').trim()
@@ -79,7 +73,15 @@ const contextOverrides = computed(() => ({
 
 const interviewOpeningPrompt = computed(
   () =>
-    `现在开始一轮${selectedPosition.value}${selectedRound.value}模拟面试。请你作为面试官主动发起第一问，先请候选人做简短自我介绍；如果当前会话里没有附件，请先尝试从“我的简历”知识库读取最近上传的简历，再结合简历内容追问。之后每次候选人回答后，请先用一句话做简短评价，再继续问下一个问题。`
+    [
+      `现在开始一轮${selectedPosition.value}${selectedRound.value}模拟面试。`,
+      '你必须始终以面试官身份发言，不能代替候选人作答，也不要输出“我叫……/我毕业于……”这类候选人口吻内容。',
+      '请先维护固定 5 步面试任务：1.读取简历并确认岗位背景；2.发起开场并请候选人自我介绍；3.追问项目经历与技术细节；4.评估岗位匹配度与风险点；5.输出总结与评分卡。',
+      '首轮真正发问前先初始化任务，第 1 项 in_progress，其余 pending。',
+      '如果当前会话里有附件，先读取附件简历；如果没有附件，只允许对“我的简历”知识库执行一次 query_kb 来读取最近上传的简历，本轮拿到内容后不要再次 query_kb，也不要对知识库返回内容调用 read_file。',
+      '拿到简历后立刻进入第一问：先简短欢迎，再请候选人做简短自我介绍，最多补一句基于简历的提示性追问方向，并且结尾必须是问句。',
+      '之后每次候选人回答后，请先用一句话做简短评价，再继续问下一个问题。'
+    ].join('')
 )
 
 const threadTitle = computed(() => `${selectedPosition.value} · ${selectedRound.value}`)

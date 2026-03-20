@@ -308,6 +308,21 @@ export const useDatabaseStore = defineStore('database', () => {
     }
   }
 
+  async function renameFile(fileId, newName) {
+    state.lock = true
+    try {
+      await documentApi.renameDocument(databaseId.value, fileId, newName)
+      await getDatabaseInfo(undefined, true)
+      message.success('重命名成功')
+    } catch (error) {
+      console.error(error)
+      message.error(error.message || '重命名失败')
+      throw error
+    } finally {
+      state.lock = false
+    }
+  }
+
   async function addFiles({ items, contentType, params, parentId }) {
     if (items.length === 0) {
       message.error(contentType === 'file' ? '请先上传文件' : '请输入有效的网页链接')
@@ -547,6 +562,7 @@ export const useDatabaseStore = defineStore('database', () => {
     handleDeleteFile,
     handleBatchDelete,
     moveFile,
+    renameFile,
     addFiles,
     parseFiles,
     indexFiles,

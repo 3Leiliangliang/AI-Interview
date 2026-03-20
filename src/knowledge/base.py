@@ -891,6 +891,36 @@ class KnowledgeBase(ABC):
         await self._persist_file(file_id)
         return meta
 
+    async def rename_file(self, db_id: str, file_id: str, new_name: str) -> dict:
+        if file_id not in self.files_meta:
+            raise ValueError(f"File {file_id} not found")
+
+        cleaned_name = (new_name or "").strip()
+        if not cleaned_name:
+            raise ValueError("New name cannot be empty")
+
+        meta = self.files_meta[file_id]
+        if meta.get("database_id") != db_id:
+            raise ValueError(f"File {file_id} does not belong to database {db_id}")
+
+        if meta.get("is_folder"):
+            meta["filename"] = cleaned_name
+            meta["path"] = cleaned_name
+        else:
+            old_filename = meta.get("filename") or ""
+            _, old_ext = os.path.splitext(old_filename)
+            new_filename = cleaned_name
+
+            if old_ext and not os.path.splitext(cleaned_name)[1]:
+                new_filename = f"{cleaned_name}{old_ext}"
+
+            meta["filename"] = new_filename
+            meta["original_filename"] = os.path.splitext(new_filename)[0]
+
+        meta["updated_at"] = utc_isoformat()
+        await self._persist_file(file_id)
+        return meta
+
     @abstractmethod
     async def delete_file(self, db_id: str, file_id: str) -> None:
         """
