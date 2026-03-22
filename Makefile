@@ -7,7 +7,6 @@ pull:
 	bash docker/pull_image.sh python:3.12-slim
 	bash docker/pull_image.sh node:20-slim
 	bash docker/pull_image.sh node:20-alpine
-	bash docker/pull_image.sh neo4j:5.26
 	bash docker/pull_image.sh minio/minio:RELEASE.2023-03-20T20-16-18Z
 	bash docker/pull_image.sh ghcr.io/astral-sh/uv:0.7.2
 	bash docker/pull_image.sh nginx:alpine

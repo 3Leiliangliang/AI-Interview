@@ -32,6 +32,20 @@ _BASE_DEFAULTS: dict[str, Any] = {
     "image_context_size": 0,
 }
 
+_SUPPORTED_PARSER_CONFIG_KEYS = {
+    "layout_recognize",
+    "chunk_token_num",
+    "delimiter",
+    "auto_keywords",
+    "auto_questions",
+    "html4excel",
+    "topn_tags",
+    "raptor",
+    "overlapped_percent",
+    "table_context_size",
+    "image_context_size",
+}
+
 _PRESET_DEFAULTS: dict[str, dict[str, Any] | None] = {
     CHUNK_PRESET_GENERAL: {
         "layout_recognize": "DeepDOC",
@@ -54,15 +68,10 @@ _PRESET_DEFAULTS: dict[str, dict[str, Any] | None] = {
             "max_cluster": 64,
             "random_seed": 0,
         },
-        "graphrag": {
-            "use_graphrag": True,
-            "entity_types": ["organization", "person", "geo", "event", "category"],
-            "method": "light",
-        },
     },
-    CHUNK_PRESET_QA: {"raptor": {"use_raptor": False}, "graphrag": {"use_graphrag": False}},
-    CHUNK_PRESET_BOOK: {"raptor": {"use_raptor": False}, "graphrag": {"use_graphrag": False}},
-    CHUNK_PRESET_LAWS: {"raptor": {"use_raptor": False}, "graphrag": {"use_graphrag": False}},
+    CHUNK_PRESET_QA: {"raptor": {"use_raptor": False}},
+    CHUNK_PRESET_BOOK: {"raptor": {"use_raptor": False}},
+    CHUNK_PRESET_LAWS: {"raptor": {"use_raptor": False}},
 }
 
 
@@ -147,6 +156,10 @@ def _legacy_params_to_parser_config(params: dict[str, Any] | None) -> dict[str, 
     return parser_config
 
 
+def _sanitize_chunk_parser_config(config: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in config.items() if key in _SUPPORTED_PARSER_CONFIG_KEYS}
+
+
 def ensure_chunk_defaults_in_additional_params(additional_params: dict[str, Any] | None) -> dict[str, Any]:
     params = dict(additional_params or {})
     params["chunk_preset_id"] = normalize_chunk_preset_id(params.get("chunk_preset_id"))
@@ -154,6 +167,8 @@ def ensure_chunk_defaults_in_additional_params(additional_params: dict[str, Any]
     if "chunk_parser_config" in params and not isinstance(params.get("chunk_parser_config"), dict):
         logger.warning("Invalid chunk_parser_config in additional_params, fallback to empty dict")
         params["chunk_parser_config"] = {}
+    elif isinstance(params.get("chunk_parser_config"), dict):
+        params["chunk_parser_config"] = _sanitize_chunk_parser_config(deepcopy(params["chunk_parser_config"]))
 
     return params
 
@@ -189,6 +204,7 @@ def resolve_chunk_processing_params(
     merged_legacy.update(file_params)
     merged_legacy.update(request)
     parser_config = deep_merge(parser_config, _legacy_params_to_parser_config(merged_legacy))
+    parser_config = _sanitize_chunk_parser_config(parser_config)
 
     # Build processing params snapshot (keep existing + request overrides for non-chunk fields)
     snapshot: dict[str, Any] = {}

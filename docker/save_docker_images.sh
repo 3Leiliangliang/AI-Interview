@@ -16,7 +16,6 @@ IMAGES=(
     "node:20-alpine",
     "node:20-slim",
     "nginx:alpine",
-    "neo4j:5.26",
     "minio/minio:RELEASE.2023-03-20T20-16-18Z",
 )
 

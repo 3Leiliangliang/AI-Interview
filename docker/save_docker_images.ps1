@@ -18,7 +18,6 @@ $Images = @(
     "ghcr.io/astral-sh/uv:0.7.2",
     "node:20-alpine",
     "nginx:alpine",
-    "neo4j:5.26",
     "minio/minio:RELEASE.2023-03-20T20-16-18Z",
     # "lmsysorg/sglang:v0.4.9.post3-cu126",
     # "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlex/paddlex:paddlex3.0.1-paddlepaddle3.0.0-gpu-cuda11.8-cudnn8.9-trt8.6"

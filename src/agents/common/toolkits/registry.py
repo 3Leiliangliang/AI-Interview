@@ -55,9 +55,9 @@ def tool(
     或者保留原有的 name_or_callable 和 description:
     @tool(
         category="buildin",
-        display_name="查询知识图谱",
-        name_or_callable="查询知识图谱",
-        description=KG_QUERY_DESCRIPTION,
+        display_name="查询知识库",
+        name_or_callable="查询知识库",
+        description=KB_QUERY_DESCRIPTION,
     )
     def ask_user_question(question: str, options: list[dict]) -> dict:
         ...

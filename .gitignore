@@ -60,11 +60,11 @@ web/package-lock.json
 saves
 saves_dev
 notebooks
-graphrag
 docker/volumes
 docs/vibe
 .cursorrules
 .codex_tmp/
 .knowledge/
+.playwright-cli/
 
 /models
