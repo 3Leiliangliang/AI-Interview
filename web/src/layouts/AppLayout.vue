@@ -150,15 +150,6 @@ const mainList = computed(() => {
     }
   ]
 
-  if (userStore.isSuperAdmin) {
-    items.push({
-      name: '扩展',
-      path: '/extensions',
-      icon: Blocks,
-      activeIcon: Blocks
-    })
-  }
-
   items.push({
     name: 'Dashboard',
     path: '/dashboard',
