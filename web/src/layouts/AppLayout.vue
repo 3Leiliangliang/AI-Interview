@@ -75,7 +75,7 @@ const fetchGithubStars = async () => {
   try {
     isLoadingStars.value = true
     // 公共API，可以直接使用fetch
-    const response = await fetch('https://api.github.com/repos/xerrors/AI-interview')
+    const response = await fetch('https://api.github.com/repos/xerrors/Bole')
     const data = await response.json()
     githubStars.value = data.stargazers_count
   } catch (error) {
@@ -104,7 +104,28 @@ const activeTaskCount = computed(() => activeCountRef.value || 0)
 const sidebarToggleIcon = computed(() =>
   isSidebarCollapsed.value ? PanelLeftOpen : PanelLeftClose
 )
-const organizationName = computed(() => infoStore.organization?.name || 'AI Interview')
+const organizationName = computed(() => {
+  const name = String(infoStore.organization?.name || '').trim()
+  if (!name || /^ai[\s-]*interview$/i.test(name)) {
+    return '伯乐 Bole'
+  }
+  return name
+})
+const sidebarBrand = computed(() => {
+  const name = organizationName.value.trim()
+  if (name === '伯乐 Bole' || name === '伯乐' || name.toLowerCase() === 'bole') {
+    return {
+      eyebrow: '',
+      leading: '伯乐',
+      trailing: 'Bole'
+    }
+  }
+  return {
+    eyebrow: '',
+    leading: name,
+    trailing: ''
+  }
+})
 
 // 下面是导航菜单部分，添加智能体项
 const mainList = computed(() => {
@@ -164,7 +185,15 @@ provide('settingsModal', {
         <div class="logo circle">
           <router-link to="/">
             <img :src="infoStore.organization.avatar" />
-            <span v-if="!isSidebarCollapsed" class="logo-title">{{ organizationName }}</span>
+            <span v-if="!isSidebarCollapsed" class="logo-title">
+              <span v-if="sidebarBrand.eyebrow" class="logo-eyebrow">{{ sidebarBrand.eyebrow }}</span>
+              <span class="logo-title-main">
+                <span class="logo-title-leading">{{ sidebarBrand.leading }}</span>
+                <span v-if="sidebarBrand.trailing" class="logo-title-trailing">
+                  {{ sidebarBrand.trailing }}
+                </span>
+              </span>
+            </span>
           </router-link>
         </div>
         <button
@@ -279,6 +308,8 @@ div.header,
   flex: 0 0 @header-width;
   justify-content: flex-start;
   align-items: stretch;
+  position: relative;
+  overflow: visible;
   background-color: var(--bg-sider);
   height: 100%;
   width: @header-width;
@@ -295,10 +326,9 @@ div.header,
     padding: 12px 8px;
 
     .header-top {
-      flex-direction: column;
-      justify-content: flex-start;
+      flex-direction: row;
+      justify-content: center;
       align-items: center;
-      gap: 10px;
     }
 
     .nav-item {
@@ -319,7 +349,7 @@ div.header,
   .header-top {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     gap: 8px;
     margin-bottom: 20px;
   }
@@ -358,6 +388,44 @@ div.header,
     }
 
     .logo-title {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .logo-eyebrow {
+      font-size: 10px;
+      line-height: 1;
+      letter-spacing: 0.16em;
+      color: var(--main-color);
+      font-weight: 700;
+      margin-bottom: 4px;
+      white-space: nowrap;
+    }
+
+    .logo-title-main {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      min-width: 0;
+      white-space: nowrap;
+    }
+
+    .logo-title-leading {
+      font-size: 18px;
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      color: var(--gray-1000);
+    }
+
+    .logo-title-trailing {
+      font-size: 15px;
+      line-height: 1;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      color: var(--gray-700);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -365,22 +433,30 @@ div.header,
   }
 
   .collapse-btn {
-    width: 32px;
-    height: 32px;
-    display: inline-flex;
+    position: absolute;
+    top: clamp(0.35rem, 0.8vw, 0.6rem);
+    right: 0;
+    transform: translateX(calc(100% + clamp(0.75rem, 1.2vw, 1rem)));
+    z-index: 10;
+    width: 28px;
+    height: 28px;
+    display: flex;
     align-items: center;
     justify-content: center;
-    border: none;
+    border: 1px solid var(--main-100);
     border-radius: 10px;
-    background: transparent;
+    background: var(--main-0);
     color: var(--gray-700);
     cursor: pointer;
+    box-shadow: 0 4px 12px var(--shadow-1);
     transition:
       background-color 0.2s ease,
-      color 0.2s ease;
+      color 0.2s ease,
+      border-color 0.2s ease;
 
     &:hover {
       background-color: var(--main-20);
+      border-color: var(--main-200);
       color: var(--main-color);
     }
   }

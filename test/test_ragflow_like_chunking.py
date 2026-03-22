@@ -64,6 +64,133 @@ def test_qa_chunking_from_markdown_headings() -> None:
     assert "回答：" in chunks[0]["content"]
 
 
+def test_qa_chunking_should_ignore_toc_table_and_extract_real_questions() -> None:
+    content = """
+# React Interview Questions & Answers
+
+### Table of Contents
+
+| No. | Questions |
+| --- | --- |
+| 1 | [What is React?](#what-is-react) |
+| 2 | [What is JSX?](#what-is-jsx) |
+
+## Core React
+
+1.  ### What is React?
+
+    React is a UI library.
+
+2.  ### What is JSX?
+
+    JSX is a syntax extension for JavaScript.
+""".strip()
+
+    chunks = chunk_markdown(
+        markdown_content=content,
+        file_id="file_toc",
+        filename="react-readme.md",
+        processing_params={"chunk_preset_id": "qa", "chunk_parser_config": {}},
+    )
+
+    assert len(chunks) == 2
+    assert "What is React?" in chunks[0]["content"]
+    assert "React is a UI library." in chunks[0]["content"]
+    assert "No." not in chunks[0]["content"]
+    assert "Questions" not in chunks[0]["content"]
+    assert "What is JSX?" in chunks[1]["content"]
+
+
+def test_qa_chunking_should_parse_numbered_heading_question_blocks() -> None:
+    content = """
+#### 1. What is the output of below code?
+
+```javascript
+console.log('hello')
+```
+
+<details><summary><b>Answer</b></summary>
+<p>
+
+##### Answer: 3
+Because the state update is batched.
+
+</p>
+</details>
+""".strip()
+
+    chunks = chunk_markdown(
+        markdown_content=content,
+        file_id="file_code",
+        filename="coding-exercise.md",
+        processing_params={"chunk_preset_id": "qa", "chunk_parser_config": {}},
+    )
+
+    assert len(chunks) == 1
+    assert "What is the output of below code?" in chunks[0]["content"]
+    assert "Because the state update is batched." in chunks[0]["content"]
+
+
+def test_qa_chunking_should_strip_answer_wrappers() -> None:
+    content = """
+#### 1. What is the output of below code?
+
+```javascript
+console.log('hello')
+```
+
+<details><summary><b>Answer</b></summary>
+<p>
+
+##### Answer: 3
+Because the state update is batched.
+
+</p>
+</details>
+""".strip()
+
+    chunks = chunk_markdown(
+        markdown_content=content,
+        file_id="file_wrapped_answer",
+        filename="coding-exercise.md",
+        processing_params={"chunk_preset_id": "qa", "chunk_parser_config": {}},
+    )
+
+    assert len(chunks) == 1
+    assert "<details>" not in chunks[0]["content"]
+    assert "<summary>" not in chunks[0]["content"]
+    assert "Answer: 3" not in chunks[0]["content"]
+    assert "3" in chunks[0]["content"]
+    assert "Because the state update is batched." in chunks[0]["content"]
+
+
+def test_qa_chunking_should_not_treat_answer_list_items_as_new_questions() -> None:
+    content = """
+#### What is cleanup timing in useEffect?
+
+The cleanup function executes in two scenarios:
+1. **Before re-running the effect** (if dependencies change)
+2. **When the component unmounts**
+
+#### What happens next?
+
+React moves on to the next question.
+""".strip()
+
+    chunks = chunk_markdown(
+        markdown_content=content,
+        file_id="file_effect_cleanup",
+        filename="coding-exercise.md",
+        processing_params={"chunk_preset_id": "qa", "chunk_parser_config": {}},
+    )
+
+    assert len(chunks) == 2
+    assert "What is cleanup timing in useEffect?" in chunks[0]["content"]
+    assert "When the component unmounts" in chunks[0]["content"]
+    assert not any("问题：When the component unmounts" in chunk["content"] for chunk in chunks)
+    assert "What happens next?" in chunks[1]["content"]
+
+
 def test_book_chunking_hierarchical_merge() -> None:
     content = """
 第一章 总则

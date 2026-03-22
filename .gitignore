@@ -65,5 +65,6 @@ docker/volumes
 docs/vibe
 .cursorrules
 .codex_tmp/
+.knowledge/
 
 /models

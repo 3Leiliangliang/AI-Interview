@@ -611,6 +611,7 @@ async def upload_my_resume(
         if openviking_service.is_enabled():
             try:
                 await openviking_service.sync_resume(resume_record)
+                await openviking_service.sync_resume_memory(resume_record)
             except Exception as exc:
                 logger.warning("Sync resume to OpenViking failed for user %s: %s", current_user.user_id, exc)
 
@@ -654,6 +655,7 @@ async def delete_my_resume(
         if openviking_service.is_enabled():
             try:
                 await openviking_service.remove_resume(resume_record)
+                await openviking_service.remove_resume_memory(resume_record)
             except Exception as exc:
                 logger.warning("Remove resume from OpenViking failed for user %s: %s", current_user.user_id, exc)
 

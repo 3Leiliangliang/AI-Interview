@@ -11,6 +11,7 @@ from src.services.doc_converter import (
     MAX_ATTACHMENT_SIZE_BYTES,
     convert_upload_to_markdown,
 )
+from src.services.openviking_service import openviking_service
 from src.storage.minio.client import get_minio_client
 from src.utils.datetime_utils import utc_isoformat
 from src.utils.logging_config import logger
@@ -41,6 +42,16 @@ def _make_attachment_path(file_name: str) -> str:
     # 替换路径分隔符
     safe_name = base_name.replace("/", "_").replace("\\", "_")
     return f"/attachments/{safe_name}.md"
+
+
+def _build_viking_attachment_path(viking_uri: str | None) -> str | None:
+    if not viking_uri or not viking_uri.startswith("viking://"):
+        return None
+
+    name = viking_uri.removeprefix("viking://").rstrip("/").split("/")[-1]
+    if not name:
+        return None
+    return f"/viking/session/current/attachments/{name}"
 
 
 def _build_state_files(attachments: list[dict]) -> dict:
@@ -263,6 +274,18 @@ async def upload_thread_attachment_view(
         logger.error(f"Failed to upload attachment to MinIO: {e}")
         # 继续处理，不因为上传失败而中断
 
+    viking_uri = None
+    if openviking_service.is_enabled():
+        try:
+            viking_uri = await openviking_service.sync_thread_attachment(
+                user_id=str(current_user_id),
+                thread_id=thread_id,
+                file_name=conversion.file_name,
+                markdown_content=conversion.markdown,
+            )
+        except Exception as exc:
+            logger.warning(f"Failed to sync attachment to OpenViking: {exc}")
+
     attachment_record = {
         "file_id": conversion.file_id,
         "file_name": conversion.file_name,
@@ -272,7 +295,9 @@ async def upload_thread_attachment_view(
         "markdown": conversion.markdown,
         "uploaded_at": utc_isoformat(),
         "truncated": conversion.truncated,
-        "file_path": file_path,  # 用于 StateBackend，前端不返回此字段
+        "file_path": file_path,
+        "viking_uri": viking_uri,
+        "viking_path": _build_viking_attachment_path(viking_uri),  # 用于 StateBackend，前端不返回此字段
         "minio_url": minio_url,  # 暂未使用
     }
     await conv_repo.add_attachment(conversation.id, attachment_record)
@@ -314,9 +339,21 @@ async def delete_thread_attachment_view(
 ) -> dict:
     conv_repo = ConversationRepository(db)
     conversation = await require_user_conversation(conv_repo, thread_id, str(current_user_id))
+    existing_attachments = await conv_repo.get_attachments(conversation.id)
+    target_attachment = next((item for item in existing_attachments if item.get("file_id") == file_id), None)
     removed = await conv_repo.remove_attachment(conversation.id, file_id)
     if not removed:
         raise HTTPException(status_code=404, detail="附件不存在或已被删除")
+    if openviking_service.is_enabled() and target_attachment:
+        try:
+            await openviking_service.remove_thread_attachment(
+                user_id=str(current_user_id),
+                thread_id=thread_id,
+                file_name=target_attachment.get("file_name", ""),
+            )
+        except Exception as exc:
+            logger.warning(f"Failed to remove attachment from OpenViking: {exc}")
+
     all_attachments = await conv_repo.get_attachments(conversation.id)
     await _sync_thread_attachment_state(
         thread_id=thread_id,

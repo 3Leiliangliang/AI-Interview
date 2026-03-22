@@ -17,7 +17,7 @@ if [ $SLASH_COUNT -eq 0 ]; then
     # No prefix (e.g., python:3.12-slim)
     MIRROR_URL="m.daocloud.io/docker.io/library"
 elif [ $SLASH_COUNT -eq 1 ]; then
-    # One prefix (e.g., milvusdb/milvus:latest)
+    # One prefix (e.g., postgres:16)
     MIRROR_URL="m.daocloud.io/docker.io"
 else
     # Two or more prefixes (e.g., quay.io/coreos/etcd:v3.5.5)

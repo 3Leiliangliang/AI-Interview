@@ -35,7 +35,7 @@ async def test_delete_knowledge_base_cleanup():
         kb_info = await kb_manager.create_database(
             database_name=test_db_name,
             description="Test knowledge base for MinIO cleanup",
-            kb_type="milvus",
+            kb_type="openviking",
         )
         db_id = kb_info["db_id"]
         print(f"   知识库创建成功: db_id={db_id}")

@@ -242,7 +242,11 @@ async def query_kb(kb_name: str, query_text: str, file_name: str | None = None, 
     if not target_info:
         return f"知识库“{kb_name}”不存在"
 
-    if openviking_service.is_enabled() and target_db_id:
+    if (
+        openviking_service.is_enabled()
+        and target_db_id
+        and target_info.get("metadata", {}).get("kb_type") != "openviking"
+    ):
         try:
             return await openviking_service.query_database(
                 db_id=target_db_id,

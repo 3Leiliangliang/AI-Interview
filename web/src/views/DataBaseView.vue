@@ -150,7 +150,7 @@
         />
         <div class="top">
           <div class="icon">
-            <component :is="getKbTypeIcon(database.kb_type || 'milvus')" />
+            <component :is="getKbTypeIcon(database.kb_type || 'openviking')" />
           </div>
           <div class="info">
             <h3>{{ database.name }}</h3>
@@ -170,13 +170,16 @@
           <a-tag color="blue" v-if="database.embed_info?.name">{{
             database.embed_info.name
           }}</a-tag>
+          <a-tag color="cyan" class="chunk-tag">
+            分块：{{ chunkPresetLabelMap[database.additional_params?.chunk_preset_id || 'general'] || 'General' }}
+          </a-tag>
           <!-- <a-tag color="green" v-if="database.embed_info?.dimension">{{ database.embed_info.dimension }}</a-tag> -->
           <a-tag
-            :color="getKbTypeColor(database.kb_type || 'milvus')"
+            :color="getKbTypeColor(database.kb_type || 'openviking')"
             class="kb-type-tag"
             size="small"
           >
-            {{ getKbTypeLabel(database.kb_type || 'milvus') }}
+            {{ getKbTypeLabel(database.kb_type || 'openviking') }}
           </a-tag>
         </div>
         <!-- <button @click="deleteDatabase(database.collection_name)">删除</button> -->
@@ -201,7 +204,11 @@ import ShareConfigForm from '@/components/ShareConfigForm.vue'
 import dayjs, { parseToShanghai } from '@/utils/time'
 import AiTextarea from '@/components/AiTextarea.vue'
 import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor } from '@/utils/kb_utils'
-import { CHUNK_PRESET_OPTIONS, getChunkPresetDescription } from '@/utils/chunk_presets'
+import {
+  CHUNK_PRESET_OPTIONS,
+  CHUNK_PRESET_LABEL_MAP,
+  getChunkPresetDescription
+} from '@/utils/chunk_presets'
 
 const route = useRoute()
 const router = useRouter()
@@ -237,12 +244,13 @@ const languageOptions = [
 ]
 
 const chunkPresetOptions = CHUNK_PRESET_OPTIONS.map(({ label, value }) => ({ label, value }))
+const chunkPresetLabelMap = CHUNK_PRESET_LABEL_MAP
 
 const createEmptyDatabaseForm = () => ({
   name: '',
   description: '',
   embed_model_name: configStore.config?.embed_model,
-  kb_type: 'milvus',
+  kb_type: 'openviking',
   is_private: false,
   storage: '',
   chunk_preset_id: 'general'
@@ -279,9 +287,9 @@ const loadSupportedKbTypes = async () => {
     console.error('加载知识库类型失败:', error)
     // 如果加载失败，设置默认类型
     supportedKbTypes.value = {
-      milvus: {
-        description: '基于 Milvus 的生产级向量知识库，适合高性能部署',
-        class_name: 'MilvusKB'
+      openviking: {
+        description: '基于 OpenViking 的生产级向量知识库，适合高性能部署',
+        class_name: 'OpenVikingKB'
       }
     }
   }
@@ -376,7 +384,7 @@ const buildRequestData = () => {
   }
 
   // 根据类型添加特定配置
-  if (['milvus'].includes(newDatabase.kb_type)) {
+  if (['openviking'].includes(newDatabase.kb_type)) {
     if (newDatabase.storage) {
       requestData.additional_params.storage = newDatabase.storage
     }
@@ -698,6 +706,17 @@ onMounted(() => {
     font-size: 13px;
     font-weight: 400;
     flex: 1;
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .chunk-tag {
+    font-weight: 600;
   }
 }
 

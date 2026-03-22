@@ -205,7 +205,7 @@ async def knowledge_database(test_client: httpx.AsyncClient, admin_headers: dict
                 "database_name": db_name,
                 "description": "Pytest managed knowledge base",
                 "embed_model_name": "siliconflow/BAAI/bge-m3",
-                "kb_type": "milvus",
+                "kb_type": "openviking",
                 "additional_params": {},
             },
             headers=admin_headers,

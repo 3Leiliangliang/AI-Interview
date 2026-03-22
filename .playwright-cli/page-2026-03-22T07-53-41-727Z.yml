@@ -1,0 +1,149 @@
+- generic [ref=e233]:
+  - generic [ref=e234]:
+    - generic [ref=e235]:
+      - link "伯乐 Bole" [ref=e237] [cursor=pointer]:
+        - /url: /
+        - img [ref=e238]
+        - generic [ref=e240]:
+          - generic [ref=e241]: 伯乐
+          - generic [ref=e242]: Bole
+      - button [ref=e243] [cursor=pointer]:
+        - img [ref=e244]
+    - generic [ref=e247]:
+      - link "模拟面试" [ref=e248] [cursor=pointer]:
+        - /url: /agent
+        - generic [ref=e249]:
+          - img [ref=e250]
+          - generic [ref=e253]: 模拟面试
+      - link "我的简历" [ref=e254] [cursor=pointer]:
+        - /url: /resume
+        - generic [ref=e255]:
+          - img [ref=e256]
+          - generic [ref=e259]: 我的简历
+      - link "知识库" [ref=e260] [cursor=pointer]:
+        - /url: /database
+        - generic [ref=e261]:
+          - img [ref=e262]
+          - generic [ref=e265]: 知识库
+      - link "扩展" [ref=e266] [cursor=pointer]:
+        - /url: /extensions
+        - generic [ref=e267]:
+          - img [ref=e268]
+          - generic [ref=e271]: 扩展
+      - link "Dashboard" [ref=e272] [cursor=pointer]:
+        - /url: /dashboard
+        - generic [ref=e273]:
+          - img [ref=e274]
+          - generic [ref=e276]: Dashboard
+      - generic [ref=e278] [cursor=pointer]:
+        - img [ref=e280]
+        - generic [ref=e283]: 任务中心
+    - generic [ref=e287] [cursor=pointer]:
+      - img [ref=e289]
+      - generic [ref=e293]: admin
+  - generic [ref=e295]:
+    - generic [ref=e296]:
+      - generic [ref=e297]:
+        - img [ref=e298]
+        - generic [ref=e301]: 模拟面试配置
+      - heading "开始一轮新的模拟面试" [level=1] [ref=e302]
+      - paragraph [ref=e303]: 先选择岗位和轮次，再进入面试界面。进入后面试官会自动发起第一问。
+      - generic [ref=e304]:
+        - generic [ref=e305]: 选择岗位
+        - generic [ref=e306]:
+          - button "前端" [ref=e307] [cursor=pointer]
+          - button "后端" [ref=e308] [cursor=pointer]
+          - button "产品" [ref=e309] [cursor=pointer]
+          - button "测试" [ref=e310] [cursor=pointer]
+          - button "算法" [ref=e311] [cursor=pointer]
+          - button "运营" [ref=e312] [cursor=pointer]
+          - button "通用" [ref=e313] [cursor=pointer]
+      - generic [ref=e314]:
+        - generic [ref=e315]: 面试轮次
+        - generic [ref=e316]:
+          - button "初试" [ref=e317] [cursor=pointer]
+          - button "复试" [ref=e318] [cursor=pointer]
+          - button "HR" [ref=e319] [cursor=pointer]
+      - generic [ref=e320]:
+        - generic [ref=e321]: 当前配置
+        - generic [ref=e322]:
+          - generic [ref=e323]: 通用岗位
+          - generic [ref=e324]: 初试
+      - generic [ref=e325]:
+        - button "开始面试" [ref=e326] [cursor=pointer]
+        - button "我的简历" [ref=e327] [cursor=pointer]
+    - generic [ref=e328]:
+      - generic [ref=e329]:
+        - img [ref=e330]
+        - generic [ref=e333]: 最近面试记录
+      - generic [ref=e334]:
+        - generic [ref=e335] [cursor=pointer]:
+          - generic [ref=e336]:
+            - generic [ref=e337]: 后端工程师 · 初试
+            - generic [ref=e338]: 3/20 02:54
+          - img [ref=e339]
+        - generic [ref=e341] [cursor=pointer]:
+          - generic [ref=e342]:
+            - generic [ref=e343]: 后端工程师 · 初试
+            - generic [ref=e344]: 3/20 02:51
+          - img [ref=e345]
+        - generic [ref=e347] [cursor=pointer]:
+          - generic [ref=e348]:
+            - generic [ref=e349]: 后端工程师 · 初试
+            - generic [ref=e350]: 3/20 02:25
+          - img [ref=e351]
+        - generic [ref=e353] [cursor=pointer]:
+          - generic [ref=e354]:
+            - generic [ref=e355]: 新的对话
+            - generic [ref=e356]: 3/20 02:24
+          - img [ref=e357]
+        - generic [ref=e359] [cursor=pointer]:
+          - generic [ref=e360]:
+            - generic [ref=e361]: 后端工程师 · 初试
+            - generic [ref=e362]: 3/20 02:15
+          - img [ref=e363]
+        - generic [ref=e365] [cursor=pointer]:
+          - generic [ref=e366]:
+            - generic [ref=e367]: 后端工程师 · 初试
+            - generic [ref=e368]: 3/19 07:04
+          - img [ref=e369]
+        - generic [ref=e371] [cursor=pointer]:
+          - generic [ref=e372]:
+            - generic [ref=e373]: 前端工程师 · 初试
+            - generic [ref=e374]: 3/19 06:36
+          - img [ref=e375]
+        - generic [ref=e377] [cursor=pointer]:
+          - generic [ref=e378]:
+            - generic [ref=e379]: 后端工程师 · 初试
+            - generic [ref=e380]: 3/19 05:23
+          - img [ref=e381]
+        - generic [ref=e383] [cursor=pointer]:
+          - generic [ref=e384]:
+            - generic [ref=e385]: 前端工程师 · 初试
+            - generic [ref=e386]: 3/19 05:23
+          - img [ref=e387]
+        - generic [ref=e389] [cursor=pointer]:
+          - generic [ref=e390]:
+            - generic [ref=e391]: 通用岗位 · 初试
+            - generic [ref=e392]: 3/19 05:15
+          - img [ref=e393]
+        - generic [ref=e395] [cursor=pointer]:
+          - generic [ref=e396]:
+            - generic [ref=e397]: 前端工程师 · 初试
+            - generic [ref=e398]: 3/19 05:07
+          - img [ref=e399]
+        - generic [ref=e401] [cursor=pointer]:
+          - generic [ref=e402]:
+            - generic [ref=e403]: 前端工程师 · 初试
+            - generic [ref=e404]: 3/19 05:05
+          - img [ref=e405]
+        - generic [ref=e407] [cursor=pointer]:
+          - generic [ref=e408]:
+            - generic [ref=e409]: 前端工程师 · 初试
+            - generic [ref=e410]: 3/19 02:24
+          - img [ref=e411]
+        - generic [ref=e413] [cursor=pointer]:
+          - generic [ref=e414]:
+            - generic [ref=e415]: 前端工程师 · 初试
+            - generic [ref=e416]: 3/19 01:58
+          - img [ref=e417]

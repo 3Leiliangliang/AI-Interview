@@ -46,7 +46,7 @@ async def test_create_database_with_chunk_preset(test_client, admin_headers):
         "database_name": db_name,
         "description": "Chunk preset create test",
         "embed_model_name": "siliconflow/BAAI/bge-m3",
-        "kb_type": "milvus",
+        "kb_type": "openviking",
         "additional_params": {"chunk_preset_id": "book"},
     }
 
@@ -124,7 +124,7 @@ async def test_admin_can_create_vector_db_with_reranker(test_client, admin_heade
         "database_name": db_name,
         "description": "Vector DB with reranker",
         "embed_model_name": "siliconflow/BAAI/bge-m3",
-        "kb_type": "milvus",
+        "kb_type": "openviking",
         "additional_params": {},
     }
 
@@ -324,7 +324,7 @@ async def test_duplicate_database_name(test_client, admin_headers, knowledge_dat
             "database_name": db_name,
             "description": "Duplicate name test",
             "embed_model_name": "siliconflow/BAAI/bge-m3",
-            "kb_type": "milvus",
+            "kb_type": "openviking",
             "additional_params": {},
         },
         headers=admin_headers,
@@ -333,17 +333,17 @@ async def test_duplicate_database_name(test_client, admin_headers, knowledge_dat
     assert "已存在" in response.json()["detail"]
 
 
-async def test_create_milvus_knowledge_base(test_client, admin_headers):
-    """测试创建 Milvus 知识库
+async def test_create_openviking_knowledge_base(test_client, admin_headers):
+    """测试创建 OpenViking 知识库
 
     注意：数据库清理由 conftest.py 中的 session fixture 自动处理。
     """
-    db_name = f"pytest_milvus_{uuid.uuid4().hex[:6]}"
+    db_name = f"pytest_openviking_{uuid.uuid4().hex[:6]}"
     payload = {
         "database_name": db_name,
-        "description": "Pytest Milvus knowledge base",
+        "description": "Pytest OpenViking knowledge base",
         "embed_model_name": "siliconflow/BAAI/bge-m3",
-        "kb_type": "milvus",
+        "kb_type": "openviking",
         "additional_params": {},
     }
 
@@ -351,7 +351,7 @@ async def test_create_milvus_knowledge_base(test_client, admin_headers):
     assert create_response.status_code == 200, create_response.text
 
     db_payload = create_response.json()
-    assert db_payload["kb_type"] == "milvus"
+    assert db_payload["kb_type"] == "openviking"
 
 
 async def test_sample_questions_endpoints(test_client, admin_headers, knowledge_database):

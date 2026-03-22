@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Annotated
 
-from deepagents.backends import StateBackend
+from src.agents.common.backends import create_agent_composite_backend
 from deepagents.middleware.filesystem import FilesystemMiddleware
 from langchain.agents import create_agent
 
@@ -17,7 +17,7 @@ from src.utils import logger
 
 def _create_fs_backend(rt):
     """创建文件存储后端"""
-    return StateBackend(rt)
+    return create_agent_composite_backend(rt, agent_id="SqlReporterAgent")
 
 
 PROMPT = """你的任务是根据用户的指令，使用数据库工具和图表绘制工具，构建 SQL 查询报告。

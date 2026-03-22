@@ -40,7 +40,7 @@ const run = () => {
 
   const chunks = MessageProcessor.extractKnowledgeChunksFromConversation(conv, databases)
 
-  // 1. Milvus 数组提取
+  // 1. OpenViking 数组提取
   assert.equal(
     chunks.some((c) => c.content === 'A' && c.kb_name === '财税库'),
     true

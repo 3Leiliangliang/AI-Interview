@@ -447,7 +447,7 @@ async def get_knowledge_stats(
             kb_type = (kb.kb_type or "unknown").lower()
             display_type = {
                 "faiss": "FAISS",
-                "milvus": "Milvus",
+                "openviking": "OpenViking",
                 "qdrant": "Qdrant",
                 "elasticsearch": "Elasticsearch",
                 "unknown": "未知类型",

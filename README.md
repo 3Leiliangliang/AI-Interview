@@ -1,6 +1,8 @@
-# AI-Interview
+![伯乐 Logo](docx/images/logo_with_word.png)
 
-AI-interview 是一个基于大模型的智能知识库与知识图谱智能体开发平台，融合了 RAG 技术与知识图谱技术，基于 LangGraph v1 + Vue.js + FastAPI 架构构建。项目完全通过 Docker Compose 进行管理，支持热重载开发。
+# 伯乐 Bole
+
+伯乐是一个基于大模型的智能知识库与知识图谱智能体开发平台，融合了 RAG 技术与知识图谱技术，基于 LangGraph v1 + Vue.js + FastAPI 架构构建。项目完全通过 Docker Compose 进行管理，支持热重载开发。
 
 ## 🌟 核心特性
 
@@ -23,8 +25,8 @@ AI-interview 是一个基于大模型的智能知识库与知识图谱智能体�
 ### 1. 获取代码与初始化配置
 
 ```bash
-git clone https://github.com/xerrors/AI-interview.git
-cd AI-interview
+git clone https://github.com/xerrors/Bole.git
+cd Bole
 
 # Linux / macOS 下执行：
 ./scripts/init.sh
@@ -40,6 +42,23 @@ docker compose up -d --build
 ```
 
 等待构建与服务启动完成后，在浏览器中访问：`http://localhost:5173` 即可进入系统。
+
+### 3. 面试知识库初始化说明
+
+- `.knowledge/` 目录仅作为运行时缓存，**已加入 gitignore，不需要提交到 Git**。
+- 启用知识库自动导入后，`kb-import` 容器会先将以下 GitHub 仓库克隆或更新到 `.knowledge/`，再执行现有导入流程：
+  - `JavaGuide`
+  - `reactjs-interview-questions`
+  - `Waking-Up`
+- 若 `.env` 或 `.env.prod` 中开启了 `AUTO_IMPORT_INTERVIEW_KB=true`，启动后会自动：
+  1. 拉取 `.knowledge` 下的三份面试资料
+  2. 调用现有知识库 API 导入
+  3. 导入完成后写入 sentinel，后续重启默认不重复导入
+- 首次启用或更新了导入镜像后，建议执行：
+
+```bash
+docker compose up -d --build
+```
 
 ## 👨‍💻 开发与调试指南
 

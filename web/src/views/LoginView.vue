@@ -221,9 +221,9 @@
       <div class="footer-links">
         <a href="https://github.com/xerrors" target="_blank">联系我们</a>
         <span class="divider">|</span>
-        <a href="https://github.com/xerrors/AI-interview" target="_blank">使用帮助</a>
+        <a href="https://github.com/xerrors/Bole" target="_blank">使用帮助</a>
         <span class="divider">|</span>
-        <a href="https://github.com/xerrors/AI-interview/blob/main/LICENSE" target="_blank"
+        <a href="https://github.com/xerrors/Bole/blob/main/LICENSE" target="_blank"
           >隐私政策</a
         >
       </div>
@@ -264,7 +264,7 @@ const brandOrgName = computed(() => {
 })
 const brandName = computed(() => {
   const orgName = brandOrgName.value
-  const brandNameRaw = infoStore.branding?.name?.trim() || 'AI-interview'
+  const brandNameRaw = infoStore.branding?.name?.trim() || '伯乐'
 
   if (orgName && brandNameRaw && orgName !== brandNameRaw) {
     return brandNameRaw

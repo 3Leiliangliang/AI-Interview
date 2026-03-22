@@ -1,0 +1,92 @@
+- generic [ref=e4]:
+  - navigation [ref=e13]:
+    - generic [ref=e14]:
+      - generic [ref=e15]:
+        - img "伯乐 Bole" [ref=e16]
+        - generic [ref=e17]: 伯乐 Bole
+      - button "登 录" [ref=e20] [cursor=pointer]:
+        - generic [ref=e21]: 登 录
+  - main [ref=e23]:
+    - generic [ref=e24]:
+      - generic [ref=e25]:
+        - generic [ref=e26]:
+          - img [ref=e27]
+          - generic [ref=e30]: 下一代求职伙伴
+        - heading "与 AI 一起 掌握你的下一次面试" [level=1] [ref=e31]:
+          - text: 与 AI 一起
+          - text: 掌握你的下一次面试
+        - paragraph [ref=e32]: 由先进大语言模型驱动的个性化实时模拟面试系统。上传简历、选择岗位与轮次，完善你的叙述，克服焦虑，斩获理想职位。
+        - generic [ref=e33]:
+          - button "开始模拟面试" [ref=e34] [cursor=pointer]:
+            - text: 开始模拟面试
+            - img [ref=e35]
+          - button "我的简历" [ref=e37] [cursor=pointer]:
+            - img [ref=e38]
+            - text: 我的简历
+        - generic [ref=e41]:
+          - generic [ref=e42]:
+            - img "User" [ref=e43]
+            - img "User" [ref=e44]
+            - img "User" [ref=e45]
+          - paragraph [ref=e46]: 2,400+ 职场人士本周已在此准备
+      - generic [ref=e50]:
+        - generic [ref=e51]:
+          - img [ref=e53]
+          - heading "7+ 岗位方向" [level=3] [ref=e57]
+          - paragraph [ref=e58]: 技术、产品、运营等主流求职方向全覆盖。
+        - generic [ref=e59]:
+          - img [ref=e61]
+          - heading "3大面试轮次" [level=3] [ref=e66]
+          - paragraph [ref=e67]: 支持初试、复试与 HR 面，全方位模拟真实场景。
+        - generic [ref=e68]:
+          - img [ref=e70]
+          - heading "详尽反馈体系" [level=3] [ref=e73]
+          - paragraph [ref=e74]: 面试后的多维度分析，涵盖亮点、风险与改进建议。
+        - generic [ref=e75]:
+          - img [ref=e77]
+          - heading "追问与记录" [level=3] [ref=e81]
+          - paragraph [ref=e82]: 基于简历连续追问，侧边栏保存完整面试历史。
+    - generic [ref=e84]:
+      - img [ref=e86]
+      - generic [ref=e98]:
+        - generic [ref=e99]:
+          - heading "体验全新的面试准备方式" [level=2] [ref=e100]
+          - generic [ref=e101]:
+            - generic [ref=e102]:
+              - img [ref=e104]
+              - generic [ref=e106]:
+                - heading "智能简历解析" [level=4] [ref=e107]
+                - paragraph [ref=e108]: 系统自动读取你的简历，面试将围绕你的真实经历展开。
+            - generic [ref=e109]:
+              - img [ref=e111]
+              - generic [ref=e113]:
+                - heading "全真模拟对话" [level=4] [ref=e114]
+                - paragraph [ref=e115]: 面试官智能发起提问与深度追问，高度还原真实面试压迫感。
+        - generic [ref=e116]:
+          - generic [ref=e117]:
+            - img [ref=e119]
+            - generic [ref=e122]:
+              - generic [ref=e123]: AI 面试官
+              - generic [ref=e124]: “你能描述一次工作中遇到的具有挑战性的冲突吗？”
+          - generic [ref=e125]:
+            - generic [ref=e126]:
+              - paragraph [ref=e127]: 实时反馈提示
+              - generic [ref=e128]:
+                - img [ref=e129]
+                - paragraph [ref=e131]: 尝试使用 STAR 法则来让回答更有结构。
+            - paragraph [ref=e134]: 当前表现得分：84%
+  - contentinfo [ref=e135]:
+    - generic [ref=e136]:
+      - generic [ref=e137]:
+        - generic [ref=e138]: 伯乐 Bole
+        - paragraph [ref=e139]: 构建职业成长与求职成功的基石。
+      - generic [ref=e140]:
+        - link "隐私政策" [ref=e141] [cursor=pointer]:
+          - /url: "#"
+        - link "服务条款" [ref=e142] [cursor=pointer]:
+          - /url: "#"
+        - link "Cookie 设置" [ref=e143] [cursor=pointer]:
+          - /url: "#"
+        - link "联系支持" [ref=e144] [cursor=pointer]:
+          - /url: "#"
+      - generic [ref=e145]: © 伯乐 Bole 2026 v0.5.1

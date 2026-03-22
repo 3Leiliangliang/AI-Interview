@@ -36,13 +36,20 @@
 
       <!-- Tags -->
       <div class="tags-section">
-        <a-tag :color="getKbTypeColor(database.kb_type || 'milvus')" size="small">
-          {{ getKbTypeLabel(database.kb_type || 'milvus') }}
+        <a-tag :color="getKbTypeColor(database.kb_type || 'openviking')" size="small">
+          {{ getKbTypeLabel(database.kb_type || 'openviking') }}
         </a-tag>
         <a-tag color="blue" size="small">{{ database.embed_info?.name || 'N/A' }}</a-tag>
-        <a-tag color="cyan" size="small">{{
-          chunkPresetLabelMap[database.additional_params?.chunk_preset_id || 'general'] || 'General'
+        <a-tag color="cyan" size="small" class="chunk-tag">{{
+          `分块：${chunkPresetLabelMap[database.additional_params?.chunk_preset_id || 'general'] || 'General'}`
         }}</a-tag>
+      </div>
+
+      <div class="chunk-summary">
+        <span class="chunk-summary-label">当前分块策略</span>
+        <span class="chunk-summary-value">{{
+          chunkPresetLabelMap[database.additional_params?.chunk_preset_id || 'general'] || 'General'
+        }}</span>
       </div>
     </div>
   </div>
@@ -426,6 +433,33 @@ const deleteDatabase = () => {
   gap: 6px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.chunk-tag {
+  font-weight: 600;
+}
+
+.chunk-summary {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(8, 145, 178, 0.08);
+  border: 1px solid rgba(8, 145, 178, 0.15);
+}
+
+.chunk-summary-label {
+  font-size: 12px;
+  color: var(--gray-500);
+}
+
+.chunk-summary-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgb(14, 116, 144);
 }
 
 .chunk-preset-label {

@@ -19,7 +19,7 @@ switch ($slashCount) {
         Write-Host "Image format: Official image (no prefix)" -ForegroundColor Cyan
     }
     1 {
-        # 一个前缀 (例如: milvusdb/milvus:latest)
+        # 一个前缀 (例如: postgres:16)
         $mirrorUrl = "m.daocloud.io/docker.io"
         Write-Host "Image format: Hub repository (one prefix)" -ForegroundColor Cyan
     }

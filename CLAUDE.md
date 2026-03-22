@@ -1,7 +1,7 @@
 
 # 项目目录结构 (Project Overview)
 
-AI-interview 是一个基于大模型的智能知识库与知识图谱智能体开发平台，融合了 RAG 技术与知识图谱技术，基于 LangGraph v1 + Vue.js + FastAPI 架构构建。项目完全通过 Docker Compose 进行管理，支持热重载开发。
+伯乐（Bole）是一个基于大模型的智能知识库与知识图谱智能体开发平台，融合了 RAG 技术与知识图谱技术，基于 LangGraph v1 + Vue.js + FastAPI 架构构建。项目完全通过 Docker Compose 进行管理，支持热重载开发。
 
 ## 开发准则
 
@@ -46,6 +46,6 @@ docker compose exec api uv run python test/your_script.py  # 放在 test 文件�
 
 **其他**：
 
-- 使用 AI_INTERVIEW_SUPER_ADMIN_NAME / AI_INTERVIEW_SUPER_ADMIN_PASSWORD 调试接口
+- 使用 BOLE_SUPER_ADMIN_NAME / BOLE_SUPER_ADMIN_PASSWORD 调试接口
 - 如果需要新建说明文档（仅开发者可见，非必要不创建），则保存在 `docs/vibe` 文件夹下面
 - 代码更新后要检查文档部分是否有需要更新的地方，文档的目录定义在 `docs/.vitepress/config.mts` 中。文档应该更新最新版（`docs/latest`）

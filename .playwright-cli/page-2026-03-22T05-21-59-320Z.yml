@@ -1,0 +1,85 @@
+- generic [ref=e241]:
+  - generic [ref=e242]:
+    - generic [ref=e243]:
+      - link "伯乐 Bole" [ref=e245] [cursor=pointer]:
+        - /url: /
+        - img [ref=e246]
+        - generic [ref=e248]:
+          - generic [ref=e249]: 伯乐
+          - generic [ref=e250]: Bole
+      - button [ref=e251] [cursor=pointer]:
+        - img [ref=e252]
+    - generic [ref=e255]:
+      - link "模拟面试" [ref=e256] [cursor=pointer]:
+        - /url: /agent
+        - generic [ref=e257]:
+          - img [ref=e258]
+          - generic [ref=e261]: 模拟面试
+      - link "我的简历" [ref=e262] [cursor=pointer]:
+        - /url: /resume
+        - generic [ref=e263]:
+          - img [ref=e264]
+          - generic [ref=e267]: 我的简历
+      - link "知识库" [ref=e268] [cursor=pointer]:
+        - /url: /database
+        - generic [ref=e269]:
+          - img [ref=e270]
+          - generic [ref=e273]: 知识库
+      - link "扩展" [ref=e274] [cursor=pointer]:
+        - /url: /extensions
+        - generic [ref=e275]:
+          - img [ref=e276]
+          - generic [ref=e279]: 扩展
+      - link "Dashboard" [ref=e280] [cursor=pointer]:
+        - /url: /dashboard
+        - generic [ref=e281]:
+          - img [ref=e282]
+          - generic [ref=e284]: Dashboard
+      - generic [ref=e286] [cursor=pointer]:
+        - img [ref=e288]
+        - generic [ref=e291]: 任务中心
+    - generic [ref=e295] [cursor=pointer]:
+      - img [ref=e297]
+      - generic [ref=e301]: admin
+  - generic [ref=e891]:
+    - generic [ref=e893]:
+      - heading "文档知识库" [level=1] [ref=e896]
+      - button "新建知识库" [ref=e901] [cursor=pointer]:
+        - generic [ref=e902]: 新建知识库
+    - generic [ref=e911]:
+      - generic [ref=e912] [cursor=pointer]:
+        - generic [ref=e913]:
+          - img [ref=e915]
+          - generic [ref=e920]:
+            - heading "Waking-Up" [level=3] [ref=e921]
+            - paragraph [ref=e922]:
+              - generic [ref=e923]: 6 文件
+              - generic [ref=e924]: 今天创建
+        - paragraph [ref=e925]: 后端面试笔记知识库，包含计网、操作系统、数据库、设计模式、Git 与 Python 手册。
+        - generic [ref=e926]:
+          - generic [ref=e927]: Pro/BAAI/bge-m3
+          - generic [ref=e928]: OpenViking
+      - generic [ref=e929] [cursor=pointer]:
+        - generic [ref=e930]:
+          - img [ref=e932]
+          - generic [ref=e937]:
+            - heading "React Interview Questions" [level=3] [ref=e938]
+            - paragraph [ref=e939]:
+              - generic [ref=e940]: 3 文件
+              - generic [ref=e941]: 今天创建
+        - paragraph [ref=e942]: React 面试题与答案知识库，包含核心问答和代码练习题。
+        - generic [ref=e943]:
+          - generic [ref=e944]: Pro/BAAI/bge-m3
+          - generic [ref=e945]: OpenViking
+      - generic [ref=e946] [cursor=pointer]:
+        - generic [ref=e947]:
+          - img [ref=e949]
+          - generic [ref=e954]:
+            - heading "JavaGuide" [level=3] [ref=e955]
+            - paragraph [ref=e956]:
+              - generic [ref=e957]: 227 文件
+              - generic [ref=e958]: 今天创建
+        - paragraph [ref=e959]: Java 面试核心知识库，包含 Java、数据库、计算机基础、分布式与系统设计等主题。
+        - generic [ref=e960]:
+          - generic [ref=e961]: Pro/BAAI/bge-m3
+          - generic [ref=e962]: OpenViking

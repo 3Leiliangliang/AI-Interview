@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-    image: ai-interview-api:0.5.dev
+    image: bole-api:0.5.dev
     container_name: api-dev
     working_dir: /app
     volumes:
@@ -29,17 +29,14 @@ services:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - RUN_EVENTS_STREAM_TTL_SECONDS=${RUN_EVENTS_STREAM_TTL_SECONDS:-7200}
       - RUN_CANCEL_KEY_TTL_SECONDS=${RUN_CANCEL_KEY_TTL_SECONDS:-1800}
-      - MILVUS_URI=${MILVUS_URI:-http://milvus:19530}
-      - MILVUS_DB_NAME=${MILVUS_DB_NAME:-default}
-      - MILVUS_TOKEN=${MILVUS_TOKEN:-}
       - MINERU_VL_SERVER=${MINERU_VL_SERVER:-http://mineru-vllm-server:30000}
       - MINERU_API_URI=${MINERU_API_URI:-http://mineru-api:30001}
       - PADDLEX_URI=${PADDLEX_URI:-http://paddlex:8080}
-      - MINIO_URI=${MINIO_URI:-http://milvus-minio:9000}
+      - MINIO_URI=${MINIO_URI:-http://minio:9000}
       - MODEL_DIR_IN_DOCKER=/models
       - RUNNING_IN_DOCKER=true
-      - NO_PROXY=localhost,127.0.0.1,milvus,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex,api.siliconflow.cn
-      - no_proxy=localhost,127.0.0.1,milvus,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex,api.siliconflow.cn
+      - NO_PROXY=localhost,127.0.0.1,minio,mineru,paddlex,api.siliconflow.cn
+      - no_proxy=localhost,127.0.0.1,minio,mineru,paddlex,api.siliconflow.cn
     # endregion api_envs
     command: uv run --no-dev uvicorn server.main:app --host 0.0.0.0 --port 5050 --reload
     restart: unless-stopped
@@ -54,13 +51,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      milvus:
-        condition: service_healthy
       minio:
         condition: service_healthy
 
   worker:
-    image: ai-interview-api:0.5.dev
+    image: bole-api:0.5.dev
     container_name: worker-dev
     working_dir: /app
     volumes:
@@ -85,17 +80,14 @@ services:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - RUN_EVENTS_STREAM_TTL_SECONDS=${RUN_EVENTS_STREAM_TTL_SECONDS:-7200}
       - RUN_CANCEL_KEY_TTL_SECONDS=${RUN_CANCEL_KEY_TTL_SECONDS:-1800}
-      - MILVUS_URI=${MILVUS_URI:-http://milvus:19530}
-      - MILVUS_DB_NAME=${MILVUS_DB_NAME:-default}
-      - MILVUS_TOKEN=${MILVUS_TOKEN:-}
       - MINERU_VL_SERVER=${MINERU_VL_SERVER:-http://mineru-vllm-server:30000}
       - MINERU_API_URI=${MINERU_API_URI:-http://mineru-api:30001}
       - PADDLEX_URI=${PADDLEX_URI:-http://paddlex:8080}
-      - MINIO_URI=${MINIO_URI:-http://milvus-minio:9000}
+      - MINIO_URI=${MINIO_URI:-http://minio:9000}
       - MODEL_DIR_IN_DOCKER=/models
       - RUNNING_IN_DOCKER=true
-      - NO_PROXY=localhost,127.0.0.1,milvus,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex,api.siliconflow.cn
-      - no_proxy=localhost,127.0.0.1,milvus,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex,api.siliconflow.cn
+      - NO_PROXY=localhost,127.0.0.1,minio,mineru,paddlex,api.siliconflow.cn
+      - no_proxy=localhost,127.0.0.1,minio,mineru,paddlex,api.siliconflow.cn
     command: uv run --no-dev arq server.worker_main.WorkerSettings
     restart: unless-stopped
     depends_on:
@@ -103,9 +95,26 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      milvus:
-        condition: service_healthy
       minio:
+        condition: service_healthy
+
+  kb-import:
+    image: bole-api:0.5.dev
+    container_name: kb-import-dev
+    working_dir: /app
+    volumes:
+      - ./scripts:/app/scripts
+      - ./saves:/app/saves
+      - ./.knowledge:/app/.knowledge
+      - ./.env:/app/.env
+    networks:
+      - app-network
+    env_file:
+      - .env
+    command: sh /app/scripts/wait_and_import_interview_knowledge.sh
+    restart: "no"
+    depends_on:
+      api:
         condition: service_healthy
 
   web:
@@ -113,7 +122,7 @@ services:
       context: .
       dockerfile: docker/web.Dockerfile
       target: development
-    image: ai-interview-web:0.5.dev
+    image: bole-web:0.5.dev
     container_name: web-dev
     volumes:
       - ./web/src:/app/src
@@ -134,36 +143,15 @@ services:
     restart: unless-stopped
 
 
-  etcd:
-    container_name: milvus-etcd-dev
-    image: quay.io/coreos/etcd:v3.5.5
-    environment:
-      - ETCD_AUTO_COMPACTION_MODE=revision
-      - ETCD_AUTO_COMPACTION_RETENTION=1000
-      - ETCD_QUOTA_BACKEND_BYTES=4294967296
-      - ETCD_SNAPSHOT_COUNT=50000
-    volumes:
-      - ./docker/volumes/milvus/etcd:/etcd
-    command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
-    healthcheck:
-      test: ["CMD", "etcdctl", "endpoint", "health"]
-      interval: 60s
-      timeout: 30s
-      retries: 5
-      start_period: 30s
-    networks:
-      - app-network
-    restart: unless-stopped
-
   minio:
-    container_name: milvus-minio
+    container_name: minio
     image: minio/minio:RELEASE.2023-03-20T20-16-18Z
     environment:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
     volumes:
-      - ./docker/volumes/milvus/minio:/minio_data
-      - ./docker/volumes/milvus/minio_config:/root/.minio
+      - ./docker/volumes/minio/data:/minio_data
+      - ./docker/volumes/minio/config:/root/.minio
     command: minio server /minio_data --address 0.0.0.0:9000 --console-address 0.0.0.0:9001
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
@@ -174,35 +162,6 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
-    networks:
-      - app-network
-    restart: unless-stopped
-
-  milvus:
-    image: milvusdb/milvus:v2.5.6
-    container_name: milvus
-    command: ["milvus", "run", "standalone"]
-    security_opt:
-      - seccomp:unconfined
-    environment:
-      ETCD_ENDPOINTS: etcd:2379
-      MINIO_ADDRESS: minio:9000
-      MILVUS_LOG_LEVEL: error
-    volumes:
-      - ./docker/volumes/milvus/milvus:/var/lib/milvus
-      - ./docker/volumes/milvus/logs:/var/lib/milvus/logs
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
-      interval: 60s
-      start_period: 120s
-      timeout: 30s
-      retries: 5
-    ports:
-      - "19530:19530"
-      - "9091:9091"
-    depends_on:
-      - "etcd"
-      - "minio"
     networks:
       - app-network
     restart: unless-stopped

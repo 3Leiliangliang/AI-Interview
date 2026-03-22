@@ -14,143 +14,161 @@
     </div>
 
     <template v-else>
-      <header class="page-header">
-        <div class="brand">
-          <img
-            v-if="infoStore.organization.logo"
-            :src="infoStore.organization.logo"
-            :alt="infoStore.organization.name"
-            class="brand-logo"
-          />
-          <div class="brand-meta">
-            <div class="brand-name">{{ infoStore.organization.name || 'AI Interview' }}</div>
-            <div class="brand-desc">AI 模拟面试系统</div>
+      <!-- Top Navigation Bar -->
+      <nav class="top-nav">
+        <div class="nav-container">
+          <div class="brand">
+            <img
+              v-if="infoStore.organization?.logo"
+              :src="infoStore.organization.logo"
+              :alt="displayBrandName"
+              class="brand-logo"
+            />
+            <div class="brand-name">{{ displayBrandName }}</div>
+          </div>
+          <div class="nav-actions">
+            <!-- Using the existing UserInfoComponent for Auth -->
+            <UserInfoComponent :show-button="true" />
           </div>
         </div>
-        <UserInfoComponent :show-button="true" />
-      </header>
+        <div class="nav-divider"></div>
+      </nav>
 
-      <main class="page-main">
+      <main class="page-main hero-gradient">
+        <!-- Hero & Capabilities Section -->
         <section class="hero-section">
-          <div class="hero-content">
-            <div class="hero-badge">
-              <Sparkles :size="14" />
-              <span>面向真实求职场景的 AI 面试体验</span>
+          <!-- Left: Hero Text -->
+          <div class="hero-left">
+            <div class="badge">
+              <Sparkles :size="14" stroke-width="2.5" />
+              <span class="badge-text">下一代求职伙伴</span>
             </div>
-
+            
             <h1 class="hero-title">
-              上传简历、选择岗位与轮次，
-              <br />
-              立即开始一轮模拟面试
+              与 AI 一起<br/>
+              <span class="text-gradient">掌握你的下一次面试</span>
             </h1>
-
-            <p class="hero-subtitle">
-              系统会先读取你的简历，再由面试官 Agent 自动发起提问。支持岗位配置、轮次切换、逐轮追问、结束评分与面试记录查看。
+            
+            <p class="hero-desc">
+              由先进大语言模型驱动的个性化实时模拟面试系统。上传简历、选择岗位与轮次，完善你的叙述，克服焦虑，斩获理想职位。
             </p>
-
+            
             <div class="hero-actions">
-              <button class="primary-btn" type="button" @click="goToInterview">
-                <PlayCircle :size="18" />
-                <span>开始模拟面试</span>
+              <button class="btn-primary" type="button" @click="goToInterview">
+                开始模拟面试
+                <ArrowRight :size="18" />
               </button>
-              <button class="secondary-btn" type="button" @click="goToResumeCenter">
+              <button class="btn-secondary" type="button" @click="goToResumeCenter">
                 <FileText :size="18" />
-                <span>我的简历</span>
+                我的简历
               </button>
             </div>
-
-            <div class="hero-points">
-              <div v-for="item in heroPoints" :key="item" class="hero-point">
-                <CheckCircle2 :size="16" />
-                <span>{{ item }}</span>
+            
+            <div class="social-proof">
+              <div class="avatars">
+                <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuBmegEzfJAvDYFJZCttYLAEMDPeyFAUfPh36XfCMMuzOzDqAhjDaaoesH01AGP4R3rpSCurhXgpfimI_JiPlhfpcY3Mj_vt-2cxGcyoyt_tjqvVraSs-D1wosNlE5Yxl8PwEMU_LsnoNUnuwGforo6BQuD-BVIM8V1B8wSdDFkkB03drDIXFklGzI9mO32S37_mhYoVXjrB1j3IfwfVPpuNxOS8S9DFP-uaRmR_PjxYWWcVDh0ykj1YMFnntz62jsjO1vgz7MB6fqM" alt="User" />
+                <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuCoM8Ambi7HTYmr5ncTfZ-9DkpQomiZtP11woLy1N0sa_glw2opWstO28BQiH5nZdWzSUqzebMYUwJ-bXMT5WRkA3IDKl3acvizo_sipC62YKex_SVQ0CgA_YPKWMS414OJDaAnhQyEX34SutV_S_rgvMxPMBkTjT_Pr4LahzvNgDIeQ_xl2SsybllLQhpYoOsetmRGk7zuKXDhvQsEs-pXqWy3E2e8B5-XinSXsWXuqzdgw3jMDd1e_caE-Pyiga5am-3rDeQ3A5E" alt="User" />
+                <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuAEZXmMWwJNtRjH7SXSgKIXe2EeGbEY-3SetM3FJYJDF6kGTpJ8NjdzqxSd1hv4QEXYBAANyk94gxyrmBfOi8hkfOppv2XEUbf4K9vBDlK-upu8MXGLr2qQgx6ol2-x6-jZchdnDAUWOqYf1Y0dJrKUigpQLsBF7Nr89iqBg5xny64ME9K3aekyneSYA07fPEFKOa0wdZl_nq_FVvCSo7vNStyr7knQgYjoRPr4yvi1kPBqUV0NUFWoL-0YuJ13KT61S2AVuWscAzI" alt="User" />
               </div>
-            </div>
-          </div>
-
-          <div class="hero-panel">
-            <div class="panel-card primary-card">
-              <div class="panel-label">当前系统能力</div>
-              <div class="panel-title">AI 面试官 + 简历知识库</div>
-              <p class="panel-text">
-                当前会话可直接读取上传简历；如果当前线程没有附件，面试官会继续从“我的简历”中读取最近上传的简历内容。
+              <p class="proof-text">
+                <span class="highlight">2,400+</span> 职场人士本周已在此准备
               </p>
             </div>
+          </div>
 
-            <div class="panel-grid">
-              <div v-for="item in stats" :key="item.label" class="panel-card stat-card">
-                <div class="stat-icon">
-                  <component :is="item.icon" :size="18" />
+          <!-- Right: System Capabilities -->
+          <div class="hero-right">
+            <div class="decor-blob top-right"></div>
+            <div class="decor-blob bottom-left"></div>
+            
+            <div class="bento-grid">
+              <div class="glass-card">
+                <div class="card-icon blue">
+                  <BriefcaseBusiness :size="20" stroke-width="2.5" />
                 </div>
-                <div class="stat-meta">
-                  <div class="stat-value">{{ item.value }}</div>
-                  <div class="stat-label">{{ item.label }}</div>
+                <h3 class="card-title">7+ 岗位方向</h3>
+                <p class="card-desc">技术、产品、运营等主流求职方向全覆盖。</p>
+              </div>
+              
+              <div class="glass-card mt-offset">
+                <div class="card-icon teal">
+                  <Repeat :size="20" stroke-width="2.5" />
+                </div>
+                <h3 class="card-title">3大面试轮次</h3>
+                <p class="card-desc">支持初试、复试与 HR 面，全方位模拟真实场景。</p>
+              </div>
+
+              <div class="glass-card">
+                <div class="card-icon gray">
+                  <LineChart :size="20" stroke-width="2.5" />
+                </div>
+                <h3 class="card-title">详尽反馈体系</h3>
+                <p class="card-desc">面试后的多维度分析，涵盖亮点、风险与改进建议。</p>
+              </div>
+              
+              <div class="glass-card mt-offset">
+                <div class="card-icon indigo">
+                  <History :size="20" stroke-width="2.5" />
+                </div>
+                <h3 class="card-title">追问与记录</h3>
+                <p class="card-desc">基于简历连续追问，侧边栏保存完整面试历史。</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Dynamic Insights Section -->
+        <section class="insights-section">
+          <div class="insights-container">
+            <div class="bg-watermark">
+              <BrainCircuit :size="160" stroke-width="1" />
+            </div>
+            
+            <div class="insights-content">
+              <div class="insights-text">
+                <h2 class="section-title">体验全新的面试准备方式</h2>
+                <div class="feature-list">
+                  <div class="feature-item">
+                    <div class="check-icon">
+                      <Check :size="14" stroke-width="3" />
+                    </div>
+                    <div class="feature-info">
+                      <h4 class="feature-title">智能简历解析</h4>
+                      <p class="feature-desc">系统自动读取你的简历，面试将围绕你的真实经历展开。</p>
+                    </div>
+                  </div>
+                  <div class="feature-item">
+                    <div class="check-icon">
+                      <Check :size="14" stroke-width="3" />
+                    </div>
+                    <div class="feature-info">
+                      <h4 class="feature-title">全真模拟对话</h4>
+                      <p class="feature-desc">面试官智能发起提问与深度追问，高度还原真实面试压迫感。</p>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="section-block">
-          <div class="section-heading">
-            <div class="section-title">你现在可以怎么用</div>
-            <div class="section-desc">首页、配置页和面试页已经围绕模拟面试重构。</div>
-          </div>
-
-          <div class="feature-grid">
-            <div v-for="item in featureCards" :key="item.title" class="feature-card">
-              <div class="feature-icon">
-                <component :is="item.icon" :size="20" />
-              </div>
-              <div class="feature-title">{{ item.title }}</div>
-              <div class="feature-desc">{{ item.description }}</div>
-            </div>
-          </div>
-        </section>
-
-        <section class="section-block">
-          <div class="section-heading">
-            <div class="section-title">使用流程</div>
-            <div class="section-desc">按照当前系统设计，完整面试链路分为四步。</div>
-          </div>
-
-          <div class="flow-list">
-            <div v-for="(item, index) in flowSteps" :key="item.title" class="flow-card">
-              <div class="flow-index">0{{ index + 1 }}</div>
-              <div class="flow-body">
-                <div class="flow-title">{{ item.title }}</div>
-                <div class="flow-desc">{{ item.description }}</div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="section-block">
-          <div class="section-heading">
-            <div class="section-title">支持的面试配置</div>
-            <div class="section-desc">可先选择岗位、轮次，再进入面试界面。</div>
-          </div>
-
-          <div class="config-layout">
-            <div class="config-card">
-              <div class="config-title">岗位方向</div>
-              <div class="tag-list">
-                <span v-for="item in positions" :key="item" class="config-tag">{{ item }}</span>
-              </div>
-            </div>
-
-            <div class="config-card">
-              <div class="config-title">面试轮次</div>
-              <div class="tag-list">
-                <span v-for="item in rounds" :key="item" class="config-tag">{{ item }}</span>
-              </div>
-            </div>
-
-            <div class="config-card">
-              <div class="config-title">结果反馈</div>
-              <div class="feedback-list">
-                <div v-for="item in feedbackItems" :key="item" class="feedback-item">
-                  <CheckCircle2 :size="15" />
-                  <span>{{ item }}</span>
+              
+              <div class="insights-preview">
+                <div class="preview-header">
+                  <div class="avatar"><Bot :size="20" stroke-width="2" /></div>
+                  <div class="header-text">
+                    <div class="user-label">AI 面试官</div>
+                    <div class="user-msg">“你能描述一次工作中遇到的具有挑战性的冲突吗？”</div>
+                  </div>
+                </div>
+                <div class="preview-body">
+                  <div class="feedback-box">
+                    <p class="feedback-label">实时反馈提示</p>
+                    <div class="feedback-msg">
+                      <Zap :size="16" />
+                      <p>尝试使用 STAR 法则来让回答更有结构。</p>
+                    </div>
+                  </div>
+                  <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                  </div>
+                  <p class="progress-text">当前表现得分：84%</p>
                 </div>
               </div>
             </div>
@@ -159,26 +177,41 @@
       </main>
 
       <footer class="page-footer">
-        <p>{{ infoStore.footer?.copyright || '© 2026 AI Interview' }}</p>
+        <div class="footer-layout">
+          <div class="footer-brand">
+            <div class="brand-name">{{ displayBrandName }}</div>
+            <p class="brand-desc">构建职业成长与求职成功的基石。</p>
+          </div>
+          <div class="footer-links">
+            <a href="#">隐私政策</a>
+            <a href="#">服务条款</a>
+            <a href="#">Cookie 设置</a>
+            <a href="#">联系支持</a>
+          </div>
+          <div class="copyright">
+            {{ displayCopyright }}
+          </div>
+        </div>
       </footer>
     </template>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  PlayCircle,
-  FileText,
   Sparkles,
-  CheckCircle2,
+  ArrowRight,
+  FileText,
   BriefcaseBusiness,
-  ClipboardList,
-  MessageSquareQuote,
-  Database,
-  FolderClock,
-  Gauge
+  Repeat,
+  LineChart,
+  History,
+  BrainCircuit,
+  Check,
+  Bot,
+  Zap
 } from 'lucide-vue-next'
 
 import UserInfoComponent from '@/components/UserInfoComponent.vue'
@@ -193,64 +226,21 @@ const infoStore = useInfoStore()
 const isLoading = ref(true)
 const error = ref(null)
 
-const heroPoints = [
-  '支持上传 PDF 简历并统一管理',
-  '岗位 / 轮次配置后自动开始面试',
-  '面试结束后输出评分卡与反馈'
-]
-
-const stats = [
-  { label: '岗位方向', value: '7+', icon: BriefcaseBusiness },
-  { label: '面试轮次', value: '3', icon: ClipboardList },
-  { label: '追问方式', value: '逐轮', icon: MessageSquareQuote },
-  { label: '面试记录', value: '侧边栏', icon: FolderClock }
-]
-
-const featureCards = [
-  {
-    title: '面试配置页',
-    description: '先选择目标岗位和面试轮次，再进入正式面试界面。',
-    icon: BriefcaseBusiness
-  },
-  {
-    title: '我的简历',
-    description: '简历集中管理，面试官可优先读取当前会话附件，或从“我的简历”继续提问。',
-    icon: Database
-  },
-  {
-    title: 'AI 面试官',
-    description: '自动发起第一问，候选人回答后先简短点评，再继续追问。',
-    icon: MessageSquareQuote
-  },
-  {
-    title: '评分反馈',
-    description: '结束面试后输出亮点、风险点、改进建议与评分面板。',
-    icon: Gauge
+const displayBrandName = computed(() => {
+  const name = String(infoStore.organization?.name || '').trim()
+  if (!name || /^ai[\s-]*interview$/i.test(name)) {
+    return '伯乐 Bole'
   }
-]
+  return name
+})
 
-const flowSteps = [
-  {
-    title: '上传或选择简历',
-    description: '在“我的简历”中上传 PDF 简历，系统会解析并作为面试依据。'
-  },
-  {
-    title: '选择岗位与轮次',
-    description: '支持前端、后端、产品、测试、算法、运营、通用等岗位，以及初试 / 复试 / HR。'
-  },
-  {
-    title: '进入面试会话',
-    description: '面试官 Agent 自动发起第一问，并根据简历和你的回答持续追问。'
-  },
-  {
-    title: '获取总结与评分',
-    description: '结束面试后查看整体评价、维度评分和后续改进建议。'
+const displayCopyright = computed(() => {
+  const copyright = String(infoStore.footer?.copyright || '').trim()
+  if (!copyright || /AI[\s-]*interview/i.test(copyright)) {
+    return '© 2026 伯乐 Bole Professional Partner. All rights reserved.'
   }
-]
-
-const positions = ['前端工程师', '后端工程师', '产品经理', '测试工程师', '算法工程师', '运营', '通用岗位']
-const rounds = ['初试', '复试', 'HR']
-const feedbackItems = ['亮点总结', '风险点提醒', '改进建议', '评分卡输出']
+  return copyright
+})
 
 const checkHealth = async () => {
   try {
@@ -275,7 +265,7 @@ const loadData = async () => {
     await checkHealth()
     await infoStore.loadInfoConfig()
   } catch (e) {
-    console.error('加载首页数据失败:', e)
+    console.error('加载提示失败:', e)
   } finally {
     isLoading.value = false
   }
@@ -289,7 +279,6 @@ const ensureLogin = () => {
   if (userStore.isLoggedIn) {
     return true
   }
-
   sessionStorage.setItem('redirect', '/')
   router.push('/login')
   return false
@@ -313,16 +302,16 @@ onMounted(() => {
 <style scoped lang="less">
 .home-page {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top right, var(--main-20), transparent 30%),
-    radial-gradient(circle at left top, var(--main-10), transparent 28%),
-    var(--gray-25);
+  background-color: var(--gray-0);
   color: var(--gray-900);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
 }
 
 .loading-container,
 .error-container {
-  min-height: 100vh;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -335,421 +324,597 @@ onMounted(() => {
   font-size: 14px;
 }
 
-.page-header {
-  height: 76px;
-  padding: 0 28px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--gray-100);
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(18px);
-  position: sticky;
+/* Navbar */
+.top-nav {
+  position: fixed;
   top: 0;
-  z-index: 10;
+  width: 100%;
+  z-index: 50;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(16px);
+}
+
+.nav-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 16px 24px;
 }
 
 .brand {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-width: 0;
 }
 
 .brand-logo {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   object-fit: cover;
 }
 
-.brand-meta {
-  min-width: 0;
-}
-
 .brand-name {
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--gray-900);
+  letter-spacing: -0.5px;
 }
 
-.brand-desc {
-  margin-top: 2px;
-  font-size: 12px;
-  color: var(--gray-500);
+.nav-links {
+  display: none;
 }
 
+@media (min-width: 768px) {
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 40px;
+  }
+}
+
+.nav-link {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-600);
+  text-decoration: none;
+  transition: color 0.3s;
+}
+
+.nav-link:hover {
+  color: var(--main-color);
+}
+
+.nav-link.active {
+  color: var(--main-color);
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+}
+
+.nav-divider {
+  height: 1px;
+  width: 100%;
+  background-color: var(--main-10);
+  position: absolute;
+  bottom: 0;
+}
+
+/* Main Content */
 .page-main {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 36px 24px 56px;
+  flex: 1;
+  padding-top: 80px;
+  overflow-x: hidden;
+}
+
+.hero-gradient {
+  background: radial-gradient(circle at 80% 20%, var(--main-20) 0%, var(--gray-0) 60%);
 }
 
 .hero-section {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 48px 24px;
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  grid-template-columns: 1fr;
+  gap: 48px;
+  align-items: center;
+}
+
+@media (min-width: 1024px) {
+  .hero-section {
+    grid-template-columns: repeat(12, 1fr);
+    padding: 96px 24px;
+  }
+  .hero-left {
+    grid-column: span 6;
+  }
+  .hero-right {
+    grid-column: span 6;
+  }
+}
+
+/* Hero Left */
+.hero-left {
+  display: flex;
+  flex-direction: column;
   gap: 24px;
-  align-items: stretch;
 }
 
-.hero-content,
-.hero-panel,
-.feature-card,
-.flow-card,
-.config-card {
-  border-radius: 20px;
-  border: 1px solid var(--gray-100);
-  background: var(--gray-0);
-}
-
-.hero-content {
-  padding: 32px;
-}
-
-.hero-badge {
+.badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 30px;
-  padding: 0 12px;
+  gap: 8px;
+  padding: 6px 16px;
   border-radius: 999px;
-  background: var(--main-20);
-  color: var(--main-color);
+  background: rgba(195, 227, 255, 0.3); /* main-100 slightly transparent */
+  border: 1px solid var(--main-200);
+  align-self: flex-start;
+}
+
+.badge-text {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--color-primary-900);
+  letter-spacing: 0.5px;
+}
+
+.badge :deep(svg) {
+  color: var(--color-primary-700);
 }
 
 .hero-title {
-  margin: 18px 0 0;
-  font-size: clamp(34px, 4vw, 52px);
-  line-height: 1.15;
+  font-size: 42px;
   font-weight: 800;
+  line-height: 1.15;
   color: var(--gray-900);
+  letter-spacing: -1px;
 }
 
-.hero-subtitle {
-  margin: 18px 0 0;
-  font-size: 15px;
-  line-height: 1.8;
-  color: var(--gray-600);
+@media (min-width: 768px) {
+  .hero-title {
+    font-size: 64px;
+  }
+}
+
+.text-gradient {
+  background: linear-gradient(to right, var(--main-700), var(--main-400));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero-desc {
+  font-size: 18px;
+  color: var(--gray-700);
+  max-width: 500px;
+  line-height: 1.6;
 }
 
 .hero-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 28px;
-}
-
-.primary-btn,
-.secondary-btn {
-  height: 46px;
-  padding: 0 18px;
-  border-radius: 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.primary-btn {
-  border: none;
-  background: var(--main-color);
-  color: var(--gray-0);
-}
-
-.secondary-btn {
-  border: 1px solid var(--gray-150);
-  background: var(--gray-0);
-  color: var(--gray-700);
-}
-
-.hero-points {
-  margin-top: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.hero-point,
-.feedback-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--gray-700);
-  font-size: 14px;
-}
-
-.hero-point :deep(svg),
-.feedback-item :deep(svg) {
-  color: var(--main-color);
-  flex-shrink: 0;
-}
-
-.hero-panel {
-  padding: 24px;
-  display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.panel-card {
-  border-radius: 16px;
-  background: var(--gray-25);
-  border: 1px solid var(--gray-100);
-  padding: 18px;
+@media (min-width: 640px) {
+  .hero-actions {
+    flex-direction: row;
+    align-items: center;
+  }
 }
 
-.primary-card {
-  background: linear-gradient(180deg, var(--main-10), var(--gray-0));
-}
-
-.panel-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--main-color);
-}
-
-.panel-title {
-  margin-top: 10px;
-  font-size: 20px;
+.btn-primary, .btn-secondary {
+  height: 54px;
+  padding: 0 32px;
+  border-radius: 999px;
+  font-size: 16px;
   font-weight: 700;
-  color: var(--gray-900);
-}
-
-.panel-text {
-  margin: 10px 0 0;
-  font-size: 14px;
-  line-height: 1.7;
-  color: var(--gray-600);
-}
-
-.panel-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.stat-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.stat-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: var(--gray-0);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--main-color);
-  flex-shrink: 0;
+  gap: 8px;
+  cursor: pointer;
+  border: none;
 }
 
-.stat-value {
-  font-size: 20px;
+.btn-primary {
+  background: linear-gradient(to right, var(--main-700), var(--main-500));
+  color: white;
+  margin-right:0px;
+}
+
+/* Rule says no hover displacement, so keeping hover simple */
+.btn-primary:active, .btn-secondary:active {
+  opacity: 0.9;
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(8px);
+  color: var(--gray-900);
+  border: 1px solid var(--gray-200);
+}
+
+.btn-secondary:hover {
+  background: var(--gray-50);
+}
+
+.social-proof {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.avatars {
+  display: flex;
+}
+
+.avatars img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid white;
+  object-fit: cover;
+  margin-left: -12px;
+}
+
+.avatars img:first-child {
+  margin-left: 0;
+}
+
+.proof-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--gray-600);
+}
+
+.highlight {
+  color: var(--main-700);
   font-weight: 700;
+}
+
+/* Hero Right (Bento) */
+.hero-right {
+  position: relative;
+}
+
+.decor-blob {
+  position: absolute;
+  width: 256px;
+  height: 256px;
+  border-radius: 50%;
+  filter: blur(60px);
+  z-index: 0;
+}
+
+.top-right {
+  top: -48px;
+  right: -48px;
+  background: rgba(195, 227, 255, 0.4);
+}
+
+.bottom-left {
+  bottom: -48px;
+  left: -48px;
+  background: rgba(135, 232, 222, 0.3);
+}
+
+.bento-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .bento-grid {
+    gap: 24px;
+  }
+}
+
+.mt-offset {
+  margin-top: 0;
+}
+
+@media (min-width: 640px) {
+  .mt-offset {
+    margin-top: 32px;
+  }
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  padding: 24px;
+  border-radius: 16px;
+}
+
+.card-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.card-icon.blue { background: rgba(55, 129, 207, 0.1); color: var(--main-color); }
+.card-icon.teal { background: rgba(3, 100, 117, 0.1); color: #004a58; }
+.card-icon.gray { background: rgba(87, 101, 122, 0.1); color: #515f74; }
+.card-icon.indigo { background: rgba(0, 82, 204, 0.1); color: #0052cc; }
+
+.card-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
   color: var(--gray-900);
 }
 
-.stat-label {
-  margin-top: 4px;
-  font-size: 13px;
-  color: var(--gray-500);
+.card-desc {
+  font-size: 12px;
+  color: var(--gray-600);
+  line-height: 1.6;
 }
 
-.section-block {
-  margin-top: 24px;
+/* Insights Section */
+.insights-section {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 48px 24px 96px;
 }
 
-.section-heading {
-  margin-bottom: 14px;
+.insights-container {
+  background-color: var(--main-10);
+  border-radius: 24px;
+  padding: 32px;
+  position: relative;
+  overflow: hidden;
+}
+
+@media (min-width: 768px) {
+  .insights-container {
+    padding: 48px;
+  }
+}
+
+.bg-watermark {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 32px;
+  opacity: 0.05;
+  color: var(--gray-900);
+}
+
+.insights-content {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 48px;
+  align-items: center;
+}
+
+@media (min-width: 1024px) {
+  .insights-content {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 .section-title {
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 30px;
+  font-weight: 800;
   color: var(--gray-900);
+  margin-bottom: 24px;
 }
 
-.section-desc {
-  margin-top: 6px;
-  font-size: 14px;
-  color: var(--gray-600);
+@media (min-width: 768px) {
+  .section-title {
+    font-size: 36px;
+  }
 }
 
-.feature-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.feature-item {
+  display: flex;
+  align-items: flex-start;
   gap: 16px;
 }
 
-.feature-card {
-  padding: 22px;
-}
-
-.feature-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  background: var(--main-20);
-  color: var(--main-color);
-  display: inline-flex;
+.check-icon {
+  margin-top: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: rgba(55, 129, 207, 0.2);
+  display: flex;
   align-items: center;
   justify-content: center;
+  color: var(--main-color);
+  flex-shrink: 0;
 }
 
 .feature-title {
-  margin-top: 16px;
-  font-size: 16px;
   font-weight: 700;
   color: var(--gray-900);
+  margin-bottom: 4px;
+  font-size: 16px;
 }
 
 .feature-desc {
-  margin-top: 10px;
   font-size: 14px;
-  line-height: 1.7;
   color: var(--gray-600);
 }
 
-.flow-list {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+/* Preview Card */
+.insights-preview {
+  background-color: white;
+  padding: 24px;
+  border-radius: 16px;
+  border: 1px solid var(--gray-100);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.03); /* Subtle shadow inline with the rules */
+}
+
+.preview-header {
+  display: flex;
+  align-items: center;
   gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--gray-100);
+  margin-bottom: 24px;
 }
 
-.flow-card {
-  padding: 22px;
-}
-
-.flow-index {
-  width: 38px;
-  height: 38px;
-  border-radius: 999px;
-  background: var(--main-20);
-  color: var(--main-color);
-  display: inline-flex;
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: var(--main-700);
+  color: white;
+  display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
-  font-weight: 700;
 }
 
-.flow-title {
-  margin-top: 16px;
-  font-size: 16px;
+.user-label {
+  font-size: 12px;
   font-weight: 700;
-  color: var(--gray-900);
+  color: var(--main-700);
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
-.flow-desc {
-  margin-top: 10px;
+.user-msg {
   font-size: 14px;
-  line-height: 1.7;
-  color: var(--gray-600);
+  font-weight: 600;
+  color: var(--gray-900);
+  margin-top: 2px;
 }
 
-.config-layout {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.preview-body {
+  display: flex;
+  flex-direction: column;
   gap: 16px;
 }
 
-.config-card {
-  padding: 22px;
+.feedback-box {
+  padding: 16px;
+  background-color: var(--main-10);
+  border-radius: 12px;
 }
 
-.config-title {
-  font-size: 16px;
+.feedback-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gray-600);
+  margin-bottom: 8px;
+}
+
+.feedback-msg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #004a58; /* tertiary color from template */
+  font-size: 14px;
+  font-weight: 500;
+  font-style: italic;
+}
+
+.progress-bar {
+  height: 8px;
+  width: 100%;
+  background-color: var(--main-50);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 84%;
+  background-color: var(--main-color);
+  border-radius: 999px;
+}
+
+.progress-text {
+  font-size: 12px;
+  color: var(--gray-600);
+  text-align: center;
+}
+
+/* Footer */
+.page-footer {
+  background-color: var(--gray-0);
+  border-top: 1px solid var(--gray-100);
+  padding: 48px 0;
+}
+
+.footer-layout {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  align-items: center;
+}
+
+@media (min-width: 768px) {
+  .footer-layout {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+}
+
+.footer-brand .brand-name {
+  font-size: 20px;
   font-weight: 700;
   color: var(--gray-900);
 }
 
-.tag-list {
-  margin-top: 14px;
+.footer-brand .brand-desc {
+  font-size: 12px;
+  color: var(--gray-600);
+  margin-top: 8px;
+  max-width: 200px;
+}
+
+.footer-links {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  justify-content: center;
+  gap: 32px;
 }
 
-.config-tag {
-  min-height: 30px;
-  padding: 0 12px;
-  border-radius: 999px;
-  border: 1px solid var(--gray-150);
-  background: var(--gray-25);
-  display: inline-flex;
-  align-items: center;
-  font-size: 13px;
-  color: var(--gray-700);
+.footer-links a {
+  font-size: 12px;
+  color: var(--gray-600);
+  text-decoration: none;
 }
 
-.feedback-list {
-  margin-top: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.footer-links a:hover {
+  color: var(--main-color);
 }
 
-.page-footer {
-  padding: 20px 24px 34px;
+.copyright {
+  font-size: 12px;
+  color: var(--gray-400);
   text-align: center;
-  color: var(--gray-500);
-  font-size: 13px;
 }
 
-@media (max-width: 1080px) {
-  .hero-section,
-  .feature-grid,
-  .flow-list,
-  .config-layout {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 768px) {
-  .page-header {
-    height: auto;
-    padding: 14px 16px;
-    gap: 12px;
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .page-main {
-    padding: 20px 16px 40px;
-  }
-
-  .hero-section,
-  .feature-grid,
-  .flow-list,
-  .config-layout,
-  .panel-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .hero-content,
-  .hero-panel,
-  .feature-card,
-  .flow-card,
-  .config-card {
-    padding: 18px;
-  }
-
-  .hero-actions {
-    flex-direction: column;
-  }
-
-  .primary-btn,
-  .secondary-btn {
-    width: 100%;
+@media (min-width: 768px) {
+  .copyright {
+    text-align: right;
   }
 }
 </style>

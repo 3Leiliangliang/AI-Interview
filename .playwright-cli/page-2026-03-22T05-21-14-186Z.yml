@@ -1,0 +1,136 @@
+- generic [ref=e241]:
+  - generic [ref=e242]:
+    - generic [ref=e243]:
+      - link "伯乐 Bole" [ref=e245] [cursor=pointer]:
+        - /url: /
+        - img [ref=e246]
+        - generic [ref=e248]:
+          - generic [ref=e249]: 伯乐
+          - generic [ref=e250]: Bole
+      - button [ref=e251] [cursor=pointer]:
+        - img [ref=e252]
+    - generic [ref=e255]:
+      - link "模拟面试" [ref=e256] [cursor=pointer]:
+        - /url: /agent
+        - generic [ref=e257]:
+          - img [ref=e258]
+          - generic [ref=e261]: 模拟面试
+      - link "我的简历" [ref=e262] [cursor=pointer]:
+        - /url: /resume
+        - generic [ref=e263]:
+          - img [ref=e264]
+          - generic [ref=e267]: 我的简历
+      - link "知识库" [ref=e268] [cursor=pointer]:
+        - /url: /database
+        - generic [ref=e269]:
+          - img [ref=e270]
+          - generic [ref=e273]: 知识库
+      - link "扩展" [ref=e274] [cursor=pointer]:
+        - /url: /extensions
+        - generic [ref=e275]:
+          - img [ref=e276]
+          - generic [ref=e279]: 扩展
+      - link "Dashboard" [ref=e280] [cursor=pointer]:
+        - /url: /dashboard
+        - generic [ref=e281]:
+          - img [ref=e282]
+          - generic [ref=e284]: Dashboard
+      - generic [ref=e286] [cursor=pointer]:
+        - img [ref=e288]
+        - generic [ref=e291]: 任务中心
+    - generic [ref=e295] [cursor=pointer]:
+      - img [ref=e297]
+      - generic [ref=e301]: admin
+  - generic [ref=e731]:
+    - generic [ref=e732]:
+      - generic [ref=e733]:
+        - generic [ref=e734]:
+          - generic [ref=e735]:
+            - button "left" [ref=e736] [cursor=pointer]:
+              - img "left" [ref=e737]:
+                - img [ref=e738]
+            - heading "React Interview Questions" [level=3] [ref=e740]
+          - generic [ref=e741]:
+            - button "复制知识库ID" [ref=e742] [cursor=pointer]:
+              - img [ref=e743]
+            - button [ref=e746] [cursor=pointer]:
+              - img [ref=e747]
+        - generic [ref=e750]:
+          - paragraph [ref=e752]: React 面试题与答案知识库，包含核心问答和代码练习题。
+          - generic [ref=e753]:
+            - generic [ref=e754]: OpenViking
+            - generic [ref=e755]: Pro/BAAI/bge-m3
+            - generic [ref=e756]: QA
+      - generic [ref=e757]:
+        - generic [ref=e758]:
+          - generic [ref=e759]:
+            - button "上传" [ref=e760] [cursor=pointer]:
+              - img [ref=e761]
+              - generic [ref=e765]: 上传
+              - img [ref=e766]
+            - button "新建文件夹" [ref=e768] [cursor=pointer]:
+              - img [ref=e769]
+          - generic [ref=e771]:
+            - generic [ref=e772]:
+              - img [ref=e774]
+              - textbox "搜索" [ref=e777]
+            - button "排序" [ref=e779] [cursor=pointer]:
+              - img [ref=e780]
+            - button "筛选状态" [ref=e783] [cursor=pointer]:
+              - img [ref=e784]
+            - button "刷新" [ref=e786] [cursor=pointer]:
+              - img [ref=e787]
+            - button "多选" [ref=e790] [cursor=pointer]:
+              - img [ref=e791]
+            - button "切换右侧面板" [ref=e794] [cursor=pointer]:
+              - img [ref=e795]
+        - table [ref=e803]:
+          - rowgroup [ref=e808]:
+            - row "展开行 folder coding-exercise" [ref=e809]:
+              - cell "展开行 folder coding-exercise" [ref=e810]:
+                - button "展开行" [ref=e811] [cursor=pointer]
+                - generic [ref=e813] [cursor=pointer]:
+                  - img "folder" [ref=e814]:
+                    - img [ref=e815]
+                  - text: coding-exercise
+              - cell [ref=e817]
+              - cell [ref=e818]:
+                - button [ref=e820] [cursor=pointer]:
+                  - img [ref=e821]
+            - row "file-markdown README.md check-circle" [ref=e825]:
+              - cell "file-markdown README.md" [ref=e826]:
+                - button "file-markdown README.md" [ref=e828] [cursor=pointer]:
+                  - img "file-markdown" [ref=e829]:
+                    - img [ref=e830]
+                  - generic [ref=e832]: README.md
+              - cell "check-circle" [ref=e833]:
+                - img "check-circle" [ref=e836]:
+                  - img [ref=e837]
+              - cell [ref=e839]:
+                - button [ref=e841] [cursor=pointer]:
+                  - img [ref=e842]
+    - generic [ref=e848]:
+      - tablist [ref=e849]:
+        - generic [ref=e851]:
+          - tab "检索测试" [selected] [ref=e853] [cursor=pointer]
+          - tab "知识导图" [ref=e855] [cursor=pointer]
+          - tab "RAG评估" [ref=e857] [cursor=pointer]
+          - tab "评估基准" [ref=e859] [cursor=pointer]
+        - button "setting 检索配置" [ref=e861] [cursor=pointer]:
+          - img "setting" [ref=e862]:
+            - img [ref=e863]
+          - generic [ref=e865]: 检索配置
+      - tabpanel "检索测试" [ref=e868]:
+        - generic [ref=e873]:
+          - textbox "输入查询内容..." [ref=e874]
+          - generic [ref=e875]:
+            - generic [ref=e876]:
+              - button "示例:" [ref=e878] [cursor=pointer]:
+                - generic [ref=e879]: "示例:"
+              - generic [ref=e881]: 暂无问题，请点击左侧按钮生成
+            - generic [ref=e882]:
+              - button [ref=e883] [cursor=pointer]:
+                - img [ref=e884]
+              - button "search" [disabled] [ref=e887]:
+                - img "search" [ref=e888]:
+                  - img [ref=e889]

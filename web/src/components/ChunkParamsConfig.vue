@@ -3,6 +3,22 @@
     <div class="params-info">
       <p>调整分块参数可以控制文本的切分方式，影响检索质量和文档加载效率。</p>
     </div>
+    <div class="preset-overview" :class="{ qa: effectivePresetId === 'qa' }">
+      <div class="overview-header">
+        <span class="overview-label">当前生效分块</span>
+        <span class="preset-badge">{{ effectivePresetLabel }}</span>
+      </div>
+      <p class="overview-description">{{ presetDescription }}</p>
+      <p v-if="tempChunkParams.chunk_preset_id" class="overview-meta">
+        本次将按当前选择的策略处理文件
+      </p>
+      <p v-else-if="allowPresetFollowDefault" class="overview-meta">
+        当前未单独覆盖，沿用知识库默认策略：{{ databasePresetLabel }}
+      </p>
+      <p v-if="effectivePresetId === 'qa'" class="overview-tip">
+        QA 分块会优先按问答结构切分，当前知识库内容会更明显按问答方式入库。
+      </p>
+    </div>
     <a-form :model="tempChunkParams" name="chunkConfig" autocomplete="off" layout="vertical">
       <a-form-item v-if="showPreset" name="chunk_preset_id">
         <template #label>
@@ -116,6 +132,12 @@ const presetOptions = computed(() => {
 const effectivePresetId = computed(
   () => props.tempChunkParams.chunk_preset_id || props.databasePresetId || 'general'
 )
+const effectivePresetLabel = computed(
+  () => CHUNK_PRESET_LABEL_MAP[effectivePresetId.value] || 'General'
+)
+const databasePresetLabel = computed(
+  () => CHUNK_PRESET_LABEL_MAP[props.databasePresetId] || 'General'
+)
 const presetDescription = computed(() => getChunkPresetDescription(effectivePresetId.value))
 </script>
 
@@ -133,6 +155,68 @@ const presetDescription = computed(() => getChunkPresetDescription(effectivePres
   color: var(--gray-500);
   font-size: 14px;
   line-height: 1.5;
+}
+
+.preset-overview {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--gray-200);
+  background: var(--gray-0);
+}
+
+.preset-overview.qa {
+  border-color: rgba(8, 145, 178, 0.35);
+  background: linear-gradient(135deg, rgba(236, 254, 255, 0.95) 0%, rgba(248, 250, 252, 1) 100%);
+}
+
+.overview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.overview-label {
+  font-size: 13px;
+  color: var(--gray-500);
+}
+
+.preset-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(8, 145, 178, 0.12);
+  color: rgb(14, 116, 144);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.overview-description {
+  margin: 0;
+  color: var(--gray-700);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.overview-meta,
+.overview-tip {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.overview-meta {
+  color: var(--gray-500);
+}
+
+.overview-tip {
+  color: rgb(14, 116, 144);
+  font-weight: 500;
 }
 
 .chunk-row {

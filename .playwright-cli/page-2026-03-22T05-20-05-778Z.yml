@@ -1,0 +1,52 @@
+- generic [ref=e241]:
+  - generic [ref=e242]:
+    - generic [ref=e243]:
+      - link "伯乐 Bole" [ref=e245] [cursor=pointer]:
+        - /url: /
+        - img [ref=e246]
+        - generic [ref=e248]:
+          - generic [ref=e249]: 伯乐
+          - generic [ref=e250]: Bole
+      - button [ref=e251] [cursor=pointer]:
+        - img [ref=e252]
+    - generic [ref=e255]:
+      - link "模拟面试" [ref=e256] [cursor=pointer]:
+        - /url: /agent
+        - generic [ref=e257]:
+          - img [ref=e258]
+          - generic [ref=e261]: 模拟面试
+      - link "我的简历" [ref=e262] [cursor=pointer]:
+        - /url: /resume
+        - generic [ref=e263]:
+          - img [ref=e264]
+          - generic [ref=e267]: 我的简历
+      - link "知识库" [ref=e268] [cursor=pointer]:
+        - /url: /database
+        - generic [ref=e269]:
+          - img [ref=e270]
+          - generic [ref=e273]: 知识库
+      - link "扩展" [ref=e274] [cursor=pointer]:
+        - /url: /extensions
+        - generic [ref=e275]:
+          - img [ref=e276]
+          - generic [ref=e279]: 扩展
+      - link "Dashboard" [ref=e280] [cursor=pointer]:
+        - /url: /dashboard
+        - generic [ref=e281]:
+          - img [ref=e282]
+          - generic [ref=e284]: Dashboard
+      - generic [ref=e286] [cursor=pointer]:
+        - img [ref=e288]
+        - generic [ref=e291]: 任务中心
+    - generic [ref=e295] [cursor=pointer]:
+      - img [ref=e297]
+      - generic [ref=e301]: admin
+  - generic [ref=e658]:
+    - generic [ref=e660]:
+      - heading "文档知识库" [level=1] [ref=e663]
+      - generic [ref=e664]:
+        - img "loading" [ref=e665]:
+          - img [ref=e666]
+        - button "新建知识库" [ref=e668] [cursor=pointer]:
+          - generic [ref=e669]: 新建知识库
+    - paragraph [ref=e677]: 正在加载知识库...

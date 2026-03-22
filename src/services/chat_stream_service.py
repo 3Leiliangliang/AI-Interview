@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 import traceback
 import uuid
 from collections.abc import AsyncIterator
@@ -14,8 +15,14 @@ from src.agents import agent_manager
 from src.plugins.guard import content_guard
 from src.repositories.agent_config_repository import AgentConfigRepository
 from src.repositories.conversation_repository import ConversationRepository
+from src.services.openviking_service import openviking_service
 from src.storage.postgres.manager import pg_manager
 from src.utils.logging_config import logger
+
+INTERVIEW_SCORECARD_PATTERN = re.compile(
+    r"```interview_scorecard\s*(\{[\s\S]*?\})\s*```",
+    re.IGNORECASE,
+)
 
 
 def _build_state_files(attachments: list[dict]) -> dict:
@@ -192,6 +199,47 @@ async def save_messages_from_langgraph_state(
     except Exception as e:
         logger.error(f"Error saving messages from LangGraph state: {e}")
         logger.error(traceback.format_exc())
+
+
+def _extract_interview_scorecard(content: str) -> dict[str, Any] | None:
+    if not content:
+        return None
+
+    match = INTERVIEW_SCORECARD_PATTERN.search(content)
+    if not match:
+        return None
+
+    try:
+        return json.loads(match.group(1))
+    except Exception:
+        return None
+
+
+async def _sync_interview_case_memory_if_needed(
+    *,
+    agent_id: str,
+    user_id: str,
+    thread_id: str,
+    user_query: str,
+    assistant_content: str,
+) -> None:
+    if agent_id != "InterviewAgent" or not openviking_service.is_enabled():
+        return
+
+    if "```interview_scorecard" not in (assistant_content or ""):
+        return
+
+    try:
+        await openviking_service.sync_interview_case_memory(
+            user_id=user_id,
+            agent_id=agent_id,
+            thread_id=thread_id,
+            user_query=user_query,
+            summary_content=assistant_content,
+            scorecard=_extract_interview_scorecard(assistant_content),
+        )
+    except Exception as exc:
+        logger.warning("Sync interview case memory to OpenViking failed: %s", exc)
 
 
 def _extract_interrupt_info(state) -> Any | None:
@@ -518,6 +566,13 @@ async def stream_agent_chat(
             thread_id=thread_id,
             conv_repo=conv_repo,
             config_dict=langgraph_config,
+        )
+        await _sync_interview_case_memory_if_needed(
+            agent_id=agent_id,
+            user_id=user_id,
+            thread_id=thread_id,
+            user_query=query,
+            assistant_content=getattr(full_msg, "content", "") if full_msg else "",
         )
 
         yield make_chunk(status="finished", meta=meta)

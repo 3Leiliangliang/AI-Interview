@@ -84,7 +84,7 @@ async def create_database(
     database_name: str = Body(...),
     description: str = Body(...),
     embed_model_name: str | None = Body(None),
-    kb_type: str = Body("milvus"),
+    kb_type: str = Body("openviking"),
     additional_params: dict = Body({}),
     llm_info: dict = Body(None),
     share_config: dict = Body(None),
@@ -106,22 +106,13 @@ async def create_database(
 
         additional_params = {**(additional_params or {})}
         additional_params["auto_generate_questions"] = False  # 默认不生成问题
-
-        def remove_reranker_config(kb: str, params: dict) -> None:
-            """
-            移除 reranker_config（已废弃）
-            所有 reranker 参数现在通过 query_params.options 配置
-            """
-            reranker_cfg = params.get("reranker_config")
-            if reranker_cfg:
-                if kb == "milvus":
-                    logger.info("reranker_config is deprecated, please use query_params.options instead")
-                else:
-                    logger.warning(f"{kb} does not support reranker, ignoring reranker_config")
-                # 移除 reranker_config，不再保存
+        def remove_reranker_config(params: dict) -> None:
+            """Remove deprecated reranker_config."""
+            if params.get("reranker_config"):
+                logger.info("reranker_config is deprecated, please use query_params.options instead")
                 params.pop("reranker_config", None)
 
-        remove_reranker_config(kb_type, additional_params)
+        remove_reranker_config(additional_params)
         additional_params = ensure_chunk_defaults_in_additional_params(additional_params)
 
         if not embed_model_name:

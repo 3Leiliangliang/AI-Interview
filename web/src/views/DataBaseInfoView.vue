@@ -75,7 +75,7 @@
             <template #tab>
               <span :style="{ color: !isEvaluationSupported ? 'var(--gray-400)' : '' }">
                 RAG评估
-                <a-tooltip v-if="!isEvaluationSupported" title="仅支持 Milvus 类型的知识库">
+                <a-tooltip v-if="!isEvaluationSupported" title="仅支持 OpenViking 类型的知识库">
                   <Info :size="14" style="margin-left: 4px; vertical-align: middle" />
                 </a-tooltip>
               </span>
@@ -94,7 +94,7 @@
             <template #tab>
               <span :style="{ color: !isEvaluationSupported ? 'var(--gray-400)' : '' }">
                 评估基准
-                <a-tooltip v-if="!isEvaluationSupported" title="仅支持 Milvus 类型的知识库">
+                <a-tooltip v-if="!isEvaluationSupported" title="仅支持 OpenViking 类型的知识库">
                   <Info :size="14" style="margin-left: 4px; vertical-align: middle" />
                 </a-tooltip>
               </span>
@@ -153,7 +153,7 @@ const state = computed(() => store.state)
 // 计算属性：是否支持评估功能
 const isEvaluationSupported = computed(() => {
   const kbType = database.value.kb_type?.toLowerCase()
-  return kbType === 'milvus'
+  return kbType === 'openviking'
 })
 
 // 计算待解析文件数量（status: 'uploaded'）

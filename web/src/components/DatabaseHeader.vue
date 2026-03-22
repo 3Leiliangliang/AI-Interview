@@ -28,12 +28,12 @@
         >
         <a-tag color="blue">{{ database.embed_info?.name }}</a-tag>
         <a-tag
-          :color="getKbTypeColor(database.kb_type || 'milvus')"
+          :color="getKbTypeColor(database.kb_type || 'openviking')"
           class="kb-type-tag"
           size="small"
         >
-          <component :is="getKbTypeIcon(database.kb_type || 'milvus')" class="type-icon" />
-          {{ getKbTypeLabel(database.kb_type || 'milvus') }}
+          <component :is="getKbTypeIcon(database.kb_type || 'openviking')" class="type-icon" />
+          {{ getKbTypeLabel(database.kb_type || 'openviking') }}
         </a-tag>
       </div>
     </template>

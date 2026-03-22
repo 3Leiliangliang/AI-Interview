@@ -11,7 +11,12 @@ from langchain.agents.middleware import (
 
 from src.agents.common import BaseAgent, load_chat_model
 from src.agents.common.backends import create_agent_composite_backend
-from src.agents.common.middlewares import RuntimeConfigMiddleware, SummaryOffloadMiddleware, save_attachments_to_fs
+from src.agents.common.middlewares import (
+    OpenVikingContextMiddleware,
+    OpenVikingSummaryMiddleware,
+    RuntimeConfigMiddleware,
+    save_attachments_to_fs,
+)
 from src.agents.common.middlewares.knowledge_base_middleware import KnowledgeBaseMiddleware
 from src.agents.common.middlewares.skills_middleware import SkillsMiddleware
 from src.agents.common.toolkits.buildin.tools import _create_tavily_search
@@ -23,7 +28,7 @@ from .context import DeepContext
 
 def _create_fs_backend(rt):
     """创建文件存储后端"""
-    return create_agent_composite_backend(rt)
+    return create_agent_composite_backend(rt, agent_id="DeepAgent")
 
 
 def _get_research_sub_agent(search_tools: list) -> dict:
@@ -107,7 +112,7 @@ class DeepAgent(BaseAgent):
         research_sub_agent = _get_research_sub_agent(search_tools)
 
         # 主 Agent 上下文优化：90k tokens 触发压缩（128k context window 的 70%）
-        summary_middleware = SummaryOffloadMiddleware(
+        summary_middleware = OpenVikingSummaryMiddleware(
             model=model,
             trigger=("tokens", 90000),
             trim_tokens_to_summarize=4000,
@@ -116,7 +121,7 @@ class DeepAgent(BaseAgent):
         )
 
         # 子 Agent 独立的上下文优化：更激进的压缩策略
-        sub_summary_middleware = SummaryOffloadMiddleware(
+        sub_summary_middleware = OpenVikingSummaryMiddleware(
             model=sub_model,
             trigger=("tokens", 50000),
             trim_tokens_to_summarize=2000,
@@ -159,6 +164,7 @@ class DeepAgent(BaseAgent):
                 TodoListMiddleware(),
                 PatchToolCallsMiddleware(),
                 KnowledgeBaseMiddleware(),  # 知识库工具
+                OpenVikingContextMiddleware(agent_id=self.id),
                 subagents_middleware,
                 summary_middleware,
                 # 工具调用限制：tavily_search 总调用最多 20 次

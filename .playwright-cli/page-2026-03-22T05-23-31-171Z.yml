@@ -1,0 +1,263 @@
+- generic [ref=e1]:
+  - generic [ref=e241]:
+    - generic [ref=e242]:
+      - generic [ref=e243]:
+        - link "伯乐 Bole" [ref=e245] [cursor=pointer]:
+          - /url: /
+          - img [ref=e246]
+          - generic [ref=e248]:
+            - generic [ref=e249]: 伯乐
+            - generic [ref=e250]: Bole
+        - button [ref=e251] [cursor=pointer]:
+          - img [ref=e252]
+      - generic [ref=e255]:
+        - link "模拟面试" [ref=e256] [cursor=pointer]:
+          - /url: /agent
+          - generic [ref=e257]:
+            - img [ref=e258]
+            - generic [ref=e261]: 模拟面试
+        - link "我的简历" [ref=e262] [cursor=pointer]:
+          - /url: /resume
+          - generic [ref=e263]:
+            - img [ref=e264]
+            - generic [ref=e267]: 我的简历
+        - link "知识库" [ref=e268] [cursor=pointer]:
+          - /url: /database
+          - generic [ref=e269]:
+            - img [ref=e270]
+            - generic [ref=e273]: 知识库
+        - link "扩展" [ref=e274] [cursor=pointer]:
+          - /url: /extensions
+          - generic [ref=e275]:
+            - img [ref=e276]
+            - generic [ref=e279]: 扩展
+        - link "Dashboard" [ref=e280] [cursor=pointer]:
+          - /url: /dashboard
+          - generic [ref=e281]:
+            - img [ref=e282]
+            - generic [ref=e284]: Dashboard
+        - generic [ref=e286] [cursor=pointer]:
+          - img [ref=e288]
+          - generic [ref=e291]: 任务中心
+      - generic [ref=e295] [cursor=pointer]:
+        - img [ref=e297]
+        - generic [ref=e301]: admin
+    - generic [ref=e964]:
+      - generic [ref=e965]:
+        - generic [ref=e966]:
+          - generic [ref=e967]:
+            - generic [ref=e968]:
+              - button "left" [ref=e969] [cursor=pointer]:
+                - img "left" [ref=e970]:
+                  - img [ref=e971]
+              - heading "JavaGuide" [level=3] [ref=e973]
+            - generic [ref=e974]:
+              - button "复制知识库ID" [ref=e975] [cursor=pointer]:
+                - img [ref=e976]
+              - button [ref=e979] [cursor=pointer]:
+                - img [ref=e980]
+          - generic [ref=e983]:
+            - paragraph [ref=e985]: Java 面试核心知识库，包含 Java、数据库、计算机基础、分布式与系统设计等主题。
+            - generic [ref=e986]:
+              - generic [ref=e987]: OpenViking
+              - generic [ref=e988]: Pro/BAAI/bge-m3
+              - generic [ref=e989]: QA
+        - generic [ref=e990]:
+          - generic [ref=e991]:
+            - generic [ref=e992]:
+              - button "上传" [ref=e993] [cursor=pointer]:
+                - img [ref=e994]
+                - generic [ref=e998]: 上传
+                - img [ref=e999]
+              - button "新建文件夹" [ref=e1001] [cursor=pointer]:
+                - img [ref=e1002]
+            - generic [ref=e1004]:
+              - generic [ref=e1005]:
+                - img [ref=e1007]
+                - textbox "搜索" [ref=e1010]
+              - button "排序" [ref=e1012] [cursor=pointer]:
+                - img [ref=e1013]
+              - button "筛选状态" [ref=e1016] [cursor=pointer]:
+                - img [ref=e1017]
+              - button "刷新" [ref=e1019] [cursor=pointer]:
+                - img [ref=e1020]
+              - button "多选" [ref=e1023] [cursor=pointer]:
+                - img [ref=e1024]
+              - button "切换右侧面板" [ref=e1027] [cursor=pointer]:
+                - img [ref=e1028]
+          - table [ref=e1036]:
+            - rowgroup [ref=e1041]:
+              - row "展开行 folder cs-basics" [ref=e1042]:
+                - cell "展开行 folder cs-basics" [ref=e1043]:
+                  - button "展开行" [ref=e1044] [cursor=pointer]
+                  - generic [ref=e1046] [cursor=pointer]:
+                    - img "folder" [ref=e1047]:
+                      - img [ref=e1048]
+                    - text: cs-basics
+                - cell [ref=e1050]
+                - cell [ref=e1051]:
+                  - button [ref=e1053] [cursor=pointer]:
+                    - img [ref=e1054]
+              - row "展开行 folder database" [ref=e1058]:
+                - cell "展开行 folder database" [ref=e1059]:
+                  - button "展开行" [ref=e1060] [cursor=pointer]
+                  - generic [ref=e1062] [cursor=pointer]:
+                    - img "folder" [ref=e1063]:
+                      - img [ref=e1064]
+                    - text: database
+                - cell [ref=e1066]
+                - cell [ref=e1067]:
+                  - button [ref=e1069] [cursor=pointer]:
+                    - img [ref=e1070]
+              - row "展开行 folder distributed-system" [ref=e1074]:
+                - cell "展开行 folder distributed-system" [ref=e1075]:
+                  - button "展开行" [ref=e1076] [cursor=pointer]
+                  - generic [ref=e1078] [cursor=pointer]:
+                    - img "folder" [ref=e1079]:
+                      - img [ref=e1080]
+                    - text: distributed-system
+                - cell [ref=e1082]
+                - cell [ref=e1083]:
+                  - button [ref=e1085] [cursor=pointer]:
+                    - img [ref=e1086]
+              - row "展开行 folder high-availability" [ref=e1090]:
+                - cell "展开行 folder high-availability" [ref=e1091]:
+                  - button "展开行" [ref=e1092] [cursor=pointer]
+                  - generic [ref=e1094] [cursor=pointer]:
+                    - img "folder" [ref=e1095]:
+                      - img [ref=e1096]
+                    - text: high-availability
+                - cell [ref=e1098]
+                - cell [ref=e1099]:
+                  - button [ref=e1101] [cursor=pointer]:
+                    - img [ref=e1102]
+              - row "展开行 folder high-performance" [ref=e1106]:
+                - cell "展开行 folder high-performance" [ref=e1107]:
+                  - button "展开行" [ref=e1108] [cursor=pointer]
+                  - generic [ref=e1110] [cursor=pointer]:
+                    - img "folder" [ref=e1111]:
+                      - img [ref=e1112]
+                    - text: high-performance
+                - cell [ref=e1114]
+                - cell [ref=e1115]:
+                  - button [ref=e1117] [cursor=pointer]:
+                    - img [ref=e1118]
+              - row "展开行 folder interview-preparation" [ref=e1122]:
+                - cell "展开行 folder interview-preparation" [ref=e1123]:
+                  - button "展开行" [ref=e1124] [cursor=pointer]
+                  - generic [ref=e1126] [cursor=pointer]:
+                    - img "folder" [ref=e1127]:
+                      - img [ref=e1128]
+                    - text: interview-preparation
+                - cell [ref=e1130]
+                - cell [ref=e1131]:
+                  - button [ref=e1133] [cursor=pointer]:
+                    - img [ref=e1134]
+              - row "展开行 folder java" [ref=e1138]:
+                - cell "展开行 folder java" [ref=e1139]:
+                  - button "展开行" [ref=e1140] [cursor=pointer]
+                  - generic [ref=e1142] [cursor=pointer]:
+                    - img "folder" [ref=e1143]:
+                      - img [ref=e1144]
+                    - text: java
+                - cell [ref=e1146]
+                - cell [ref=e1147]:
+                  - button [ref=e1149] [cursor=pointer]:
+                    - img [ref=e1150]
+              - row "展开行 folder system-design" [ref=e1154]:
+                - cell "展开行 folder system-design" [ref=e1155]:
+                  - button "展开行" [ref=e1156] [cursor=pointer]
+                  - generic [ref=e1158] [cursor=pointer]:
+                    - img "folder" [ref=e1159]:
+                      - img [ref=e1160]
+                    - text: system-design
+                - cell [ref=e1162]
+                - cell [ref=e1163]:
+                  - button [ref=e1165] [cursor=pointer]:
+                    - img [ref=e1166]
+      - generic [ref=e1172]:
+        - tablist [ref=e1173]:
+          - generic [ref=e1175]:
+            - tab "检索测试" [selected] [ref=e1177] [cursor=pointer]
+            - tab "知识导图" [ref=e1179] [cursor=pointer]
+            - tab "RAG评估" [ref=e1181] [cursor=pointer]
+            - tab "评估基准" [ref=e1183] [cursor=pointer]
+          - button "setting 检索配置" [ref=e1185] [cursor=pointer]:
+            - img "setting" [ref=e1186]:
+              - img [ref=e1187]
+            - generic [ref=e1189]: 检索配置
+        - tabpanel "检索测试" [ref=e1192]:
+          - generic [ref=e1197]:
+            - textbox "输入查询内容..." [ref=e1198]
+            - generic [ref=e1199]:
+              - generic [ref=e1200]:
+                - button "示例:" [ref=e1202] [cursor=pointer]:
+                  - generic [ref=e1203]: "示例:"
+                - generic [ref=e1205]: 暂无问题，请点击左侧按钮生成
+              - generic [ref=e1206]:
+                - button [ref=e1207] [cursor=pointer]:
+                  - img [ref=e1208]
+                - button "search" [disabled] [ref=e1211]:
+                  - img "search" [ref=e1212]:
+                    - img [ref=e1213]
+  - dialog "编辑知识库信息" [ref=e1216]:
+    - document:
+      - generic [ref=e1217]:
+        - button "Close" [ref=e1218] [cursor=pointer]:
+          - img "close" [ref=e1220]:
+            - img [ref=e1221]
+        - generic [ref=e1224]: 编辑知识库信息
+        - generic [ref=e1226]:
+          - generic [ref=e1228]:
+            - generic "知识库名称" [ref=e1230]: "* 知识库名称"
+            - textbox "* 知识库名称" [ref=e1234]:
+              - /placeholder: 请输入知识库名称
+              - text: JavaGuide
+          - generic [ref=e1236]:
+            - generic "知识库描述" [ref=e1238]
+            - generic [ref=e1242]:
+              - textbox "知识库描述" [ref=e1243]:
+                - /placeholder: 请输入知识库描述
+                - text: Java 面试核心知识库，包含 Java、数据库、计算机基础、分布式与系统设计等主题。
+              - button "润色" [ref=e1244] [cursor=pointer]:
+                - img [ref=e1245]
+                - generic [ref=e1248]: 润色
+          - generic [ref=e1250]:
+            - generic "自动生成问题" [ref=e1252]
+            - generic [ref=e1255]:
+              - switch "自动生成问题" [ref=e1256] [cursor=pointer]:
+                - generic [ref=e1258]:
+                  - generic: 开启
+                  - generic: 关闭
+              - text: 上传文件后自动生成测试问题
+          - generic [ref=e1260]:
+            - generic [ref=e1263]:
+              - text: 分块策略
+              - img "question-circle" [ref=e1264]:
+                - img [ref=e1265]
+            - generic [ref=e1271] [cursor=pointer]:
+              - generic [ref=e1272]:
+                - combobox "分块策略 question-circle" [ref=e1274]
+                - generic "QA" [ref=e1275]
+              - generic:
+                - img:
+                  - img
+          - generic [ref=e1277]:
+            - generic "共享设置" [ref=e1279]
+            - generic [ref=e1284]:
+              - generic [ref=e1286]:
+                - generic [ref=e1287] [cursor=pointer]:
+                  - radio "全员共享" [checked] [ref=e1289]
+                  - generic [ref=e1291]: 全员共享
+                - generic [ref=e1292] [cursor=pointer]:
+                  - radio "指定部门" [ref=e1294]
+                  - generic [ref=e1296]: 指定部门
+              - paragraph [ref=e1297]: 所有用户都可以访问
+        - generic [ref=e1298]:
+          - button "删除数据库" [ref=e1299] [cursor=pointer]:
+            - img [ref=e1300]
+            - generic [ref=e1303]: 删除数据库
+          - button "取 消" [ref=e1304] [cursor=pointer]:
+            - generic [ref=e1305]: 取 消
+          - button "确 定" [ref=e1306] [cursor=pointer]:
+            - generic [ref=e1307]: 确 定

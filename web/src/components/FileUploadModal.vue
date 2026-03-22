@@ -585,7 +585,7 @@ const buildAutoIndexParams = () => {
 // 计算属性：是否支持QA分割
 const isQaSplitSupported = computed(() => {
   const type = kbType.value?.toLowerCase()
-  return type === 'milvus'
+  return type === 'openviking'
 })
 
 

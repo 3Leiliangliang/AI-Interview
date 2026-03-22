@@ -1,4 +1,3 @@
-from deepagents.backends import StateBackend
 from deepagents.middleware.filesystem import FilesystemMiddleware
 from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
 from langchain.agents import create_agent
@@ -10,7 +9,13 @@ from langchain.agents.middleware import (
 )
 
 from src.agents.common import BaseAgent, load_chat_model
-from src.agents.common.middlewares import RuntimeConfigMiddleware, save_attachments_to_fs
+from src.agents.common.backends import create_agent_composite_backend
+from src.agents.common.middlewares import (
+    OpenVikingContextMiddleware,
+    OpenVikingSummaryMiddleware,
+    RuntimeConfigMiddleware,
+    save_attachments_to_fs,
+)
 from src.agents.common.toolkits.kbs.tools import query_kb
 
 from .context import InterviewContext
@@ -58,7 +63,7 @@ INTERVIEW_TODO_PROMPT = """## `write_todos`
 
 def _create_interview_filesystem_middleware() -> FilesystemMiddleware:
     middleware = FilesystemMiddleware(
-        backend=StateBackend,
+        backend=lambda rt: create_agent_composite_backend(rt, agent_id="InterviewAgent"),
         system_prompt=INTERVIEW_FILESYSTEM_PROMPT,
         custom_tool_descriptions={"read_file": INTERVIEW_READ_FILE_DESCRIPTION},
     )
@@ -80,17 +85,25 @@ class InterviewAgent(BaseAgent):
 
     async def get_graph(self, **kwargs):
         context = self.context_schema.from_file(module_name=self.module_name)
+        model = load_chat_model(context.model)
 
         return create_agent(
-            model=load_chat_model(context.model),
+            model=model,
             system_prompt=context.system_prompt,
             middleware=[
                 save_attachments_to_fs,
                 _create_interview_filesystem_middleware(),
                 InterviewKnowledgeBaseMiddleware(),
                 RuntimeConfigMiddleware(),
+                OpenVikingContextMiddleware(agent_id=self.id),
                 TodoListMiddleware(system_prompt=INTERVIEW_TODO_PROMPT),
                 PatchToolCallsMiddleware(),
+                OpenVikingSummaryMiddleware(
+                    model=model,
+                    trigger=("tokens", 30000),
+                    trim_tokens_to_summarize=2000,
+                    max_retention_ratio=0.5,
+                ),
                 ToolCallLimitMiddleware(
                     tool_name="query_kb",
                     run_limit=1,

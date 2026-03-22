@@ -19,7 +19,7 @@ from src.services.mcp_service import get_tools_from_all_servers
 
 def _create_fs_backend(rt):
     """创建文件存储后端"""
-    return create_agent_composite_backend(rt)
+    return create_agent_composite_backend(rt, agent_id="ChatbotAgent")
 
 
 class ChatbotAgent(BaseAgent):

@@ -3,15 +3,15 @@
 
 # 组织信息
 organization:
-  name: "AI-interview"           # 完整组织名称
-  logo: "/favicon.svg"       # Logo文件路径（放在 web/public 目录下）
-  avatar: "/avatar.jpg"      # 头像文件路径（放在 web/public 目录下）
+  name: "伯乐 Bole"           # 完整组织名称
+  logo: "/favicon.png"       # Logo文件路径（放在 web/public 目录下）
+  avatar: "/favicon.png"      # 头像文件路径（放在 web/public 目录下）
   login_bg: "/login-bg.jpg"  # 登录背景图片路径（放在 web/public 目录下）
 
 # 项目信息
 branding:
-  name: "AI-interview"
-  title: "AI-interview: 更智能的知识库智能体平台"     # 系统标题
+  name: "伯乐 Bole"
+  title: "伯乐 Bole：AI 模拟面试平台"     # 系统标题
   subtitle: "大模型驱动的知识库智能体平台"          # 副标题
 
 features:
@@ -50,4 +50,4 @@ actions:
 
 # 页脚信息
 footer:
-  copyright: "© AI-interview 2026 v0.5.1"
+  copyright: "© 伯乐 Bole 2026 v0.5.1"

@@ -19,9 +19,7 @@
         <div class="header-controls">
           <!-- 字符数/片段数显示在 segment 左边 -->
           <span class="view-info">
-            {{
-              viewMode === 'chunks' ? chunkCount + ' 个片段' : formatTextLength(charCount) + ' 字符'
-            }}
+            {{ viewInfoText }}
           </span>
 
           <!-- 视图模式切换 -->
@@ -80,17 +78,58 @@
 
       <!-- Chunks 模式：使用 Grid 布局 -->
       <div v-else-if="viewMode === 'chunks'" class="chunks-panel">
-        <div class="chunk-grid">
-          <div v-for="chunk in mappedChunks" :key="chunk.id" class="chunk-card">
-            <div class="chunk-card-header">
-              <span class="chunk-order">#{{ chunk.chunk_order_index }}</span>
+        <div class="chunks-overview" :class="{ qa: isQaPreset }">
+          <div class="chunks-overview-main">
+            <div class="chunks-overview-title-row">
+              <span class="chunks-overview-label">当前分块策略</span>
+              <span class="chunks-preset-badge">{{ databasePresetLabel }}</span>
             </div>
-            <div class="chunk-card-content">
-              {{ chunk.content.replace(/\n+/g, ' ') }}
+            <p class="chunks-overview-description">{{ databasePresetDescription }}</p>
+          </div>
+          <div class="chunks-overview-stats">
+            <div class="overview-stat">
+              <span class="overview-stat-label">片段数</span>
+              <strong class="overview-stat-value">{{ chunkCount }}</strong>
+            </div>
+            <div v-if="isQaPreset" class="overview-stat">
+              <span class="overview-stat-label">识别问题</span>
+              <strong class="overview-stat-value">{{ qaQuestionCount }}</strong>
+            </div>
+            <div v-if="isQaPreset" class="overview-stat">
+              <span class="overview-stat-label">识别回答</span>
+              <strong class="overview-stat-value">{{ qaAnswerCount }}</strong>
             </div>
           </div>
         </div>
-        <div v-if="mappedChunks.length === 0" class="empty-content">
+        <div class="chunk-grid">
+          <div
+            v-for="chunk in displayChunks"
+            :key="chunk.id"
+            class="chunk-card"
+            :class="{ qa: isQaPreset, structured: chunk.isQaStructured }"
+          >
+            <div class="chunk-card-header">
+              <span class="chunk-order">#{{ chunk.chunk_order_index }}</span>
+              <span v-if="isQaPreset" class="chunk-type-badge">
+                {{ chunk.isQaStructured ? '问答' : '片段' }}
+              </span>
+            </div>
+            <template v-if="isQaPreset && chunk.isQaStructured">
+              <div class="qa-section">
+                <span class="qa-section-label">问题</span>
+                <div class="qa-section-content">{{ chunk.question }}</div>
+              </div>
+              <div v-if="chunk.answer" class="qa-section answer">
+                <span class="qa-section-label">回答</span>
+                <div class="qa-section-content">{{ chunk.answer }}</div>
+              </div>
+            </template>
+            <div v-else class="chunk-card-content">
+              {{ chunk.preview }}
+            </div>
+          </div>
+        </div>
+        <div v-if="displayChunks.length === 0" class="empty-content">
           <p>暂无分块信息</p>
         </div>
       </div>
@@ -110,6 +149,7 @@ import { message } from 'ant-design-vue'
 import { documentApi } from '@/apis/knowledge_api'
 import { mergeChunks } from '@/utils/chunkUtils'
 import { getFileIcon, getFileIconColor } from '@/utils/file_utils'
+import { CHUNK_PRESET_LABEL_MAP, getChunkPresetDescription } from '@/utils/chunk_presets'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 import { Download, ChevronDown, FileText, X } from 'lucide-vue-next'
@@ -141,6 +181,14 @@ const hasIndexed = computed(() => ['done', 'indexed'].includes(file.value?.statu
 const hasContent = computed(
   () => (file.value?.lines && file.value?.lines.length > 0) || file.value?.content
 )
+const databasePresetId = computed(
+  () => store.database?.additional_params?.chunk_preset_id || 'general'
+)
+const databasePresetLabel = computed(
+  () => CHUNK_PRESET_LABEL_MAP[databasePresetId.value] || 'General'
+)
+const databasePresetDescription = computed(() => getChunkPresetDescription(databasePresetId.value))
+const isQaPreset = computed(() => databasePresetId.value === 'qa')
 // 是否有实际的分块数据
 const hasChunks = computed(() => mappedChunks.value && mappedChunks.value.length > 0)
 
@@ -148,7 +196,7 @@ const viewModeOptions = computed(() => {
   const options = [{ label: 'Markdown', value: 'markdown' }]
   // 只有当有实际的分块数据时才显示 Chunks 选项
   if (hasChunks.value) {
-    options.push({ label: 'Chunks', value: 'chunks' })
+    options.push({ label: isQaPreset.value ? 'QA Chunks' : 'Chunks', value: 'chunks' })
   }
   return options
 })
@@ -163,9 +211,37 @@ watch(file, (newFile) => {
 // 统计信息
 const mergeResult = computed(() => mergeChunks(file.value?.lines || []))
 const mappedChunks = computed(() => mergeResult.value.chunks)
+const parseQaChunk = (content) => {
+  const raw = String(content || '').trim()
+  const preview = raw.replace(/\n+/g, ' ').trim()
+  const questionMatch = raw.match(/(?:问题|Question)\s*[:：]\s*([\s\S]*?)(?=(?:回答|Answer)\s*[:：]|$)/i)
+  const answerMatch = raw.match(/(?:回答|Answer)\s*[:：]\s*([\s\S]*)$/i)
+  const question = questionMatch?.[1]?.trim() || ''
+  const answer = answerMatch?.[1]?.trim() || ''
+
+  return {
+    question,
+    answer,
+    isQaStructured: Boolean(question || answer),
+    preview
+  }
+}
+const displayChunks = computed(() =>
+  mappedChunks.value.map((chunk) => ({
+    ...chunk,
+    ...parseQaChunk(chunk.content)
+  }))
+)
 const mergedContent = computed(() => file.value?.content || mergeResult.value.content || '')
 const charCount = computed(() => mergedContent.value.length)
 const chunkCount = computed(() => mappedChunks.value.length || file.value?.lines?.length || 0)
+const qaQuestionCount = computed(() => displayChunks.value.filter((chunk) => chunk.question).length)
+const qaAnswerCount = computed(() => displayChunks.value.filter((chunk) => chunk.answer).length)
+const viewInfoText = computed(() =>
+  viewMode.value === 'chunks'
+    ? `${chunkCount.value} 个片段 · ${databasePresetLabel.value} 分块`
+    : `${formatTextLength(charCount.value)} 字符`
+)
 
 // 格式化文本长度
 function formatTextLength(length) {
@@ -337,10 +413,92 @@ const handleDownloadMarkdown = () => {
 }
 
 /* Chunks 面板样式 */
+.chunks-overview {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: stretch;
+  padding: 0 16px 16px;
+  margin-bottom: 4px;
+}
+
+.chunks-overview.qa .chunks-overview-main,
+.chunks-overview.qa .chunks-overview-stats {
+  border-color: rgba(8, 145, 178, 0.2);
+  background: linear-gradient(135deg, rgba(236, 254, 255, 0.95) 0%, rgba(248, 250, 252, 1) 100%);
+}
+
+.chunks-overview-main,
+.chunks-overview-stats {
+  border: 1px solid var(--gray-200);
+  border-radius: 12px;
+  background: var(--gray-0);
+  padding: 14px 16px;
+}
+
+.chunks-overview-main {
+  flex: 1;
+}
+
+.chunks-overview-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.chunks-overview-label {
+  font-size: 13px;
+  color: var(--gray-500);
+}
+
+.chunks-preset-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(8, 145, 178, 0.12);
+  color: rgb(14, 116, 144);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chunks-overview-description {
+  margin: 0;
+  font-size: 13px;
+  color: var(--gray-700);
+  line-height: 1.6;
+}
+
+.chunks-overview-stats {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: fit-content;
+}
+
+.overview-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.overview-stat-label {
+  font-size: 12px;
+  color: var(--gray-500);
+}
+
+.overview-stat-value {
+  font-size: 18px;
+  line-height: 1;
+  color: var(--gray-900);
+}
+
 .chunk-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 12px;
+  padding: 0 16px 16px;
 }
 
 .chunk-card {
@@ -351,6 +509,11 @@ const handleDownloadMarkdown = () => {
   transition: all 0.2s ease;
 }
 
+.chunk-card.qa.structured {
+  border-color: rgba(8, 145, 178, 0.18);
+  background: linear-gradient(180deg, rgba(248, 252, 255, 0.95) 0%, var(--gray-0) 100%);
+}
+
 .chunk-card:hover {
   border-color: var(--main-color);
   box-shadow: 0 2px 8px rgba(1, 97, 121, 0.1);
@@ -359,6 +522,7 @@ const handleDownloadMarkdown = () => {
 .chunk-card-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   margin-bottom: 8px;
 }
 
@@ -368,8 +532,51 @@ const handleDownloadMarkdown = () => {
   font-size: 12px;
 }
 
-.chunk-card-content {
+.chunk-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(8, 145, 178, 0.1);
+  color: rgb(14, 116, 144);
   font-size: 12px;
+  font-weight: 600;
+}
+
+.qa-section {
+  border-radius: 10px;
+  background: var(--gray-10);
+  padding: 10px 12px;
+}
+
+.qa-section + .qa-section {
+  margin-top: 10px;
+}
+
+.qa-section.answer {
+  background: rgba(8, 145, 178, 0.05);
+}
+
+.qa-section-label {
+  display: inline-flex;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gray-500);
+}
+
+.qa-section-content {
+  font-size: 13px;
+  color: var(--gray-700);
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.chunk-card-content {
+  font-size: 13px;
   color: var(--gray-600);
   line-height: 1.5;
   overflow: hidden;
@@ -377,6 +584,16 @@ const handleDownloadMarkdown = () => {
   display: -webkit-box;
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
+}
+
+@media (max-width: 900px) {
+  .chunks-overview {
+    flex-direction: column;
+  }
+
+  .chunks-overview-stats {
+    justify-content: space-between;
+  }
 }
 </style>
 
