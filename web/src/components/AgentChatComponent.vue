@@ -551,7 +551,9 @@ const onGoingConvMessages = computed(() => {
     MessageProcessor.mergeMessageChunk
   )
   return msgs.length > 0
-    ? MessageProcessor.convertToolResultToMessages(msgs).filter((msg) => msg.type !== 'tool')
+    ? MessageProcessor.convertToolResultToMessages(msgs).filter(
+        (msg) => msg.type !== 'tool' && !MessageProcessor.isHiddenInterviewPromptMessage(msg)
+      )
     : []
 })
 

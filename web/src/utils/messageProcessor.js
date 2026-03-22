@@ -2,6 +2,18 @@
  * 消息处理工具类
  */
 export class MessageProcessor {
+  static isHiddenInterviewPromptMessage(message) {
+    const content = typeof message?.content === 'string' ? message.content.trim() : ''
+    if (!content) return false
+
+    return (
+      content.startsWith('\u73b0\u5728\u5f00\u59cb\u4e00\u8f6e') &&
+      content.includes('\u4f60\u5fc5\u987b\u59cb\u7ec8\u4ee5\u9762\u8bd5\u5b98\u8eab\u4efd\u53d1\u8a00') &&
+      content.includes('\u8bf7\u5148\u7ef4\u62a4\u56fa\u5b9a 5 \u6b65\u9762\u8bd5\u4efb\u52a1') &&
+      content.includes('\u62ff\u5230\u7b80\u5386\u540e\u7acb\u523b\u8fdb\u5165\u7b2c\u4e00\u95ee')
+    )
+  }
+
   /**
    * 将工具结果与消息合并
    * @param {Array} msgs - 消息数组
@@ -51,46 +63,46 @@ export class MessageProcessor {
     // Backend new storage: tool results are embedded in AI messages' tool_calls array with tool_call_result field
     const filteredHistory = serverHistory.filter((item) => item.type !== 'tool')
 
-    // 按照对话分组
+    // ??????
     const conversations = []
     let currentConv = null
 
-    for (const item of filteredHistory) {
-      if (item.type === 'human') {
-        // Start new conversation, finalize previous one
-        if (currentConv) {
-          // Find the last AI message and mark it as final
-          for (let i = currentConv.messages.length - 1; i >= 0; i--) {
-            if (currentConv.messages[i].type === 'ai') {
-              currentConv.messages[i].isLast = true
-              currentConv.status = 'finished'
-              break
-            }
-          }
-        }
-        currentConv = {
-          messages: [item],
-          status: 'loading'
-        }
-        conversations.push(currentConv)
-      } else if (item.type === 'ai' && currentConv) {
-        currentConv.messages.push(item)
-      }
-    }
+    const finalizeConversation = (conv) => {
+      if (!conv || conv.messages.length === 0) return
 
-    // Mark the last conversation as finished
-    if (currentConv && currentConv.messages.length > 0) {
-      // Find the last AI message and mark it as final
-      for (let i = currentConv.messages.length - 1; i >= 0; i--) {
-        if (currentConv.messages[i].type === 'ai') {
-          currentConv.messages[i].isLast = true
-          currentConv.status = 'finished'
+      for (let i = conv.messages.length - 1; i >= 0; i--) {
+        if (conv.messages[i].type === 'ai') {
+          conv.messages[i].isLast = true
+          conv.status = 'finished'
           break
         }
       }
     }
 
-    return conversations
+    for (const item of filteredHistory) {
+      if (item.type === 'human') {
+        finalizeConversation(currentConv)
+
+        currentConv = {
+          messages: MessageProcessor.isHiddenInterviewPromptMessage(item) ? [] : [item],
+          status: 'loading'
+        }
+        conversations.push(currentConv)
+      } else if (item.type === 'ai') {
+        if (!currentConv) {
+          currentConv = {
+            messages: [],
+            status: 'loading'
+          }
+          conversations.push(currentConv)
+        }
+        currentConv.messages.push(item)
+      }
+    }
+
+    finalizeConversation(currentConv)
+
+    return conversations.filter((conv) => conv.messages.length > 0)
   }
 
   /**
