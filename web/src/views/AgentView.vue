@@ -165,20 +165,14 @@ onMounted(async () => {
 })
 
 const continueInterview = (thread) => {
-  // Parsing the stored position and round from title if needed, 
-  // or simply routing to the agent with the thread id. No thread select supported yet directly on route params, 
-  // so we will just use AgentComp which maps to AgentChatComponent which selects thread if given ?threadId or just loads default 
-  // Wait, the router pushes to 'AgentInterviewComp'. But AgentInterviewComp uses InterviewSessionView which starts a new thread. 
-  // For simplicity, we just route to `/agent` and maybe it should be supported later. 
-  // Actually, InterviewSessionView.vue doesn't support an explicit threadId yet. 
-  // Let's pass the same format but use the thread.id as session.
-  let [pos, rnd] = (thread.title || '').split(' · ')
+  const [pos, rnd] = (thread.title || '').split(' · ')
+
   router.push({
     name: 'AgentInterviewComp',
     query: {
       position: pos ? pos.trim() : '通用岗位',
       round: rnd ? rnd.trim() : '初试',
-      session: thread.id // Use thread.id as session to avoid creating new thread
+      threadId: thread.id
     }
   })
 }

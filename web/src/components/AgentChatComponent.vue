@@ -1764,9 +1764,22 @@ const startInterviewSession = async ({
   return threadId
 }
 
+const openThread = async (threadId) => {
+  if (!threadId || !currentAgent.value) return
+
+  let waitCount = 0
+  while (chatUIStore.isLoadingThreads && waitCount < 20) {
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    waitCount += 1
+  }
+
+  await selectChat(threadId)
+}
+
 defineExpose({
   getExportPayload: buildExportPayload,
-  startInterviewSession
+  startInterviewSession,
+  openThread
 })
 
 const toggleSidebar = () => {

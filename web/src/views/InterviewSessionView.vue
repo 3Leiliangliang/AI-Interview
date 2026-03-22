@@ -65,6 +65,7 @@ const selectedRound = computed(() => {
 })
 
 const sessionKey = computed(() => String(route.query.session || '').trim())
+const threadId = computed(() => String(route.query.threadId || '').trim())
 
 const contextOverrides = computed(() => ({
   target_position: selectedPosition.value,
@@ -130,7 +131,19 @@ const handleShareChat = async () => {
   }
 }
 
+const maybeRestoreInterview = async () => {
+  if (!threadId.value || !interviewAgentId.value || !chatComponentRef.value) return
+
+  await nextTick()
+  await chatComponentRef.value.openThread?.(threadId.value)
+}
+
 const maybeStartInterview = async () => {
+  if (threadId.value) {
+    await maybeRestoreInterview()
+    return
+  }
+
   if (!sessionKey.value || !interviewAgentId.value || !chatComponentRef.value) return
   if (sessionStorage.getItem(getStartedStorageKey(sessionKey.value)) === '1') return
 
@@ -148,7 +161,7 @@ const maybeStartInterview = async () => {
 }
 
 onMounted(async () => {
-  if (!sessionKey.value) {
+  if (!sessionKey.value && !threadId.value) {
     router.replace({
       name: 'AgentComp',
       query: {
@@ -163,7 +176,7 @@ onMounted(async () => {
     try {
       await agentStore.initialize()
     } catch (error) {
-      console.error('初始化面试智能体失败:', error)
+      console.error('\u521d\u59cb\u5316\u9762\u8bd5\u667a\u80fd\u4f53\u5931\u8d25:', error)
     }
   }
 
@@ -171,7 +184,7 @@ onMounted(async () => {
 })
 
 watch(
-  () => [sessionKey.value, interviewAgentId.value],
+  () => [sessionKey.value, threadId.value, interviewAgentId.value],
   async () => {
     await maybeStartInterview()
   }
