@@ -48,6 +48,15 @@
       <h3>知识库名称<span style="color: var(--color-error-500)">*</span></h3>
       <a-input v-model:value="newDatabase.name" placeholder="新建知识库名称" size="large" />
 
+      <h3>岗位<span style="color: var(--color-error-500)">*</span></h3>
+      <a-select
+        v-model:value="newDatabase.position"
+        :options="positionOptions"
+        style="width: 100%"
+        size="large"
+        placeholder="请选择岗位"
+      />
+
       <template v-if="true">
         <h3>嵌入模型</h3>
         <EmbeddingModelSelector
@@ -55,6 +64,17 @@
           style="width: 100%"
           size="large"
           placeholder="请选择嵌入模型"
+        />
+      </template>
+
+      <template v-if="newDatabase.kb_type === 'openviking'">
+        <h3>VLM 模型<span style="color: var(--color-error-500)">*</span></h3>
+        <ModelSelectorComponent
+          :model_spec="vlmModelSpec"
+          style="width: 100%"
+          size="large"
+          placeholder="请选择 VLM 模型"
+          @select-model="handleLLMSelect"
         />
       </template>
 
@@ -135,55 +155,61 @@
     </div>
 
     <!-- 数据库列表 -->
-    <div v-else class="databases">
-      <div
-        v-for="database in databases"
-        :key="database.db_id"
-        class="database dbcard"
-        @click="navigateToDatabase(database.db_id)"
-      >
-        <!-- 私有知识库锁定图标 -->
-        <LockOutlined
-          v-if="database.metadata?.is_private"
-          class="private-lock-icon"
-          title="私有知识库"
-        />
-        <div class="top">
-          <div class="icon">
-            <component :is="getKbTypeIcon(database.kb_type || 'openviking')" />
-          </div>
-          <div class="info">
-            <h3>{{ database.name }}</h3>
-            <p>
-              <span>{{ database.files ? Object.keys(database.files).length : 0 }} 文件</span>
-              <span class="created-time-inline" v-if="database.created_at">
-                {{ formatCreatedTime(database.created_at) }}
-              </span>
-            </p>
-          </div>
+    <div v-else class="database-groups">
+      <section v-for="group in databaseGroups" :key="group.key" class="database-group">
+        <div class="database-group-header">
+          <h3 class="database-group-title">{{ group.label }}</h3>
+          <span class="database-group-count">{{ group.items.length }} 个知识库</span>
         </div>
-        <!-- <a-tooltip :title="database.description || '暂无描述'">
-          <p class="description">{{ database.description || '暂无描述' }}</p>
-        </a-tooltip> -->
-        <p class="description">{{ database.description || '暂无描述' }}</p>
-        <div class="tags">
-          <a-tag color="blue" v-if="database.embed_info?.name">{{
-            database.embed_info.name
-          }}</a-tag>
-          <a-tag color="cyan" class="chunk-tag">
-            分块：{{ chunkPresetLabelMap[database.additional_params?.chunk_preset_id || 'general'] || 'General' }}
-          </a-tag>
-          <!-- <a-tag color="green" v-if="database.embed_info?.dimension">{{ database.embed_info.dimension }}</a-tag> -->
-          <a-tag
-            :color="getKbTypeColor(database.kb_type || 'openviking')"
-            class="kb-type-tag"
-            size="small"
+        <div class="databases">
+          <div
+            v-for="database in group.items"
+            :key="database.db_id"
+            class="database dbcard"
+            @click="navigateToDatabase(database.db_id)"
           >
-            {{ getKbTypeLabel(database.kb_type || 'openviking') }}
-          </a-tag>
+            <LockOutlined
+              v-if="database.metadata?.is_private"
+              class="private-lock-icon"
+              title="私有知识库"
+            />
+            <div class="top">
+              <div class="icon">
+                <component :is="getKbTypeIcon(database.kb_type || 'openviking')" />
+              </div>
+              <div class="info">
+                <h3>{{ database.name }}</h3>
+                <p>
+                  <span>{{ database.files ? Object.keys(database.files).length : 0 }} 文件</span>
+                  <span class="created-time-inline" v-if="database.created_at">
+                    {{ formatCreatedTime(database.created_at) }}
+                  </span>
+                </p>
+              </div>
+            </div>
+            <p class="description">{{ database.description || '暂无描述' }}</p>
+            <div class="tags">
+              <a-tag color="blue" v-if="database.embed_info?.name">{{
+                database.embed_info.name
+              }}</a-tag>
+              <a-tag color="geekblue">岗位：{{ getDatabasePositionLabel(database) }}</a-tag>
+              <a-tag color="purple" v-if="getDatabaseVlmModel(database)">
+                VLM：{{ getDatabaseVlmModel(database) }}
+              </a-tag>
+              <a-tag color="cyan" class="chunk-tag">
+                分块：{{ chunkPresetLabelMap[database.additional_params?.chunk_preset_id || 'general'] || 'General' }}
+              </a-tag>
+              <a-tag
+                :color="getKbTypeColor(database.kb_type || 'openviking')"
+                class="kb-type-tag"
+                size="small"
+              >
+                {{ getKbTypeLabel(database.kb_type || 'openviking') }}
+              </a-tag>
+            </div>
+          </div>
         </div>
-        <!-- <button @click="deleteDatabase(database.collection_name)">删除</button> -->
-      </div>
+      </section>
     </div>
   </div>
 </template>
@@ -228,29 +254,54 @@ const shareConfig = ref({
   accessible_department_ids: []
 })
 
-// 语言选项（值使用英文，以保证后端兼容；标签为中英文方便理解）
-const languageOptions = [
-  { label: '中文 Chinese', value: 'Chinese' },
-  { label: '英语 English', value: 'English' },
-  { label: '日语 Japanese', value: 'Japanese' },
-  { label: '韩语 Korean', value: 'Korean' },
-  { label: '德语 German', value: 'German' },
-  { label: '法语 French', value: 'French' },
-  { label: '西班牙语 Spanish', value: 'Spanish' },
-  { label: '葡萄牙语 Portuguese', value: 'Portuguese' },
-  { label: '俄语 Russian', value: 'Russian' },
-  { label: '阿拉伯语 Arabic', value: 'Arabic' },
-  { label: '印地语 Hindi', value: 'Hindi' }
-]
 
 const chunkPresetOptions = CHUNK_PRESET_OPTIONS.map(({ label, value }) => ({ label, value }))
 const chunkPresetLabelMap = CHUNK_PRESET_LABEL_MAP
 
+const POSITION_OPTIONS = [
+  { label: '后端工程师', value: '后端工程师' },
+  { label: '前端工程师', value: '前端工程师' }
+]
+
+const POSITION_ORDER = [...POSITION_OPTIONS.map((item) => item.value), '未分类']
+
+const LEGACY_POSITION_MAP = {
+  'React Interview Questions': '前端工程师',
+  'Waking-Up': '后端工程师',
+  JavaGuide: '后端工程师'
+}
+
+const positionOptions = POSITION_OPTIONS
+
+const parseModelSpec = (spec = '') => {
+  if (typeof spec !== 'string' || !spec) {
+    return {
+      provider: '',
+      model_name: ''
+    }
+  }
+
+  const index = spec.indexOf('/')
+  if (index === -1) {
+    return {
+      provider: '',
+      model_name: ''
+    }
+  }
+
+  return {
+    provider: spec.slice(0, index),
+    model_name: spec.slice(index + 1)
+  }
+}
+
 const createEmptyDatabaseForm = () => ({
   name: '',
   description: '',
+  position: POSITION_OPTIONS[0].value,
   embed_model_name: configStore.config?.embed_model,
   kb_type: 'openviking',
+  llm_info: parseModelSpec(configStore.config?.default_model || ''),
   is_private: false,
   storage: '',
   chunk_preset_id: 'general'
@@ -262,7 +313,7 @@ const selectedPresetDescription = computed(() =>
   getChunkPresetDescription(newDatabase.chunk_preset_id)
 )
 
-const llmModelSpec = computed(() => {
+const vlmModelSpec = computed(() => {
   const provider = newDatabase.llm_info?.provider || ''
   const modelName = newDatabase.llm_info?.model_name || ''
   if (provider && modelName) {
@@ -271,7 +322,65 @@ const llmModelSpec = computed(() => {
   return ''
 })
 
-// 支持的知识库类型
+const inferDatabasePosition = (database) => {
+  const explicitPosition =
+    database?.additional_params?.position || database?.metadata?.position || ''
+  if (explicitPosition) {
+    return explicitPosition
+  }
+
+  const name = String(database?.name || '').trim()
+  if (LEGACY_POSITION_MAP[name]) {
+    return LEGACY_POSITION_MAP[name]
+  }
+
+  const hint = `${name} ${database?.description || ''}`.toLowerCase()
+  if (hint.includes('react') || hint.includes('vue') || hint.includes('前端')) {
+    return '前端工程师'
+  }
+  if (
+    hint.includes('java') ||
+    hint.includes('spring') ||
+    hint.includes('backend') ||
+    hint.includes('后端')
+  ) {
+    return '后端工程师'
+  }
+
+  return '未分类'
+}
+
+const getDatabasePositionLabel = (database) => inferDatabasePosition(database)
+
+const getDatabaseVlmModel = (database) => {
+  const provider = database?.llm_info?.provider || ''
+  const modelName = database?.llm_info?.model_name || ''
+  if (provider && modelName) {
+    return `${provider}/${modelName}`
+  }
+  return ''
+}
+
+const databaseGroups = computed(() => {
+  const groups = new Map(POSITION_ORDER.map((key) => [key, []]))
+
+  for (const database of databases.value || []) {
+    const position = inferDatabasePosition(database)
+    if (!groups.has(position)) {
+      groups.set(position, [])
+    }
+    groups.get(position).push(database)
+  }
+
+  return Array.from(groups.entries())
+    .filter(([, items]) => items.length > 0)
+    .map(([key, items]) => ({
+      key,
+      label: key,
+      items
+    }))
+})
+
 const supportedKbTypes = ref({})
 
 // 有序的知识库类型
@@ -374,8 +483,8 @@ const buildRequestData = () => {
   requestData.embed_model_name = newDatabase.embed_model_name || configStore.config.embed_model
   requestData.additional_params.is_private = newDatabase.is_private || false
   requestData.additional_params.chunk_preset_id = newDatabase.chunk_preset_id || 'general'
+  requestData.additional_params.position = newDatabase.position
 
-  // 添加共享配置
   requestData.share_config = {
     is_shared: shareConfig.value.is_shared,
     accessible_departments: shareConfig.value.is_shared
@@ -383,18 +492,32 @@ const buildRequestData = () => {
       : shareConfig.value.accessible_department_ids || []
   }
 
-  // 根据类型添加特定配置
-  if (['openviking'].includes(newDatabase.kb_type)) {
+  if (newDatabase.kb_type === 'openviking') {
     if (newDatabase.storage) {
       requestData.additional_params.storage = newDatabase.storage
+    }
+    requestData.llm_info = {
+      provider: newDatabase.llm_info?.provider || '',
+      model_name: newDatabase.llm_info?.model_name || ''
     }
   }
 
   return requestData
 }
 
-// 创建按钮处理
 const handleCreateDatabase = async () => {
+  if (!newDatabase.position) {
+    message.error('请选择岗位')
+    return
+  }
+
+  if (
+    newDatabase.kb_type === 'openviking' &&
+    (!newDatabase.llm_info?.provider || !newDatabase.llm_info?.model_name)
+  ) {
+    message.error('OpenViking 知识库需要配置 VLM 模型')
+    return
+  }
 
   const requestData = buildRequestData()
   try {
@@ -573,7 +696,41 @@ onMounted(() => {
 }
 
 .database-container {
+  .database-groups {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .database-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .database-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .database-group-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--gray-900);
+  }
+
+  .database-group-count {
+    font-size: 13px;
+    color: var(--gray-600);
+  }
+
   .databases {
+    padding: 0;
+
     .database {
       .top {
         .info {

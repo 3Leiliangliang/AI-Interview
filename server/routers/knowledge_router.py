@@ -119,6 +119,11 @@ async def create_database(
             raise HTTPException(status_code=400, detail="embed_model_name 不能为空")
         if embed_model_name not in config.embed_model_names:
             raise HTTPException(status_code=400, detail=f"不支持的 embedding 模型: {embed_model_name}")
+        if kb_type == "openviking":
+            provider = (llm_info or {}).get("provider", "").strip()
+            model_name = (llm_info or {}).get("model_name", "").strip()
+            if not provider or not model_name:
+                raise HTTPException(status_code=400, detail="OpenViking 知识库需要配置 VLM 模型")
         embed_info = config.embed_model_names[embed_model_name]
         # 将Pydantic模型转换为字典以便JSON序列化
         embed_info_dict = embed_info.model_dump() if hasattr(embed_info, "model_dump") else embed_info.dict()
