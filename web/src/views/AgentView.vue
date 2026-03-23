@@ -95,6 +95,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Sparkles, Clock, ChevronRight, LoaderCircle } from 'lucide-vue-next'
 import { useAgentStore } from '@/stores/agent'
 import { threadApi } from '@/apis/agent_api'
+import { parseToShanghai } from '@/utils/time'
 
 const route = useRoute()
 const router = useRouter()
@@ -134,9 +135,8 @@ const loadingHistory = ref(false)
 
 const formatTime = (timeStr) => {
   if (!timeStr) return ''
-  const date = new Date(timeStr)
-  const pad = (n) => (n < 10 ? '0' + n : n)
-  return `${date.getMonth() + 1}/${date.getDate()} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+  const parsed = parseToShanghai(timeStr)
+  return parsed ? parsed.format('M/D HH:mm') : ''
 }
 
 onMounted(async () => {
