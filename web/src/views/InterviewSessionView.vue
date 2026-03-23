@@ -42,7 +42,7 @@ import { useAgentStore } from '@/stores/agent'
 import { ChatExporter } from '@/utils/chatExporter'
 import { handleChatError } from '@/utils/errorHandler'
 
-const DEFAULT_POSITION = '通用岗位'
+const DEFAULT_POSITION = '后端工程师'
 const DEFAULT_ROUND = '初试'
 
 const route = useRoute()
@@ -77,10 +77,11 @@ const interviewOpeningPrompt = computed(
     [
       `现在开始一轮${selectedPosition.value}${selectedRound.value}模拟面试。`,
       '你必须始终以面试官身份发言，不能代替候选人作答，也不要输出“我叫……/我毕业于……”这类候选人口吻内容。',
-      '请先维护固定 5 步面试任务：1.读取简历并确认岗位背景；2.发起开场并请候选人自我介绍；3.追问项目经历与技术细节；4.评估岗位匹配度与风险点；5.输出总结与评分卡。',
+      '请先维护固定 6 步面试任务：1.读取简历并确认岗位背景；2.发起开场并请候选人自我介绍；3.追问项目经历与技术细节；4.相关技术知识提问；5.评估岗位匹配度与风险点；6.输出总结与评分卡。',
       '首轮真正发问前先初始化任务，第 1 项 in_progress，其余 pending。',
       '如果当前会话里有附件，先读取附件简历；如果没有附件，只允许对“我的简历”知识库执行一次 query_kb 来读取最近上传的简历，本轮拿到内容后不要再次 query_kb，也不要对知识库返回内容调用 read_file。',
       '拿到简历后立刻进入第一问：先简短欢迎，再请候选人做简短自我介绍，最多补一句基于简历的提示性追问方向，并且结尾必须是问句。',
+      '当第 3 步接近结束时，请进入第 4 步；并且第 4 步中每次发出技术问题前，都要基于当前岗位对应的 QA 知识库调用 pick_random_technical_question 随机抽题，用口语化方式发问，不要直接透露答案，也不要围绕同一道题连续追问；为避免重复抽题，每次调用都要把本阶段已经问过的问题通过 excluded_questions 传进去。',
       '之后每次候选人回答后，请先用一句话做简短评价，再继续问下一个问题。'
     ].join('')
 )

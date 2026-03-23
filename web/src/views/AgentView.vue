@@ -102,12 +102,7 @@ const agentStore = useAgentStore()
 
 const positionOptions = [
   { label: '前端', value: '前端工程师' },
-  { label: '后端', value: '后端工程师' },
-  { label: '产品', value: '产品经理' },
-  { label: '测试', value: '测试工程师' },
-  { label: '算法', value: '算法工程师' },
-  { label: '运营', value: '运营' },
-  { label: '通用', value: '通用岗位' }
+  { label: '后端', value: '后端工程师' }
 ]
 
 const roundOptions = [
@@ -116,7 +111,7 @@ const roundOptions = [
   { label: 'HR', value: 'HR' }
 ]
 
-const selectedPosition = ref(String(route.query.position || '通用岗位'))
+const selectedPosition = ref(String(route.query.position || '后端工程师'))
 const selectedRound = ref(String(route.query.round || '初试'))
 
 const startInterview = () => {
@@ -170,7 +165,7 @@ const continueInterview = (thread) => {
   router.push({
     name: 'AgentInterviewComp',
     query: {
-      position: pos ? pos.trim() : '通用岗位',
+      position: pos ? pos.trim() : '后端工程师',
       round: rnd ? rnd.trim() : '初试',
       threadId: thread.id
     }

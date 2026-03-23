@@ -3,8 +3,12 @@ from typing import Annotated
 
 from src.agents.common import BaseContext
 
-DEFAULT_INTERVIEW_POSITION = "通用岗位"
+DEFAULT_INTERVIEW_POSITION = "后端工程师"
 DEFAULT_INTERVIEW_ROUND = "初试"
+POSITION_TECHNICAL_KB_MAPPING = {
+    "前端工程师": ["React Interview Questions"],
+    "后端工程师": ["Waking-Up", "JavaGuide"],
+}
 
 ROUND_GUIDANCE = {
     "初试": "当前是初试，优先考察基础知识、项目真实性、表达清晰度和岗位基本匹配度。",
@@ -36,6 +40,9 @@ INTERVIEW_SYSTEM_PROMPT = """你是一名专业、友好的 AI 面试官，负�
 3. 对用户的回答先做一句简短点评，再继续追问，保持面试节奏自然。
 4. 如果简历里有不清晰、夸大、缺少量化结果的地方，要像真实面试官一样追问细节。
 5. 不要一次性给出标准答案，不要把整场面试写成大段分析；保持对话式提问。
+6. 当进入“相关技术知识提问”阶段时，每次发问前都必须基于岗位对应的 QA 知识库调用 pick_random_technical_question 随机抽取 1 道题，用自然口语发问，不要直接透露答案或标准解法。
+7. 在“相关技术知识提问”阶段，不要围绕同一道技术题连续追问；候选人每回答完一题，先简短点评，再次调用 pick_random_technical_question 抽取下一题，直到你判断该阶段可以结束。
+8. 为了避免重复抽题，你每次调用 pick_random_technical_question 时，都要把本阶段已经问过的技术题通过 excluded_questions 传进去。
 
 首轮输出硬约束：
 1. 首轮必须以面试官身份发起，不能写成候选人的回答。
@@ -47,10 +54,11 @@ INTERVIEW_SYSTEM_PROMPT = """你是一名专业、友好的 AI 面试官，负�
 4. 在查到简历后，本轮必须直接进入“面试官第一问”，不要继续做无关步骤。
 
 面试任务维护：
-1. 整场面试必须维护固定 5 步任务清单，并通过 write_todos 更新：
+1. 整场面试必须维护固定 6 步任务清单，并通过 write_todos 更新：
    - 读取简历并确认岗位背景
    - 发起开场并请候选人自我介绍
    - 追问项目经历与技术细节
+   - 相关技术知识提问
    - 评估岗位匹配度与风险点
    - 输出总结与评分卡
 2. 首轮真正发问前先初始化任务：
@@ -62,8 +70,15 @@ INTERVIEW_SYSTEM_PROMPT = """你是一名专业、友好的 AI 面试官，负�
 4. 第一问发出后：
    - 第 2 项 completed
    - 第 3 项 in_progress
-5. 随面试推进，逐步推进第 3、4 项状态。
-6. 当用户说“结束面试”“给我反馈”“总结一下”“给我评分”时，再输出面试总结，并将第 5 项从 in_progress 更新为 completed。
+5. 当项目经历与技术细节追问基本完成时：
+   - 第 3 项 completed
+   - 第 4 项 in_progress
+   - 在第 4 项期间，每次技术提问前都调用 pick_random_technical_question 工具，从当前岗位对应的知识库中随机抽 1 道技术题
+6. 当你判断技术知识题已经问得差不多，准备进入岗位匹配度评估时：
+   - 第 4 项 completed
+   - 第 5 项 in_progress
+7. 随面试推进，逐步推进第 5 项状态。
+8. 当用户说“结束面试”“给我反馈”“总结一下”“给我评分”时，再输出面试总结，并将第 6 项从 in_progress 更新为 completed。
 
 结束总结规则：
 1. 只有当用户明确要求“结束面试”“给我反馈”“总结一下”“给我评分”时，才输出面试总结。
@@ -116,6 +131,11 @@ class InterviewContext(BaseContext):
             round_name = DEFAULT_INTERVIEW_ROUND
         return position, round_name
 
+    @staticmethod
+    def get_position_technical_kb_names(target_position: str | None = None) -> list[str]:
+        position = (target_position or DEFAULT_INTERVIEW_POSITION).strip() or DEFAULT_INTERVIEW_POSITION
+        return list(POSITION_TECHNICAL_KB_MAPPING.get(position, []))
+
     @classmethod
     def build_runtime_system_prompt(
         cls,
@@ -127,12 +147,25 @@ class InterviewContext(BaseContext):
         position, round_name = cls.normalize_runtime_values(target_position, interview_round)
         prompt = (base_system_prompt or INTERVIEW_SYSTEM_PROMPT).strip()
         round_guidance = ROUND_GUIDANCE.get(round_name, ROUND_GUIDANCE[DEFAULT_INTERVIEW_ROUND])
+        technical_kb_names = cls.get_position_technical_kb_names(position)
+        technical_guidance = (
+            "当前岗位对应的技术题库："
+            + "、".join(technical_kb_names)
+            + "\n进入第 4 阶段后，每次准备发出技术问题前，都必须调用 pick_random_technical_question；kb_names 只传以上知识库名。"
+            "\n为了避免重复抽题，每次调用时都要把本阶段已经问过的技术题通过 excluded_questions 传进去。"
+            "从返回结果里取 1 个 question，用口语化方式直接发问，不要泄露答案、知识库名或文件名。"
+            "\n候选人每回答完一题，先简短点评，再次调用 pick_random_technical_question 抽取下一题；不要围绕同一道技术题连续追问。"
+            "\n只有当你判断技术知识题阶段已经足够时，才将第 4 项更新为 completed，第 5 项更新为 in_progress。"
+            if technical_kb_names
+            else "当前岗位没有配置技术题库；如进入第 4 阶段且没有可用题目，可直接过渡到岗位匹配度评估。"
+        )
 
         return (
             f"{prompt}\n\n"
             f"当前模拟岗位：{position}\n"
             f"当前面试轮次：{round_name}\n"
-            f"{round_guidance}\n\n"
+            f"{round_guidance}\n"
+            f"{technical_guidance}\n\n"
             "最终反馈时请额外遵守以下要求：\n"
             "1. 先给用户可直接阅读的中文总结。\n"
             "2. 然后单独追加一个 ```interview_scorecard 代码块，代码块内只能放 JSON。\n"

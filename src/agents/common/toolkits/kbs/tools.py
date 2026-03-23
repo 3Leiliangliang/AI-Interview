@@ -1,6 +1,8 @@
 """知识库工具模块。"""
 
 import inspect
+import random
+import re
 from typing import Any
 
 from langchain_core.tools import tool
@@ -17,6 +19,9 @@ from src.utils import logger
 RESUME_KB_NAME = "我的简历"
 RESUME_KB_DESCRIPTION = "用户在“我的简历”中上传的简历文件，可直接用于模拟面试提问。"
 MAX_RESUME_CONTENT_CHARS = 8000
+INDEXED_FILE_STATUSES = {"indexed", "done"}
+QA_QUESTION_PREFIX_RE = re.compile(r"^(?:问题|question)\s*[:：]\s*", flags=re.IGNORECASE)
+QA_ANSWER_SPLIT_RE = re.compile(r"(?:回答|答案|answer)\s*[:：]", flags=re.IGNORECASE)
 
 
 def _normalize_runtime_user_id(runtime: ToolRuntime) -> int | None:
@@ -80,6 +85,110 @@ def _build_resume_kb_result(resume: UserResume, query_text: str) -> str:
         "以下是该简历的正文内容，请直接基于这份简历继续面试提问：\n\n"
         f"{content}"
     )
+
+
+def _extract_question_from_chunk_content(chunk_content: str) -> str | None:
+    if not chunk_content:
+        return None
+
+    question_part = chunk_content.strip().split("\t", 1)[0].strip()
+    if not question_part:
+        return None
+
+    question_part = QA_ANSWER_SPLIT_RE.split(question_part, maxsplit=1)[0].strip()
+    question = QA_QUESTION_PREFIX_RE.sub("", question_part).strip()
+    return question or None
+
+
+async def _collect_technical_question_candidates(kb_names: list[str]) -> list[dict[str, str]]:
+    if not kb_names:
+        return []
+
+    retrievers = knowledge_base.get_retrievers()
+    kb_lookup = {info.get("name"): db_id for db_id, info in retrievers.items() if info.get("name")}
+
+    seen_questions: set[str] = set()
+    candidates: list[dict[str, str]] = []
+
+    for kb_name in kb_names:
+        db_id = kb_lookup.get(kb_name)
+        if not db_id:
+            continue
+
+        db_info = await knowledge_base.get_database_info(db_id)
+        files = db_info.get("files", {}) or {}
+
+        for file_id, file_info in files.items():
+            if file_info.get("is_folder"):
+                continue
+            if file_info.get("status") not in INDEXED_FILE_STATUSES:
+                continue
+
+            file_content = await knowledge_base.get_file_content(db_id, file_id)
+            for line in file_content.get("lines") or []:
+                question = _extract_question_from_chunk_content(line.get("content", ""))
+                if not question or question in seen_questions:
+                    continue
+
+                seen_questions.add(question)
+                candidates.append(
+                    {
+                        "question": question,
+                        "kb_name": kb_name,
+                        "file_name": file_info.get("filename") or "",
+                    }
+                )
+
+    return candidates
+
+
+async def _pick_random_technical_question(kb_names: list[str]) -> dict[str, str]:
+    return await _pick_random_technical_question_with_excludes(kb_names, excluded_questions=None)
+
+
+async def _pick_random_technical_question_with_excludes(
+    kb_names: list[str],
+    excluded_questions: list[str] | None = None,
+) -> dict[str, str]:
+    normalized_kb_names = [name.strip() for name in kb_names if isinstance(name, str) and name.strip()]
+    if not normalized_kb_names:
+        return {
+            "question": "",
+            "kb_name": "",
+            "file_name": "",
+            "message": "当前没有可用的技术题库。",
+        }
+
+    candidates = await _collect_technical_question_candidates(normalized_kb_names)
+    normalized_excluded_questions = {
+        question.strip()
+        for question in (excluded_questions or [])
+        if isinstance(question, str) and question.strip()
+    }
+    if normalized_excluded_questions:
+        candidates = [
+            candidate for candidate in candidates if candidate["question"] not in normalized_excluded_questions
+        ]
+
+    if not candidates:
+        return {
+            "question": "",
+            "kb_name": "",
+            "file_name": "",
+            "message": (
+                "当前岗位对应的知识库里没有更多可用的技术题目。"
+                if normalized_excluded_questions
+                else "当前岗位对应的知识库里没有可用的技术题目。"
+            ),
+        }
+
+    selected = random.choice(candidates)
+    return {
+        "question": selected["question"],
+        "kb_name": selected["kb_name"],
+        "file_name": selected["file_name"],
+        "message": "success",
+    }
 
 
 class ListKBsInput(BaseModel):
@@ -191,6 +300,13 @@ class QueryKBInput(BaseModel):
     file_name: str | None = Field(default=None, description="可选的文件名过滤")
 
 
+class PickRandomTechnicalQuestionInput(BaseModel):
+    """随机抽取技术问题输入模型。"""
+
+    kb_names: list[str] = Field(description="候选题目来源的知识库名称列表")
+    excluded_questions: list[str] | None = Field(default=None, description="本阶段已经问过的问题列表")
+
+
 @tool(args_schema=QueryKBInput)
 async def query_kb(kb_name: str, query_text: str, file_name: str | None = None, runtime: ToolRuntime = None) -> Any:
     """在指定知识库中检索内容。"""
@@ -270,6 +386,24 @@ async def query_kb(kb_name: str, query_text: str, file_name: str | None = None, 
     except Exception as e:
         logger.error("知识库检索失败: %s", e)
         return f"知识库检索失败: {str(e)}"
+
+
+@tool(args_schema=PickRandomTechnicalQuestionInput)
+async def pick_random_technical_question(
+    kb_names: list[str],
+    excluded_questions: list[str] | None = None,
+) -> dict[str, str]:
+    """从指定知识库的 QA 分块中随机抽取一个技术问题。"""
+    try:
+        return await _pick_random_technical_question_with_excludes(kb_names, excluded_questions)
+    except Exception as e:
+        logger.error("随机抽取技术问题失败: %s", e)
+        return {
+            "question": "",
+            "kb_name": "",
+            "file_name": "",
+            "message": f"随机抽取技术问题失败: {str(e)}",
+        }
 
 
 def get_common_kb_tools() -> list:

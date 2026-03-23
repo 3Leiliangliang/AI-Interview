@@ -16,7 +16,7 @@ from src.agents.common.middlewares import (
     RuntimeConfigMiddleware,
     save_attachments_to_fs,
 )
-from src.agents.common.toolkits.kbs.tools import query_kb
+from src.agents.common.toolkits.kbs.tools import pick_random_technical_question, query_kb
 
 from .context import InterviewContext
 
@@ -36,14 +36,15 @@ INTERVIEW_READ_FILE_DESCRIPTION = """读取用户在当前会话中上传的简�
 
 INTERVIEW_TODO_PROMPT = """## `write_todos`
 
-你正在进行一场模拟面试。每一轮面试都必须维护一份固定的 5 步任务清单，并通过 `write_todos` 工具更新整份列表。
+你正在进行一场模拟面试。每一轮面试都必须维护一份固定的 6 步任务清单，并通过 `write_todos` 工具更新整份列表。
 
-固定任务必须始终保持为以下 5 项，不要新增、删除、改名，也不要扩展成更多步骤：
+固定任务必须始终保持为以下 6 项，不要新增、删除、改名，也不要扩展成更多步骤：
 1. 读取简历并确认岗位背景
 2. 发起开场并请候选人自我介绍
 3. 追问项目经历与技术细节
-4. 评估岗位匹配度与风险点
-5. 输出总结与评分卡
+4. 相关技术知识提问
+5. 评估岗位匹配度与风险点
+6. 输出总结与评分卡
 
 任务状态只允许使用：
 - pending
@@ -51,13 +52,16 @@ INTERVIEW_TODO_PROMPT = """## `write_todos`
 - completed
 
 使用规则：
-- 首轮真正发问前先初始化 5 条任务：第 1 条为 in_progress，其余为 pending。
+- 首轮真正发问前先初始化 6 条任务：第 1 条为 in_progress，其余为 pending。
 - 简历读取成功后：第 1 条改为 completed，第 2 条改为 in_progress。
 - 第一问已经发出后：第 2 条改为 completed，第 3 条改为 in_progress。
-- 面试进行中：根据对话进度推进第 3、4 条任务状态，但始终保持总任务数为 5。
-- 当用户要求“结束面试 / 总结 / 评分 / 给我反馈”时：先将第 5 条标记为 in_progress，输出总结和评分卡后再标记为 completed。
+- 当项目追问阶段基本完成时：第 3 条改为 completed，第 4 条改为 in_progress。
+- 第 4 条进行中时：每次准备发出技术问题前，都调用 `pick_random_technical_question` 随机抽取 1 道技术题；并通过 `excluded_questions` 传入本阶段已经问过的题目，避免重复抽到同一题；不要围绕同一道技术题连续追问。
+- 当你判断技术知识题阶段已经足够时：第 4 条改为 completed，第 5 条改为 in_progress。
+- 面试进行中：根据对话进度推进第 5 条任务状态，但始终保持总任务数为 6。
+- 当用户要求“结束面试 / 总结 / 评分 / 给我反馈”时：先将第 6 条标记为 in_progress，输出总结和评分卡后再标记为 completed。
 - 每轮回答最多调用一次 `write_todos`，避免重复刷新。
-- 除这 5 条固定任务外，不要创建任何额外 todo。
+- 除这 6 条固定任务外，不要创建任何额外 todo。
 """
 
 
@@ -74,7 +78,7 @@ def _create_interview_filesystem_middleware() -> FilesystemMiddleware:
 class InterviewKnowledgeBaseMiddleware(AgentMiddleware):
     def __init__(self):
         super().__init__()
-        self.tools = [query_kb]
+        self.tools = [query_kb, pick_random_technical_question]
 
 
 class InterviewAgent(BaseAgent):
