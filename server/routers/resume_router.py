@@ -1,3 +1,4 @@
+import asyncio
 import os
 import re
 import tempfile
@@ -14,6 +15,7 @@ from src.knowledge.indexing import process_file_to_markdown
 from src.knowledge.utils import calculate_content_hash
 from src.plugins.document_processor_base import DocumentProcessorException
 from src.services.openviking_service import openviking_service
+from src.services.resume_summary_service import resume_summary_service
 from src.storage.minio import aupload_file_to_minio, get_minio_client
 from src.storage.postgres.models_business import User, UserResume
 from src.utils import logger
@@ -522,6 +524,14 @@ def _serialize_resume(resume_record: UserResume, include_markdown: bool = True) 
     return data
 
 
+async def _trigger_summary_extraction(resume_id: int) -> None:
+    """触发简历摘要提取（异步执行，不阻塞主流程）"""
+    try:
+        await resume_summary_service.update_resume_summary(resume_id)
+    except Exception as e:
+        logger.error(f"触发简历摘要提取失败，resume_id={resume_id}: {e}")
+
+
 @resume.get("")
 async def get_my_resumes(current_user: User = Depends(get_required_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(
@@ -581,7 +591,7 @@ async def upload_my_resume(
             temp_path = temp_file.name
 
         content_hash = await calculate_content_hash(file_bytes)
-        markdown_content = await process_file_to_markdown(
+        markdown_content, _ = await process_file_to_markdown(
             temp_path,
             params={
                 "enable_ocr": "mineru_official",
@@ -614,6 +624,9 @@ async def upload_my_resume(
                 await openviking_service.sync_resume_memory(resume_record)
             except Exception as exc:
                 logger.warning("Sync resume to OpenViking failed for user %s: %s", current_user.user_id, exc)
+
+        # 异步触发 LLM 简历摘要提取（不阻塞主流程）
+        asyncio.create_task(_trigger_summary_extraction(resume_record.id))
 
         return {
             "message": "success",

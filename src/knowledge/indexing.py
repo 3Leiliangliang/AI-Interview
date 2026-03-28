@@ -286,7 +286,7 @@ def parse_pdf(file, params=None):
         params: 参数字典，包含enable_ocr设置
 
     Returns:
-        str: 解析得到的文本
+        tuple[str, dict]: (解析得到的文本, 修改后的params)
 
     Raises:
         DocumentProcessorException: 处理失败时抛出
@@ -294,14 +294,17 @@ def parse_pdf(file, params=None):
     from src.plugins.document_processor_base import DocumentProcessorException
     from src.plugins.document_processor_factory import DocumentProcessorFactory
 
-    params = params or {}
+    # 不使用 params = params or {}，保持原始引用以便修改能传递回去
+    if params is None:
+        params = {}
     opt_ocr = params.get("enable_ocr", "disable")
 
     if opt_ocr == "disable":
-        return pdfreader(file, params=params)
+        return pdfreader(file, params=params), params
 
     try:
-        return DocumentProcessorFactory.process_file(opt_ocr, file, params)
+        text = DocumentProcessorFactory.process_file(opt_ocr, file, params)
+        return text, params
 
     except DocumentProcessorException as e:
         logger.error(f"文档处理失败: {e.service_name} - {str(e)}")
@@ -358,7 +361,7 @@ async def parse_image_async(file, params=None):
     return await asyncio.to_thread(parse_image, file, params=params)
 
 
-async def process_file_to_markdown(file_path: str, params: dict | None = None) -> str:
+async def process_file_to_markdown(file_path: str, params: dict | None = None) -> tuple[str, dict]:
     """
     将不同类型的文件转换为markdown格式 - 支持本地文件和MinIO文件
 
@@ -367,10 +370,10 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
         params: 处理参数，对于ZIP文件需要包含 db_id
 
     Returns:
-        markdown格式内容
+        tuple[str, dict]: (markdown格式内容, 处理后的params)
 
     Note:
-        对于ZIP文件，会在params中保存处理结果供调用方使用：
+        对于ZIP文件，params中会保存处理结果供调用方使用：
         - params['_zip_images_info']: 图片信息列表
         - params['_zip_content_hash']: 内容哈希值
     """
@@ -434,8 +437,9 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
 
         if file_ext == ".pdf":
             # 使用 OCR 处理 PDF
-            text = await parse_pdf_async(str(file_path_obj), params=params)
-            result = f"{text}"
+            # parse_pdf_async 返回 (text, modified_params) 元组
+            text, params = await parse_pdf_async(str(file_path_obj), params=params)
+            result = text
 
         elif file_ext in [".txt", ".md"]:
             # 直接读取文本文件
@@ -535,7 +539,7 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
             except Exception as e:
                 logger.warning(f"Failed to clean up temp file {actual_file_path}: {e}")
 
-    return result
+    return result, params
 
 
 async def _process_zip_file(zip_path: str, db_id: str) -> dict:

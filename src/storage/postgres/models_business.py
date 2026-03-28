@@ -132,6 +132,11 @@ class UserResume(Base):
     file_url = Column(String(1024), nullable=False)
     parser_name = Column(String(64), nullable=False, default="mineru_official")
     markdown_content = Column(Text, nullable=False)
+    # LLM 提取的简历结构化摘要
+    summary_json = Column(JSON, nullable=True, comment="LLM 提取的简历结构化摘要")
+    # 摘要生成状态: pending/processing/completed/failed
+    summary_status = Column(String(32), nullable=False, default="pending")
+    summary_error = Column(Text, nullable=True, comment="摘要生成失败原因")
     created_at = Column(DateTime, default=utc_now_naive)
     updated_at = Column(DateTime, default=utc_now_naive, onupdate=utc_now_naive)
 
@@ -144,11 +149,15 @@ class UserResume(Base):
             "file_size": self.file_size,
             "file_url": self.file_url,
             "parser_name": self.parser_name,
+            "summary_status": self.summary_status,
+            "summary_error": self.summary_error,
             "created_at": format_utc_datetime(self.created_at),
             "updated_at": format_utc_datetime(self.updated_at),
         }
         if include_markdown:
             data["markdown_content"] = self.markdown_content
+        if self.summary_json:
+            data["summary_json"] = self.summary_json
         return data
 
 
@@ -621,6 +630,52 @@ class AgentRun(Base):
             "error_message": self.error_message,
             "started_at": format_utc_datetime(self.started_at),
             "finished_at": format_utc_datetime(self.finished_at),
+            "created_at": format_utc_datetime(self.created_at),
+            "updated_at": format_utc_datetime(self.updated_at),
+        }
+
+
+class JobDescription(Base):
+    """职位描述表"""
+
+    __tablename__ = "job_descriptions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    title = Column(String(200), nullable=False, index=True, comment="岗位名称")
+    department = Column(String(100), nullable=True, comment="部门")
+    description = Column(Text, nullable=True, comment="岗位职责描述")
+    requirements = Column(Text, nullable=True, comment="任职要求")
+
+    # 结构化提取字段
+    required_skills = Column(JSON, nullable=True, default=list, comment="必备技能要求")
+    preferred_skills = Column(JSON, nullable=True, default=list, comment="加分技能")
+    min_experience_years = Column(Integer, nullable=True, comment="最低工作年限")
+    education_level = Column(String(50), nullable=True, comment="学历要求")
+    salary_range = Column(String(100), nullable=True, comment="薪资范围")
+
+    # 状态
+    status = Column(String(32), nullable=False, default="active", index=True, comment="状态: draft/active/closed")
+
+    # 创建者
+    created_by = Column(String(64), nullable=True)
+
+    created_at = Column(DateTime, default=utc_now_naive, comment="创建时间")
+    updated_at = Column(DateTime, default=utc_now_naive, onupdate=utc_now_naive, comment="更新时间")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "title": self.title,
+            "department": self.department,
+            "description": self.description,
+            "requirements": self.requirements,
+            "required_skills": self.required_skills or [],
+            "preferred_skills": self.preferred_skills or [],
+            "min_experience_years": self.min_experience_years,
+            "education_level": self.education_level,
+            "salary_range": self.salary_range,
+            "status": self.status,
+            "created_by": self.created_by,
             "created_at": format_utc_datetime(self.created_at),
             "updated_at": format_utc_datetime(self.updated_at),
         }

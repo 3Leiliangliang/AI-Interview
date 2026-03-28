@@ -74,8 +74,165 @@ def _truncate_resume_content(content: str) -> str:
     return f"{truncated}\n\n[内容已截断，请基于当前简历片段继续提问]"
 
 
+def _format_structured_summary(summary_json: dict) -> str:
+    """将结构化 JSON 格式化为可读文本"""
+    lines = []
+
+    # 基础信息
+    basic = summary_json.get("basic_info") or {}
+    if basic:
+        basic_parts = []
+        for key, label in [
+            ("name", "姓名"),
+            ("gender", "性别"),
+            ("age", "年龄"),
+            ("phone", "手机"),
+            ("email", "邮箱"),
+            ("location", "所在地"),
+        ]:
+            val = basic.get(key)
+            if val:
+                basic_parts.append(f"{label}：{val}")
+        if basic.get("github"):
+            basic_parts.append(f"GitHub：{basic['github']}")
+        if basic.get("linkedin"):
+            basic_parts.append(f"LinkedIn：{basic['linkedin']}")
+        if basic_parts:
+            lines.append("【基础信息】 " + " | ".join(basic_parts))
+
+    # 教育经历
+    education = summary_json.get("education") or []
+    if education:
+        lines.append("")
+        lines.append("【教育经历】")
+        for edu in education:
+            edu_parts = [edu.get("school", "")]
+            if edu.get("major"):
+                edu_parts.append(edu["major"])
+            if edu.get("degree"):
+                edu_parts.append(edu["degree"])
+            if edu.get("duration"):
+                edu_parts.append(f"({edu['duration']})")
+            line = "".join(edu_parts)
+            if edu.get("gpa"):
+                line += f" | GPA：{edu['gpa']}"
+            if edu.get("ranking"):
+                line += f" | 排名：{edu['ranking']}"
+            lines.append(f"  - {line}")
+
+    # 工作经历
+    work = summary_json.get("work_experience") or []
+    if work:
+        lines.append("")
+        lines.append("【工作经历】")
+        for w in work:
+            title = w.get("company", "")
+            if w.get("position"):
+                title += f" - {w['position']}"
+            if w.get("duration"):
+                title += f" ({w['duration']})"
+            lines.append(f"  - {title}")
+            highlights = w.get("highlights") or []
+            for h in highlights:
+                lines.append(f"    · {h}")
+
+    # 项目经历
+    projects = summary_json.get("project_experience") or []
+    if projects:
+        lines.append("")
+        lines.append("【项目经历】")
+        for p in projects:
+            title = p.get("name", "")
+            if p.get("role"):
+                title += f"（{p['role']}）"
+            if p.get("duration"):
+                title += f" ({p['duration']})"
+            lines.append(f"  - {title}")
+            tech_stack = p.get("tech_stack") or []
+            if tech_stack:
+                lines.append(f"    技术栈：{', '.join(tech_stack)}")
+            if p.get("team_size"):
+                lines.append(f"    团队规模：{p['team_size']}人")
+            desc = p.get("description", "")
+            if desc:
+                lines.append(f"    描述：{desc}")
+            results = p.get("results") or []
+            for r in results:
+                lines.append(f"    成果：{r}")
+
+    # 技能
+    skills = summary_json.get("skills") or {}
+    if skills:
+        lines.append("")
+        skill_parts = []
+        tech = skills.get("technical") or []
+        if tech:
+            skill_parts.append(f"技术技能：{', '.join(tech)}")
+        langs = skills.get("languages") or []
+        if langs:
+            skill_parts.append(f"语言能力：{', '.join(langs)}")
+        certs = skills.get("certifications") or []
+        if certs:
+            skill_parts.append(f"证书：{', '.join(certs)}")
+        if skill_parts:
+            lines.append("【技能】 " + " | ".join(skill_parts))
+
+    # 获奖情况
+    awards = summary_json.get("awards") or []
+    if awards:
+        lines.append("")
+        lines.append("【获奖情况】")
+        for a in awards:
+            lines.append(f"  - {a}")
+
+    # 培训经历
+    training = summary_json.get("training") or []
+    if training:
+        lines.append("")
+        lines.append("【培训经历】")
+        for t in training:
+            lines.append(f"  - {t}")
+
+    # 自我评价
+    self_eval = summary_json.get("self_evaluation")
+    if self_eval:
+        lines.append("")
+        lines.append(f"【自我评价】 {self_eval}")
+
+    # 求职偏好
+    pref = summary_json.get("job_preference") or {}
+    if pref:
+        lines.append("")
+        pref_parts = []
+        if pref.get("job_intention"):
+            pref_parts.append(f"求职意向：{pref['job_intention']}")
+        if pref.get("expected_salary"):
+            pref_parts.append(f"期望薪资：{pref['expected_salary']}")
+        if pref.get("desired_location"):
+            pref_parts.append(f"期望地点：{pref['desired_location']}")
+        if pref_parts:
+            lines.append("【求职偏好】 " + " | ".join(pref_parts))
+
+    return "\n".join(lines) if lines else ""
+
+
 def _build_resume_kb_result(resume: UserResume, query_text: str) -> str:
     updated_at = resume.updated_at.isoformat() if resume.updated_at else "未知"
+
+    # 优先使用结构化摘要（当状态为 completed 时）
+    if resume.summary_status == "completed" and resume.summary_json:
+        formatted_summary = _format_structured_summary(resume.summary_json)
+        if formatted_summary:
+            return (
+                f"知识库：{RESUME_KB_NAME}\n"
+                f"命中文件：{resume.filename}\n"
+                f"更新时间：{updated_at}\n"
+                f"检索意图：{query_text}\n\n"
+                "以下是该简历的结构化摘要信息：\n\n"
+                f"{formatted_summary}"
+            )
+
+    # 降级方案：使用原始 markdown 内容
     content = _truncate_resume_content(resume.markdown_content or "")
     return (
         f"知识库：{RESUME_KB_NAME}\n"

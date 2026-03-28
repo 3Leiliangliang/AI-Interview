@@ -80,7 +80,7 @@ async def convert_upload_to_markdown(upload: UploadFile) -> ConversionResult:
 
     try:
         file_size = await _write_upload_to_disk(upload, temp_path)
-        markdown = await process_file_to_markdown(str(temp_path))
+        markdown, _ = await process_file_to_markdown(str(temp_path))
         markdown, truncated = _truncate_markdown(markdown)
         return ConversionResult(
             file_id=uuid.uuid4().hex,

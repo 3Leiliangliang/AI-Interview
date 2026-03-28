@@ -69,6 +69,19 @@ const router = createRouter({
       ]
     },
     {
+      path: '/job',
+      name: 'job',
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'JobDescriptionComp',
+          component: () => import('../views/JobDescriptionView.vue'),
+          meta: { keepAlive: false, requiresAuth: true }
+        }
+      ]
+    },
+    {
       path: '/database',
       name: 'database',
       component: AppLayout,
