@@ -1,451 +1,481 @@
 <template>
   <div class="match-result-panel">
-    <!-- 整体评分 -->
-    <div class="match-result-panel__header">
-      <div class="match-result-panel__meta">
-        <div class="match-result-panel__title">匹配分析结果</div>
-        <div class="match-result-panel__tags">
-          <span v-if="matchResult.summary" class="match-tag">{{ matchLevelText }}</span>
+    <!-- Overall Score Ring -->
+    <div class="score-ring-section">
+      <div class="score-ring">
+        <svg viewBox="0 0 120 120" class="ring-svg">
+          <circle cx="60" cy="60" r="52" fill="none" stroke="var(--bg-secondary, #f0f0f0)" stroke-width="8" />
+          <circle
+            cx="60" cy="60" r="52" fill="none"
+            :stroke="scoreColor"
+            stroke-width="8"
+            stroke-linecap="round"
+            :stroke-dasharray="circumference"
+            :stroke-dashoffset="animatedDashOffset"
+            transform="rotate(-90 60 60)"
+            class="ring-progress"
+          />
+        </svg>
+        <div class="score-text">
+          <span class="score-value">{{ animatedScore }}</span>
+          <span class="score-label">综合匹配</span>
         </div>
       </div>
-      <div v-if="matchResult.overall_score" class="match-result-panel__overall">
-        <span class="match-result-panel__number">{{ matchResult.overall_score }}</span>
-        <span class="match-result-panel__unit">/100</span>
-      </div>
+      <div class="score-summary" v-if="matchResult.summary">{{ matchResult.summary }}</div>
     </div>
 
-    <!-- 雷达图和详细分数 -->
-    <div class="match-result-panel__content">
-      <!-- 雷达图 -->
-      <div class="radar-section">
-        <div ref="radarChartRef" class="radar-chart"></div>
-      </div>
-
-      <!-- 详细分数 -->
-      <div class="detail-section">
-        <!-- 技能匹配 -->
-        <div class="score-card">
-          <div class="score-card__header">
-            <span class="score-card__title">技能匹配</span>
-            <span class="score-card__score">{{ matchResult.skill_match?.score || 0 }}/100</span>
-          </div>
-          <div class="skill-tags">
-            <span
-              v-for="skill in matchResult.skill_match?.matched || []"
-              :key="skill"
-              class="skill-tag skill-tag--matched"
-            >
-              <Check :size="12" />
-              {{ skill }}
-            </span>
-            <span
-              v-for="skill in matchResult.skill_match?.missing || []"
-              :key="skill"
-              class="skill-tag skill-tag--missing"
-            >
-              <X :size="12" />
-              {{ skill }}
-            </span>
-          </div>
-          <div v-if="matchResult.skill_match" class="skill-count">
-            已匹配 {{ matchResult.skill_match.matched_count || 0 }} / {{ matchResult.skill_match.total_count || 0 }} 项技能
-          </div>
-        </div>
-
-        <!-- 经验匹配 -->
-        <div class="score-card">
-          <div class="score-card__header">
-            <span class="score-card__title">经验匹配</span>
-            <span class="score-card__score">{{ matchResult.experience_match?.score || 0 }}/100</span>
-          </div>
-          <ul v-if="matchResult.experience_match?.details?.length" class="experience-list">
-            <li v-for="(detail, idx) in matchResult.experience_match.details" :key="idx">
-              {{ detail }}
-            </li>
-          </ul>
-          <div v-if="matchResult.experience_match?.years_match === false" class="risk-badge">
-            工作年限不满足要求
-          </div>
-          <div v-else-if="matchResult.experience_match?.years_match === null" class="warning-badge">
-            年限无法确定
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 风险点 -->
-    <div v-if="matchResult.risk_points?.length" class="risk-section">
+    <!-- Radar Chart -->
+    <div class="section-card radar-section">
       <div class="section-title">
-        <AlertTriangle :size="14" />
-        风险点
+        <Target :size="16" />
+        多维匹配分析
       </div>
-      <ul class="risk-list">
-        <li v-for="(risk, idx) in matchResult.risk_points" :key="idx">{{ risk }}</li>
-      </ul>
+      <div ref="radarChartRef" class="radar-chart"></div>
     </div>
 
-    <!-- 摘要 -->
-    <p v-if="matchResult.summary" class="match-result-panel__summary">{{ matchResult.summary }}</p>
+    <!-- Skill Match -->
+    <div class="section-card" v-if="matchResult.skill_match">
+      <div class="section-title">
+        <Target :size="16" />
+        技能匹配 ({{ matchResult.skill_match.matched_count }}/{{ matchResult.skill_match.total_count }})
+      </div>
+      <div class="skill-tags" v-if="matchResult.skill_match.matched?.length">
+        <div class="tag-group">
+          <span class="tag-group-label">已匹配</span>
+          <a-tag v-for="skill in matchResult.skill_match.matched" :key="skill" color="green">{{ skill }}</a-tag>
+        </div>
+      </div>
+      <div class="skill-tags" v-if="matchResult.skill_match.missing?.length">
+        <div class="tag-group">
+          <span class="tag-group-label">缺失技能</span>
+          <a-tag v-for="skill in matchResult.skill_match.missing" :key="skill" color="red">{{ skill }}</a-tag>
+        </div>
+      </div>
+    </div>
+
+    <!-- Experience Match -->
+    <div class="section-card" v-if="matchResult.experience_match">
+      <div class="section-title">
+        <Briefcase :size="16" />
+        经验匹配
+        <a-tag :color="matchResult.experience_match.years_match ? 'green' : 'orange'" class="match-tag">
+          {{ matchResult.experience_match.years_match ? '年限达标' : '年限不足' }}
+        </a-tag>
+      </div>
+      <div class="exp-score-bar">
+        <div class="bar-track">
+          <div class="bar-fill exp-fill" :style="{ width: matchResult.experience_match.score + '%' }"></div>
+        </div>
+        <span class="bar-value">{{ matchResult.experience_match.score?.toFixed(1) }}分</span>
+      </div>
+      <div v-if="matchResult.experience_match.details?.length" class="detail-list">
+        <div v-for="(detail, i) in matchResult.experience_match.details" :key="i" class="detail-item">{{ detail }}</div>
+      </div>
+    </div>
+
+    <!-- Education Match -->
+    <div class="section-card" v-if="matchResult.education_match">
+      <div class="section-title">
+        <GraduationCap :size="16" />
+        教育匹配
+        <a-tag :color="matchResult.education_match.meets_requirement ? 'green' : 'orange'" class="match-tag">
+          {{ matchResult.education_match.meets_requirement ? '满足要求' : '未达标' }}
+        </a-tag>
+      </div>
+      <div class="exp-score-bar">
+        <div class="bar-track">
+          <div class="bar-fill edu-fill" :style="{ width: matchResult.education_match.score + '%' }"></div>
+        </div>
+        <span class="bar-value">{{ matchResult.education_match.score?.toFixed(1) }}分</span>
+      </div>
+    </div>
+
+    <!-- Strengths -->
+    <div class="section-card" v-if="strengths.length">
+      <div class="section-title strengths-title">
+        <TrendingUp :size="16" />
+        优势分析
+      </div>
+      <div class="strength-list">
+        <div v-for="(s, i) in strengths" :key="i" class="strength-item">
+          <span class="strength-bullet"></span>
+          {{ s }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Risk Points -->
+    <div class="section-card" v-if="matchResult.risk_points?.length">
+      <div class="section-title risk-title">
+        <AlertTriangle :size="16" />
+        风险提示
+      </div>
+      <div class="risk-list">
+        <div v-for="(risk, i) in matchResult.risk_points" :key="i" class="risk-item">{{ risk }}</div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
-import { Check, X, AlertTriangle } from 'lucide-vue-next'
+import { Target, Briefcase, GraduationCap, TrendingUp, AlertTriangle } from 'lucide-vue-next'
 
 const props = defineProps({
-  matchResult: {
-    type: Object,
-    required: true,
-    default: () => ({
-      overall_score: 0,
-      skill_match: {
-        score: 0,
-        matched: [],
-        missing: [],
-        matched_count: 0,
-        total_count: 0,
-      },
-      experience_match: {
-        score: 0,
-        years_match: true,
-        project_relevance: 0,
-        details: [],
-      },
-      risk_points: [],
-      summary: '',
-    }),
-  },
+  matchResult: { type: Object, required: true }
 })
 
 const radarChartRef = ref(null)
 let chartInstance = null
+let animFrameId = null
 
-const matchLevelText = computed(() => {
-  const score = props.matchResult.overall_score || 0
-  if (score >= 80) return '优秀'
-  if (score >= 60) return '良好'
-  if (score >= 40) return '一般'
-  return '较差'
+// Animated score
+const animatedScore = ref(0)
+const circumference = 2 * Math.PI * 52 // ~326.7
+
+const scoreColor = computed(() => {
+  const s = props.matchResult.overall_score || 0
+  if (s >= 80) return '#52c41a'
+  if (s >= 60) return '#1890ff'
+  if (s >= 40) return '#faad14'
+  return '#ff4d4f'
 })
 
-const initChart = () => {
-  if (!radarChartRef.value) return
+const animatedDashOffset = computed(() => {
+  const progress = animatedScore.value / 100
+  return circumference * (1 - progress)
+})
 
-  try {
+const strengths = computed(() => {
+  const matched = props.matchResult.skill_match?.matched || []
+  if (matched.length === 0) return []
+  const items = []
+  if (matched.length >= 5) items.push(`技能覆盖广泛，匹配 ${matched.length} 项核心技能`)
+  if (props.matchResult.experience_match?.years_match) items.push('工作经验年限满足岗位要求')
+  if (props.matchResult.education_match?.meets_requirement) items.push('学历背景符合岗位要求')
+  if (props.matchResult.experience_match?.project_relevance >= 70) items.push('项目经历与岗位高度相关')
+  if (matched.length > 0 && matched.length < 5) items.push(`具备 ${matched.slice(0, 3).join('、')} 等关键技能`)
+  return items
+})
+
+function animateScore() {
+  if (animFrameId) cancelAnimationFrame(animFrameId)
+  const target = Math.round(props.matchResult.overall_score || 0)
+  const start = animatedScore.value
+  const diff = target - start
+  const duration = 800
+  const startTime = performance.now()
+  function step(now) {
+    const elapsed = now - startTime
+    const progress = Math.min(elapsed / duration, 1)
+    // easeOutCubic
+    const eased = 1 - Math.pow(1 - progress, 3)
+    animatedScore.value = Math.round(start + diff * eased)
+    if (progress < 1) {
+      animFrameId = requestAnimationFrame(step)
+    } else {
+      animFrameId = null
+    }
+  }
+  animFrameId = requestAnimationFrame(step)
+}
+
+function initRadarChart() {
+  if (!radarChartRef.value) return
+  chartInstance = echarts.init(radarChartRef.value)
+
+  const sm = props.matchResult.skill_match?.score || 0
+  const em = props.matchResult.experience_match?.score || 0
+  const pr = props.matchResult.experience_match?.project_relevance || 0
+  const edu = props.matchResult.education_match?.score || 0
+  const overall = props.matchResult.overall_score || 0
+
+  const option = {
+    grid: {
+      left: 0, right: 0, top: 0, bottom: 0,
+      containLabel: true
+    },
+    radar: {
+      indicator: [
+        { name: '技能匹配', max: 100 },
+        { name: '经验匹配', max: 100 },
+        { name: '项目相关度', max: 100 },
+        { name: '教育匹配', max: 100 },
+        { name: '综合评分', max: 100 }
+      ],
+      center: ['50%', '50%'],
+      radius: '70%',
+      shape: 'circle',
+      splitNumber: 4,
+      nameGap: 8,
+      axisName: {
+        color: '#555',
+        fontSize: 13,
+        fontWeight: 600
+      },
+      splitLine: { lineStyle: { color: '#e8e8e8' } },
+      splitArea: {
+        show: true,
+        areaStyle: { color: ['rgba(24,144,255,0.02)', 'rgba(24,144,255,0.04)'] }
+      },
+      axisLine: { lineStyle: { color: '#e8e8e8' } }
+    },
+    series: [{
+      type: 'radar',
+      data: [{
+        value: [sm, em, pr, edu, overall],
+        areaStyle: { color: 'rgba(24, 144, 255, 0.15)' },
+        lineStyle: { color: '#1890ff', width: 2 },
+        itemStyle: { color: '#1890ff' },
+        symbol: 'circle',
+        symbolSize: 6
+      }],
+      animationDuration: 1000,
+      animationEasing: 'elasticOut'
+    }]
+  }
+  chartInstance.setOption(option)
+}
+
+watch(() => props.matchResult, () => {
+  nextTick(() => {
+    animateScore()
     if (chartInstance) {
       chartInstance.dispose()
       chartInstance = null
     }
-
-    chartInstance = echarts.init(radarChartRef.value)
-    const skillScore = props.matchResult.skill_match?.score || 0
-    const expScore = props.matchResult.experience_match?.score || 0
-
-    const option = {
-      radar: {
-        indicator: [
-          { name: '技能匹配', max: 100 },
-          { name: '经验匹配', max: 100 },
-          { name: '项目相关度', max: 100 },
-        ],
-        radius: '60%',
-        center: ['50%', '50%'],
-        axisName: {
-          color: '#666',
-          fontSize: 12,
-        },
-        splitArea: {
-          areaStyle: {
-            color: ['rgba(0, 122, 255, 0.05)', 'rgba(0, 122, 255, 0.1)'],
-          },
-        },
-        axisLine: {
-          lineStyle: {
-            color: '#ddd',
-          },
-        },
-        splitLine: {
-          lineStyle: {
-            color: '#eee',
-          },
-        },
-      },
-      series: [
-        {
-          type: 'radar',
-          data: [
-            {
-              value: [skillScore, expScore, props.matchResult.experience_match?.project_relevance || 0],
-              name: '匹配度',
-              symbol: 'circle',
-              symbolSize: 6,
-              lineStyle: {
-                color: '#007AFF',
-                width: 2,
-              },
-              areaStyle: {
-                color: 'rgba(0, 122, 255, 0.2)',
-              },
-              itemStyle: {
-                color: '#007AFF',
-              },
-            },
-          ],
-        },
-      ],
-    }
-
-    chartInstance.setOption(option)
-  } catch (error) {
-    console.error('初始化雷达图失败:', error)
-  }
-}
-
-const handleResize = () => {
-  chartInstance?.resize()
-}
+    setTimeout(() => {
+      initRadarChart()
+    }, 300)
+  })
+}, { deep: true })
 
 onMounted(() => {
-  initChart()
+  nextTick(() => {
+    animateScore()
+    // 延迟初始化雷达图，确保 Drawer 动画完成且容器尺寸正确
+    setTimeout(() => {
+      initRadarChart()
+    }, 300)
+  })
   window.addEventListener('resize', handleResize)
 })
 
-onBeforeUnmount(() => {
+onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
+  if (animFrameId) cancelAnimationFrame(animFrameId)
   if (chartInstance) {
     chartInstance.dispose()
     chartInstance = null
   }
 })
 
-watch(
-  () => props.matchResult,
-  () => {
-    initChart()
-  },
-  { deep: true },
-)
+const handleResize = () => {
+  chartInstance?.resize()
+}
 </script>
 
 <style lang="less" scoped>
 .match-result-panel {
-  margin: 14px 0 8px;
-  padding: 20px;
-  border: 1px solid var(--gray-150);
-  border-radius: 12px;
-  background: var(--gray-25);
+  padding: 16px 0;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
 }
 
-.match-result-panel__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+.score-ring-section {
+  text-align: center;
+  margin-bottom: 20px;
 }
 
-.match-result-panel__title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--gray-900);
+.score-ring {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 8px;
 }
 
-.match-result-panel__tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
+.ring-svg {
+  width: 100%;
+  height: 100%;
 }
 
-.match-tag {
-  display: inline-flex;
-  align-items: center;
-  height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: var(--gray-100);
-  color: var(--gray-700);
-  font-size: 12px;
+.ring-progress {
+  transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.match-result-panel__overall {
-  display: flex;
-  align-items: baseline;
-  gap: 2px;
-  white-space: nowrap;
-  color: var(--main-color);
+.score-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
 }
 
-.match-result-panel__number {
+.score-value {
+  display: block;
   font-size: 28px;
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.2;
 }
 
-.match-result-panel__unit {
+.score-label {
+  display: block;
+  font-size: 12px;
+  color: #999;
+}
+
+.score-summary {
   font-size: 13px;
-  color: var(--gray-500);
-}
-
-.match-result-panel__content {
-  display: grid;
-  grid-template-columns: 300px 1fr;
-  gap: 24px;
-  margin-top: 18px;
-}
-
-.radar-section {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  color: #666;
+  margin-top: 4px;
 }
 
 .radar-chart {
-  width: 300px;
-  height: 300px;
+  width: 100%;
+  height: 400px;
+  min-height: 400px;
 }
 
-.detail-section {
+.radar-section {
+  margin-bottom: 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  align-items: stretch;
+  padding: 12px 0;
 }
 
-.score-card {
-  padding: 14px;
-  border-radius: 10px;
-  background: var(--gray-0);
-  border: 1px solid var(--gray-100);
-}
-
-.score-card__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.score-card__title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--gray-800);
-}
-
-.score-card__score {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--main-color);
-}
-
-.skill-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.skill-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 22px;
-  padding: 0 8px;
-  border-radius: 4px;
-  font-size: 12px;
-}
-
-.skill-tag--matched {
-  background: rgba(52, 199, 89, 0.1);
-  color: #34c759;
-}
-
-.skill-tag--missing {
-  background: rgba(255, 59, 48, 0.1);
-  color: #ff3b30;
-}
-
-.skill-count {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--gray-500);
-}
-
-.experience-list {
-  margin: 0;
-  padding-left: 18px;
-  font-size: 13px;
-  color: var(--gray-700);
-
-  li + li {
-    margin-top: 6px;
-  }
-}
-
-.risk-badge {
-  display: inline-flex;
-  align-items: center;
-  margin-top: 8px;
-  padding: 4px 10px;
-  border-radius: 4px;
-  background: rgba(255, 59, 48, 0.1);
-  color: #ff3b30;
-  font-size: 12px;
-}
-
-.warning-badge {
-  display: inline-flex;
-  align-items: center;
-  margin-top: 8px;
-  padding: 4px 10px;
-  border-radius: 4px;
-  background: rgba(255, 149, 0, 0.1);
-  color: #ff9500;
-  font-size: 12px;
-}
-
-.risk-section {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid var(--gray-150);
+.section-card {
+  background: var(--bg-secondary, #fafafa);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
 }
 
 .section-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 8px;
+}
+
+.match-tag {
+  margin-left: auto;
+  font-size: 11px;
+}
+
+.skill-tags {
+  margin-bottom: 6px;
+}
+
+.tag-group {
+  margin-bottom: 6px;
+}
+
+.tag-group-label {
+  font-size: 12px;
+  color: #999;
+  margin-right: 6px;
+}
+
+:deep(.ant-tag) {
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.exp-score-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.bar-track {
+  flex: 1;
+  height: 6px;
+  background: #e8e8e8;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.6s ease;
+}
+
+.exp-fill {
+  background: linear-gradient(90deg, #1890ff, #40a9ff);
+}
+
+.edu-fill {
+  background: linear-gradient(90deg, #722ed1, #9254de);
+}
+
+.bar-value {
   font-size: 13px;
   font-weight: 600;
-  color: #ff3b30;
+  min-width: 48px;
+  text-align: right;
 }
 
-.risk-list {
-  margin: 0;
-  padding-left: 18px;
-  color: var(--gray-700);
+.detail-list {
+  margin-top: 4px;
+}
+
+.detail-item {
+  font-size: 12px;
+  color: #666;
+  padding: 2px 0;
+}
+
+.strengths-title {
+  color: #389e0d;
+}
+
+.risk-title {
+  color: #d4380d;
+}
+
+.strength-list, .risk-list {
+  padding-left: 4px;
+}
+
+.strength-item {
   font-size: 13px;
-
-  li + li {
-    margin-top: 6px;
-  }
+  color: #555;
+  padding: 3px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.match-result-panel__summary {
-  margin: 14px 0 0;
-  color: var(--gray-700);
-  font-size: 14px;
-  line-height: 1.7;
+.strength-bullet {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #52c41a;
+  flex-shrink: 0;
 }
 
-@media (max-width: 640px) {
-  .match-result-panel__content {
-    grid-template-columns: 1fr;
-  }
+.risk-item {
+  font-size: 13px;
+  color: #666;
+  padding: 3px 0;
+  padding-left: 14px;
+  position: relative;
 
-  .radar-chart {
-    width: 260px;
-    height: 260px;
-    margin: 0 auto;
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 10px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ff4d4f;
   }
 }
 </style>

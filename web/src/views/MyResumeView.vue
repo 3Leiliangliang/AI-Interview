@@ -27,6 +27,11 @@
     </HeaderComponent>
 
     <div class="resume-content">
+      <!-- 上传动画覆盖层 -->
+      <div v-if="showUploadingAnimation" class="upload-animation-overlay">
+        <ResumeExtractingAnimation :stage="uploadStage" />
+      </div>
+
       <div v-if="loading" class="state-wrapper">
         <a-spin />
       </div>
@@ -87,6 +92,7 @@
         </a-card>
       </div>
     </div>
+
   </div>
 </template>
 
@@ -97,6 +103,7 @@ import { message, Upload } from 'ant-design-vue'
 import { FileText, FileUp, RefreshCw, Trash2 } from 'lucide-vue-next'
 
 import HeaderComponent from '@/components/HeaderComponent.vue'
+import ResumeExtractingAnimation from '@/components/ResumeExtractingAnimation.vue'
 import { resumeApi } from '@/apis/resume_api'
 
 const router = useRouter()
@@ -105,6 +112,8 @@ const loading = ref(false)
 const uploading = ref(false)
 const deletingId = ref(null)
 const resumes = ref([])
+const showUploadingAnimation = ref(false)
+const uploadStage = ref('idle')
 
 const loadResumes = async () => {
   loading.value = true
@@ -130,19 +139,27 @@ const beforeUpload = (file) => {
 
 const handleUpload = async ({ file, onSuccess, onError }) => {
   try {
+    uploadStage.value = 'parsing'
+    showUploadingAnimation.value = true
     uploading.value = true
     const result = await resumeApi.uploadResume(file)
-    message.success('简历上传并解析成功')
+    uploadStage.value = 'extracting'
+    message.success('简历上传成功，正在分析中...')
     onSuccess?.(result)
+
     if (result?.resume?.id) {
-      router.push(`/resume/${result.resume.id}`)
-      return
+      router.push({ path: `/resume/${result.resume.id}`, query: { extracting: '1' } })
+    } else {
+      showUploadingAnimation.value = false
+      uploadStage.value = 'idle'
+      await loadResumes()
     }
-    await loadResumes()
   } catch (error) {
     console.error('上传简历失败:', error)
     message.error(error.message || '上传简历失败')
     onError?.(error)
+    showUploadingAnimation.value = false
+    uploadStage.value = 'idle'
   } finally {
     uploading.value = false
   }
@@ -209,6 +226,8 @@ onMounted(() => {
 
 .resume-content {
   padding: 16px;
+  position: relative;
+  min-height: calc(100vh - 140px);
 }
 
 .resume-list {
@@ -280,5 +299,17 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.upload-animation-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(4px);
+  border-radius: 12px;
 }
 </style>

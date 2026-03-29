@@ -1,5 +1,5 @@
 <template>
-  <div class="resume-detail-page">
+  <div class="resume-detail-page" @keydown="handleKeydown">
     <HeaderComponent
       :title="resume?.filename || '简历详情'"
       description="智能提取简历关键信息，全面展示个人背景与能力"
@@ -37,299 +37,331 @@
 
       <template v-else-if="resume">
         <div class="detail-grid">
-          <!-- Hero 区域：姓名 + 联系方式 + 亮点标签 -->
           <div class="summary-panel">
-            <div class="summary-hero">
-              <div class="hero-top">
-                <div class="hero-avatar">
-                  {{ summary.name?.charAt(0) || '姓' }}
+            <!-- Extracting animation overlay -->
+            <ResumeExtractingAnimation
+              v-if="extractStage === 'parsing' || extractStage === 'extracting'"
+              :stage="extractStage"
+              :stats="extractStats"
+            />
+
+            <!-- Extraction failed state -->
+            <div v-else-if="extractStage === 'failed'" class="extract-failed-card">
+              <div class="extract-failed__icon">
+                <AlertCircle :size="32" />
+              </div>
+              <div class="extract-failed__title">简历分析失败</div>
+              <div class="extract-failed__error" v-if="resume?.summary_error">
+                {{ resume.summary_error }}
+              </div>
+              <div class="extract-failed__hint">请检查简历文件是否完整，或点击下方按钮重试</div>
+              <a-button
+                type="primary"
+                :loading="retrying"
+                @click="handleRetryExtract"
+              >
+                <RefreshCw :size="14" />
+                重新分析
+              </a-button>
+            </div>
+
+            <template v-else>
+              <div class="summary-hero">
+                <div class="hero-top slide-up">
+                  <div class="hero-avatar">
+                    <img v-if="summary.basicInfo?.photo_url && !photoLoadError" :src="summary.basicInfo.photo_url" alt="证件照" class="avatar-photo" @error="photoLoadError = true" />
+                    <span v-else>{{ summary.name?.charAt(0) || '姓' }}</span>
+                  </div>
+                  <div class="hero-main">
+                    <div class="hero-name">{{ summary.name }}</div>
+                    <div class="hero-contact" v-if="summary.phone || summary.email">
+                      <div v-if="summary.phone" class="contact-item">
+                        <Phone :size="14" />
+                        <span>{{ summary.phone }}</span>
+                      </div>
+                      <div v-if="summary.email" class="contact-item">
+                        <Mail :size="14" />
+                        <span>{{ summary.email }}</span>
+                      </div>
+                      <div v-if="summary.basicInfo?.location" class="contact-item">
+                        <MapPin :size="14" />
+                        <span>{{ summary.basicInfo.location }}</span>
+                      </div>
+                      <div v-if="summary.basicInfo?.github" class="contact-item">
+                        <Github :size="14" />
+                        <a :href="summary.basicInfo.github" target="_blank" class="hero-link">
+                          {{ formatGithubUrl(summary.basicInfo.github) }}
+                        </a>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div class="hero-main">
-                  <div class="hero-name">{{ summary.name }}</div>
-                  <div class="hero-contact" v-if="summary.phone || summary.email">
-                    <div v-if="summary.phone" class="contact-item">
-                      <Phone :size="14" />
-                      <span>{{ summary.phone }}</span>
-                    </div>
-                    <div v-if="summary.email" class="contact-item">
-                      <Mail :size="14" />
-                      <span>{{ summary.email }}</span>
-                    </div>
-                    <div v-if="summary.basicInfo?.location" class="contact-item">
-                      <MapPin :size="14" />
-                      <span>{{ summary.basicInfo.location }}</span>
-                    </div>
-                    <div v-if="summary.basicInfo?.github" class="contact-item">
-                      <Github :size="14" />
-                      <a :href="summary.basicInfo.github" target="_blank" class="hero-link">
-                        {{ formatGithubUrl(summary.basicInfo.github) }}
-                      </a>
-                    </div>
-                  </div>
+                <div v-if="highlightTags.length" class="hero-tags slide-up" style="--delay: 0.1s">
+                  <a-tag v-for="tag in highlightTags" :key="tag.text" :color="tag.color" class="highlight-tag">
+                    <component :is="tag.icon" :size="12" />
+                    {{ tag.text }}
+                  </a-tag>
                 </div>
               </div>
-              <!-- 亮点标签 -->
-              <div v-if="highlightTags.length" class="hero-tags">
-                <a-tag v-for="tag in highlightTags" :key="tag.text" :color="tag.color" class="highlight-tag">
-                  <component :is="tag.icon" :size="12" />
-                  {{ tag.text }}
-                </a-tag>
-              </div>
-            </div>
 
-            <!-- 简历完整度 -->
-            <div v-if="hasSummaryData" class="completeness-bar">
-              <div class="completeness-header">
-                <span class="completeness-label">简历完整度</span>
-                <span class="completeness-score" :class="completenessClass">{{ completenessScore }}%</span>
+              <div v-if="hasSummaryData" class="completeness-bar slide-up" style="--delay: 0.15s">
+                <div class="completeness-header">
+                  <span class="completeness-label">简历完整度</span>
+                  <span class="completeness-score" :class="completenessClass">{{ completenessScore }}%</span>
+                </div>
+                <a-progress
+                  :percent="completenessScore"
+                  :show-info="false"
+                  :stroke-color="completenessColor"
+                  :trail-color="'rgba(30, 58, 95, 0.1)'"
+                  size="small"
+                />
+                <div v-if="completenessTips.length" class="completeness-tips">
+                  <span v-for="tip in completenessTips" :key="tip" class="tip-item">
+                    <Plus :size="12" /> {{ tip }}
+                  </span>
+                </div>
               </div>
-              <a-progress
-                :percent="completenessScore"
-                :show-info="false"
-                :stroke-color="completenessColor"
-                :trail-color="'rgba(30, 58, 95, 0.1)'"
-                size="small"
-              />
-              <div v-if="completenessTips.length" class="completeness-tips">
-                <span v-for="tip in completenessTips" :key="tip" class="tip-item">
-                  <Plus :size="12" /> {{ tip }}
-                </span>
-              </div>
-            </div>
 
-            <!-- 正文内容 -->
-            <div class="summary-body">
-              <!-- 左侧主栏 -->
-              <div class="summary-main">
-                <!-- 教育经历 -->
-                <section v-if="summary.education.length" class="summary-section">
-                  <div class="section-title">
-                    <GraduationCap :size="16" />
-                    教育经历
-                  </div>
-                  <div
-                    v-for="(item, index) in summary.education"
-                    :key="`education-${index}`"
-                    class="timeline-item"
-                  >
-                    <div class="timeline-head">
-                      <div class="timeline-title">{{ item.school }}</div>
-                      <div v-if="item.duration" class="timeline-date">
-                        <CalendarDays :size="13" />
-                        <span>{{ item.duration }}</span>
+              <div class="summary-body">
+                <div class="summary-main">
+                  <section v-if="summary.education.length" class="summary-section slide-up" style="--delay: 0.2s">
+                    <div class="section-title section-title--education">
+                      <GraduationCap :size="16" />
+                      教育经历
+                    </div>
+                    <div
+                      v-for="(item, index) in summary.education"
+                      :key="`education-${index}`"
+                      class="timeline-item timeline-item--education"
+                    >
+                      <div class="timeline-head">
+                        <div class="timeline-title">{{ item.school }}</div>
+                        <div v-if="item.duration" class="timeline-date">
+                          <CalendarDays :size="13" />
+                          <span>{{ item.duration }}</span>
+                        </div>
+                      </div>
+                      <div v-if="item.major || item.degree" class="timeline-subtitle">
+                        {{ item.major }}{{ item.degree ? ` · ${item.degree}` : '' }}
+                      </div>
+                      <div v-if="item.gpa || item.ranking" class="timeline-tags">
+                        <a-tag v-if="item.gpa" color="blue" class="info-tag">GPA: {{ item.gpa }}</a-tag>
+                        <a-tag v-if="item.ranking" color="cyan" class="info-tag">{{ item.ranking }}</a-tag>
                       </div>
                     </div>
-                    <div v-if="item.major || item.degree" class="timeline-subtitle">
-                      {{ item.major }}{{ item.degree ? ` · ${item.degree}` : '' }}
-                    </div>
-                    <div v-if="item.gpa || item.ranking" class="timeline-tags">
-                      <a-tag v-if="item.gpa" color="blue" class="info-tag">GPA: {{ item.gpa }}</a-tag>
-                      <a-tag v-if="item.ranking" color="cyan" class="info-tag">{{ item.ranking }}</a-tag>
-                    </div>
-                  </div>
-                </section>
+                  </section>
 
-                <!-- 工作经历 -->
-                <section v-if="summary.work.length" class="summary-section">
-                  <div class="section-title">
-                    <Briefcase :size="16" />
-                    工作经历
-                  </div>
-                  <div
-                    v-for="(item, index) in summary.work"
-                    :key="`work-${index}`"
-                    class="timeline-item"
-                  >
-                    <div class="timeline-head">
-                      <div class="timeline-title">{{ item.company }}</div>
-                      <div v-if="item.duration" class="timeline-date">
-                        <CalendarDays :size="13" />
-                        <span>{{ item.duration }}</span>
+                  <section v-if="summary.work.length" class="summary-section slide-up" style="--delay: 0.25s">
+                    <div class="section-title section-title--work">
+                      <Briefcase :size="16" />
+                      工作经历
+                    </div>
+                    <div
+                      v-for="(item, index) in summary.work"
+                      :key="`work-${index}`"
+                      class="timeline-item timeline-item--work"
+                    >
+                      <div class="timeline-head">
+                        <div class="timeline-title">{{ item.company }}</div>
+                        <div v-if="item.duration" class="timeline-date">
+                          <CalendarDays :size="13" />
+                          <span>{{ item.duration }}</span>
+                        </div>
+                      </div>
+                      <div v-if="item.position" class="timeline-subtitle">{{ item.position }}</div>
+                      <div v-if="item.highlights?.length" class="timeline-details">
+                        <p v-for="(h, hi) in item.highlights" :key="hi">
+                          <span class="bullet">·</span> {{ h }}
+                        </p>
                       </div>
                     </div>
-                    <div v-if="item.position" class="timeline-subtitle">{{ item.position }}</div>
-                    <div v-if="item.highlights?.length" class="timeline-details">
-                      <p v-for="(h, hi) in item.highlights" :key="hi">
-                        <span class="bullet">·</span> {{ h }}
-                      </p>
-                    </div>
-                  </div>
-                </section>
+                  </section>
 
-                <!-- 项目经历 -->
-                <section v-if="summary.projects.length" class="summary-section">
-                  <div class="section-title">
-                    <FolderGit :size="16" />
-                    项目经历
-                  </div>
-                  <div
-                    v-for="(item, index) in summary.projects"
-                    :key="`project-${index}`"
-                    class="timeline-item"
-                  >
-                    <div class="timeline-head">
-                      <div class="timeline-title">{{ item.name }}</div>
-                      <div v-if="item.duration" class="timeline-date">
-                        <CalendarDays :size="13" />
-                        <span>{{ item.duration }}</span>
+                  <section v-if="summary.projects.length" class="summary-section slide-up" style="--delay: 0.3s">
+                    <div class="section-title section-title--project">
+                      <FolderGit :size="16" />
+                      项目经历
+                    </div>
+                    <div
+                      v-for="(item, index) in summary.projects"
+                      :key="`project-${index}`"
+                      class="timeline-item timeline-item--project"
+                    >
+                      <div class="timeline-head">
+                        <div class="timeline-title">{{ item.name }}</div>
+                        <div v-if="item.duration" class="timeline-date">
+                          <CalendarDays :size="13" />
+                          <span>{{ item.duration }}</span>
+                        </div>
                       </div>
-                    </div>
-                    <div v-if="item.role" class="timeline-subtitle">{{ item.role }}</div>
-                    <div v-if="item.tech_stack?.length" class="timeline-tags">
-                      <a-tag v-for="tech in item.tech_stack" :key="tech" color="purple" class="info-tag">
-                        {{ tech }}
-                      </a-tag>
-                    </div>
-                    <div v-if="item.description" class="timeline-desc">{{ item.description }}</div>
-                    <div v-if="item.results?.length" class="timeline-details">
-                      <p v-for="(r, ri) in item.results" :key="ri">
-                        <span class="bullet green">✓</span> {{ r }}
-                      </p>
-                    </div>
-                  </div>
-                </section>
-
-                <!-- 获奖情况 -->
-                <section v-if="summary.awards.length" class="summary-section">
-                  <div class="section-title">
-                    <Award :size="16" />
-                    获奖情况
-                  </div>
-                  <div class="awards-grid">
-                    <div v-for="(award, index) in summary.awards" :key="`award-${index}`" class="award-card">
-                      <Trophy :size="14" class="award-icon" />
-                      {{ award }}
-                    </div>
-                  </div>
-                </section>
-
-                <!-- 培训经历 -->
-                <section v-if="summary.training.length" class="summary-section">
-                  <div class="section-title">
-                    <BookOpen :size="16" />
-                    培训经历
-                  </div>
-                  <div class="training-list">
-                    <div v-for="(t, i) in summary.training" :key="i" class="training-item">
-                      {{ t }}
-                    </div>
-                  </div>
-                </section>
-              </div>
-
-              <!-- 右侧侧边栏 -->
-              <div class="summary-side">
-                <!-- 求职偏好 -->
-                <section v-if="summary.jobPreference" class="summary-section side-card">
-                  <div class="section-title">
-                    <Target :size="16" />
-                    求职偏好
-                  </div>
-                  <div class="preference-list">
-                    <div v-if="summary.jobPreference.job_intention" class="pref-item">
-                      <span class="pref-label">意向岗位</span>
-                      <span class="pref-value">{{ summary.jobPreference.job_intention }}</span>
-                    </div>
-                    <div v-if="summary.jobPreference.expected_salary" class="pref-item">
-                      <span class="pref-label">期望薪资</span>
-                      <span class="pref-value">{{ summary.jobPreference.expected_salary }}</span>
-                    </div>
-                    <div v-if="summary.jobPreference.desired_location" class="pref-item">
-                      <span class="pref-label">期望地点</span>
-                      <span class="pref-value">{{ summary.jobPreference.desired_location }}</span>
-                    </div>
-                  </div>
-                </section>
-
-                <!-- 技能标签 -->
-                <section v-if="skillTags.length" class="summary-section side-card">
-                  <div class="section-title">
-                    <Wrench :size="16" />
-                    技能标签
-                  </div>
-                  <div class="skills-category">
-                    <div v-if="skillTags.technical.length" class="skill-group">
-                      <div class="skill-group-label">技术技能</div>
-                      <div class="skills-wrap">
-                        <a-tag
-                          v-for="skill in skillTags.technical"
-                          :key="skill"
-                          color="blue"
-                          class="skill-tag"
-                        >
-                          {{ skill }}
+                      <div v-if="item.role" class="timeline-subtitle">{{ item.role }}</div>
+                      <div v-if="item.tech_stack?.length" class="timeline-tags">
+                        <a-tag v-for="tech in item.tech_stack" :key="tech" color="purple" class="info-tag">
+                          {{ tech }}
                         </a-tag>
                       </div>
-                    </div>
-                    <div v-if="skillTags.languages.length" class="skill-group">
-                      <div class="skill-group-label">语言能力</div>
-                      <div class="skills-wrap">
-                        <a-tag
-                          v-for="lang in skillTags.languages"
-                          :key="lang"
-                          color="green"
-                          class="skill-tag"
-                        >
-                          {{ lang }}
-                        </a-tag>
+                      <div v-if="item.description" class="timeline-desc">{{ item.description }}</div>
+                      <div v-if="item.results?.length" class="timeline-details">
+                        <p v-for="(r, ri) in item.results" :key="ri">
+                          <span class="bullet green">✓</span> {{ r }}
+                        </p>
                       </div>
                     </div>
-                    <div v-if="skillTags.certifications.length" class="skill-group">
-                      <div class="skill-group-label">证书资质</div>
-                      <div class="skills-wrap">
-                        <a-tag
-                          v-for="cert in skillTags.certifications"
-                          :key="cert"
-                          color="orange"
-                          class="skill-tag"
-                        >
-                          {{ cert }}
-                        </a-tag>
+                  </section>
+
+                  <section v-if="summary.awards.length" class="summary-section slide-up" style="--delay: 0.35s">
+                    <div class="section-title">
+                      <Award :size="16" />
+                      获奖情况
+                    </div>
+                    <div class="awards-grid">
+                      <div v-for="(award, index) in summary.awards" :key="`award-${index}`" class="award-card">
+                        <Trophy :size="14" class="award-icon" />
+                        {{ award }}
                       </div>
                     </div>
-                  </div>
-                </section>
+                  </section>
 
-                <!-- 自我评价 -->
-                <section v-if="summary.selfEvaluation" class="summary-section side-card">
-                  <div class="section-title">
-                    <MessageSquare :size="16" />
-                    自我评价
-                  </div>
-                  <div class="self-eval-text">{{ summary.selfEvaluation }}</div>
-                </section>
+                  <section v-if="summary.training.length" class="summary-section slide-up" style="--delay: 0.4s">
+                    <div class="section-title">
+                      <BookOpen :size="16" />
+                      培训经历
+                    </div>
+                    <div class="training-list">
+                      <div v-for="(t, i) in summary.training" :key="i" class="training-item">
+                        {{ t }}
+                      </div>
+                    </div>
+                  </section>
+                </div>
 
-                <!-- 简历信息 -->
-                <section class="summary-section side-card meta-section">
-                  <div class="section-title">
-                    <FileText :size="16" />
-                    简历信息
-                  </div>
-                  <a-descriptions :column="1" size="small" class="meta-descriptions">
-                    <a-descriptions-item label="文件名">{{ resume.filename }}</a-descriptions-item>
-                    <a-descriptions-item label="文件大小">{{ formatFileSize(resume.file_size) }}</a-descriptions-item>
-                    <a-descriptions-item label="解析状态">
-                      <a-tag :color="resume.summary_status === 'completed' ? 'success' : 'warning'" size="small">
-                        {{ statusText }}
-                      </a-tag>
-                    </a-descriptions-item>
-                    <a-descriptions-item label="更新时间">
-                      {{ formatDateTime(resume.updated_at || resume.created_at) }}
-                    </a-descriptions-item>
-                  </a-descriptions>
-                </section>
+                <div class="summary-side">
+                  <section v-if="summary.jobPreference" class="summary-section side-card slide-up" style="--delay: 0.2s">
+                    <div class="section-title">
+                      <Target :size="16" />
+                      求职偏好
+                    </div>
+                    <div class="preference-list">
+                      <div v-if="summary.jobPreference.job_intention" class="pref-item">
+                        <span class="pref-label">意向岗位</span>
+                        <span class="pref-value">{{ summary.jobPreference.job_intention }}</span>
+                      </div>
+                      <div v-if="summary.jobPreference.expected_salary" class="pref-item">
+                        <span class="pref-label">期望薪资</span>
+                        <span class="pref-value">{{ summary.jobPreference.expected_salary }}</span>
+                      </div>
+                      <div v-if="summary.jobPreference.desired_location" class="pref-item">
+                        <span class="pref-label">期望地点</span>
+                        <span class="pref-value">{{ summary.jobPreference.desired_location }}</span>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="summary-section side-card slide-up" style="--delay: 0.25s">
+                    <div class="section-title">
+                      <Crosshair :size="16" />
+                      岗位匹配
+                    </div>
+                    <template v-if="resume?.match_status === 'completed' && resume?.match_result">
+                      <div class="match-panel__card--inline">
+                        <div class="match-inline__score-ring">
+                          <svg viewBox="0 0 36 36" class="match-ring-svg">
+                            <path
+                              class="match-ring-bg"
+                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                            />
+                            <path
+                              class="match-ring-fill"
+                              :stroke-dasharray="`${resume.match_result.overall_score || 0}, 100`"
+                              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                            />
+                          </svg>
+                          <span class="match-ring-text">{{ Math.round(resume.match_result.overall_score) }}</span>
+                        </div>
+                        <div class="match-inline__info">
+                          <a-tag :color="matchLevelColor" class="match-level-tag">{{ matchLevelText }}</a-tag>
+                          <div class="match-inline__job" v-if="resume.matched_job_title">{{ resume.matched_job_title }}</div>
+                        </div>
+                      </div>
+                      <div class="match-actions-row">
+                        <span class="match-detail-link" @click="showMatchDetail = true">查看匹配详情</span>
+                        <a-button size="small" type="link" @click="handleChangeJob">
+                          <RotateCcw :size="12" />
+                          更换岗位
+                        </a-button>
+                      </div>
+                    </template>
+                    <template v-else-if="resume?.match_status === 'pending' || resume?.match_status === 'processing'">
+                      <div class="match-loading">
+                        <a-spin size="small" />
+                        <span>正在匹配中...</span>
+                      </div>
+                    </template>
+                    <template v-else>
+                      <a-button type="primary" ghost block @click="openMatchModal">
+                        <Crosshair :size="14" />
+                        匹配岗位
+                      </a-button>
+                    </template>
+                  </section>
+
+                  <section v-if="skillTagsFlat.length" class="summary-section side-card slide-up" style="--delay: 0.3s">
+                    <div class="section-title">
+                      <Wrench :size="16" />
+                      技能标签
+                    </div>
+                    <div class="skill-cloud">
+                      <span
+                        v-for="skill in skillCloudItems"
+                        :key="skill.name"
+                        class="skill-cloud__tag"
+                        :class="`skill-cloud__tag--${skill.category}`"
+                        :style="{ fontSize: skill.size + 'px' }"
+                      >
+                        {{ skill.name }}
+                      </span>
+                    </div>
+                  </section>
+
+                  <section v-if="summary.selfEvaluation" class="summary-section side-card slide-up" style="--delay: 0.35s">
+                    <div class="section-title">
+                      <MessageSquare :size="16" />
+                      自我评价
+                    </div>
+                    <div class="self-eval-text">{{ summary.selfEvaluation }}</div>
+                  </section>
+
+                  <section class="summary-section side-card meta-section slide-up" style="--delay: 0.4s">
+                    <div class="section-title">
+                      <FileText :size="16" />
+                      简历信息
+                    </div>
+                    <a-descriptions :column="1" size="small" class="meta-descriptions">
+                      <a-descriptions-item label="文件名">{{ resume.filename }}</a-descriptions-item>
+                      <a-descriptions-item label="文件大小">{{ formatFileSize(resume.file_size) }}</a-descriptions-item>
+                      <a-descriptions-item label="解析状态">
+                        <a-tag :color="resume.summary_status === 'completed' ? 'success' : 'warning'" size="small">
+                          {{ statusText }}
+                        </a-tag>
+                      </a-descriptions-item>
+                      <a-descriptions-item label="更新时间">
+                        {{ formatDateTime(resume.updated_at || resume.created_at) }}
+                      </a-descriptions-item>
+                    </a-descriptions>
+                  </section>
+                </div>
               </div>
-            </div>
 
-            <!-- 空状态 -->
-            <div v-if="!hasSummaryData" class="empty-state">
-              <a-empty description="暂未从当前简历中提取到结构化信息">
-                <template #image>
-                  <FileSearch :size="48" class="empty-icon" />
-                </template>
-              </a-empty>
-              <p class="empty-hint">简历正在解析中，请稍后刷新页面</p>
-            </div>
+              <div v-if="!hasSummaryData && extractStage !== 'parsing' && extractStage !== 'extracting'" class="empty-state">
+                <a-empty description="暂未从当前简历中提取到结构化信息">
+                  <template #image>
+                    <FileSearch :size="48" class="empty-icon" />
+                  </template>
+                </a-empty>
+                <p class="empty-hint">简历正在解析中，请稍后刷新页面</p>
+              </div>
+            </template>
           </div>
         </div>
       </template>
@@ -338,11 +370,47 @@
         <a-empty description="未找到该简历" />
       </div>
     </div>
+
+    <a-modal
+      v-model:open="matchModalVisible"
+      title="选择目标岗位进行匹配"
+      :confirm-loading="matchLoading"
+      ok-text="开始匹配"
+      cancel-text="取消"
+      @ok="handleMatch"
+    >
+      <p style="color: var(--gray-600); margin-bottom: 12px;">
+        选择目标岗位，系统将分析简历与岗位要求的匹配程度。
+      </p>
+      <a-select
+        v-model:value="selectedJobId"
+        placeholder="请选择目标岗位"
+        :loading="jobsLoading"
+        allow-clear
+        show-search
+        :filter-option="filterJobOption"
+        style="width: 100%"
+      >
+        <a-select-option v-for="job in availableJobs" :key="job.id" :value="job.id">
+          {{ job.title }}{{ job.department ? ` - ${job.department}` : '' }}
+        </a-select-option>
+      </a-select>
+    </a-modal>
+
+    <a-drawer
+      v-model:open="showMatchDetail"
+      title="岗位匹配详情"
+      :width="640"
+      placement="right"
+      @afterOpenChange="onDrawerOpenChange"
+    >
+      <MatchResultPanel v-if="resume?.match_result" :match-result="resume.match_result" />
+    </a-drawer>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
@@ -370,34 +438,56 @@ import {
   Zap,
   Code2,
   Globe,
-  TrendingUp
+  TrendingUp,
+  Crosshair,
+  RotateCcw,
+  AlertCircle
 } from 'lucide-vue-next'
 
 import HeaderComponent from '@/components/HeaderComponent.vue'
-import { resumeApi } from '@/apis/resume_api'
+import MatchResultPanel from '@/components/MatchResultPanel.vue'
+import ResumeExtractingAnimation from '@/components/ResumeExtractingAnimation.vue'
+import { resumeApi, watchExtractProgress } from '@/apis/resume_api'
+import { jobApi } from '@/apis/job_api'
+
+const emit = defineEmits(['changeJob'])
 
 const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
 const deleting = ref(false)
+const retrying = ref(false)
+const photoLoadError = ref(false)
 const resume = ref(null)
 
-// 知名公司列表（用于亮点标记）
+const matchModalVisible = ref(false)
+const matchLoading = ref(false)
+const jobsLoading = ref(false)
+const availableJobs = ref([])
+const selectedJobId = ref(null)
+const showMatchDetail = ref(false)
+
+function onDrawerOpenChange(open) {
+  // Drawer 动画完成后，触发窗口 resize 事件让 ECharts 重新计算尺寸
+  if (open) {
+    setTimeout(() => {
+      window.dispatchEvent(new Event('resize'))
+    }, 100)
+  }
+}
+
+const extractStage = ref('idle')
+const extractStats = ref({ skills: 0, projects: 0, experience: 0 })
+let extractEventSource = null
+
 const FAMOUS_COMPANIES = ['腾讯', '阿里', '字节', '百度', '京东', '美团', '拼多多', '华为', '网易', '滴滴', '快手', '哔哩', '小米', 'OPPO', 'vivo', '蚂蚁', '饿了么']
 
-// 优先使用 LLM 提取的 summary_json，fallback 到 structured_resume
 const summary = computed(() => {
-  // 尝试从 summary_json（LLM 提取）获取数据
   const llmData = resume.value?.summary_json
-  // fallback 到 structured_resume（旧规则解析）
   const legacyData = resume.value?.structured_resume
-
   const data = llmData || legacyData || {}
 
-  // 教育经历：兼容两种格式
-  // summary_json: [{school, major, degree, gpa, ranking, duration}]
-  // structured_resume: [{title, subtitle, date, details}]
   const education = (data.education || []).map(item => ({
     school: item.school || item.title || '',
     major: item.major || item.subtitle || '',
@@ -407,9 +497,6 @@ const summary = computed(() => {
     duration: item.duration || item.date || ''
   }))
 
-  // 工作经历：兼容两种格式
-  // summary_json: [{company, position, duration, highlights}]
-  // structured_resume: [{title, subtitle, date, details}]
   const work = (data.work_experience || data.work || []).map(item => ({
     company: item.company || item.title || '',
     position: item.position || item.subtitle || '',
@@ -417,9 +504,6 @@ const summary = computed(() => {
     highlights: item.highlights || item.details || []
   }))
 
-  // 项目经历：兼容两种格式
-  // summary_json: [{name, role, tech_stack, description, results, duration}]
-  // structured_resume: [{title, subtitle, date, details}]
   const projects = (data.project_experience || data.projects || []).map(item => ({
     name: item.name || item.title || '',
     role: item.role || item.subtitle || '',
@@ -457,13 +541,11 @@ const hasSummaryData = computed(() => {
   )
 })
 
-// 简历完整度评分
 const completenessScore = computed(() => {
   const s = summary.value
   let score = 0
   let total = 0
 
-  // 基础信息 20%
   if (s.basicInfo?.name) score += 5
   if (s.basicInfo?.phone) score += 3
   if (s.basicInfo?.email) score += 3
@@ -471,23 +553,18 @@ const completenessScore = computed(() => {
   if (s.basicInfo?.github || s.basicInfo?.linkedin) score += 6
   total += 20
 
-  // 教育经历 15%
   if (s.education?.length) score += 15
   total += 15
 
-  // 工作经历 20%
   if (s.work?.length) score += 20
   total += 20
 
-  // 项目经历 20%
   if (s.projects?.length) score += 20
   total += 20
 
-  // 技能 10%
   if (s.skills?.technical?.length) score += 10
   total += 10
 
-  // 获奖/培训/自我评价 15%
   if (s.awards?.length) score += 5
   if (s.training?.length) score += 5
   if (s.selfEvaluation) score += 5
@@ -524,12 +601,10 @@ const completenessTips = computed(() => {
   return tips.slice(0, 3)
 })
 
-// 亮点标签
 const highlightTags = computed(() => {
   const tags = []
   const s = summary.value
 
-  // 高 GPA
   if (s.education?.[0]?.gpa) {
     const gpaStr = s.education[0].gpa.toString()
     if (/\b(3\.[7-9]|4\.0|前10%|前5%|前3%)\b/i.test(gpaStr)) {
@@ -537,32 +612,26 @@ const highlightTags = computed(() => {
     }
   }
 
-  // 名企经验
   if (s.work?.some(w => FAMOUS_COMPANIES.some(c => (w.company || '').includes(c)))) {
     tags.push({ text: '名企经验', color: 'red', icon: Star })
   }
 
-  // 有 GitHub
   if (s.basicInfo?.github) {
     tags.push({ text: '有开源作品', color: 'purple', icon: Code2 })
   }
 
-  // 有 LinkedIn
   if (s.basicInfo?.linkedin) {
     tags.push({ text: '有 LinkedIn', color: 'blue', icon: Globe })
   }
 
-  // 竞赛获奖
   if (s.awards?.length) {
     tags.push({ text: '竞赛获奖', color: 'orange', icon: Trophy })
   }
 
-  // 多个项目
   if (s.projects?.length >= 3) {
     tags.push({ text: '项目丰富', color: 'cyan', icon: FolderGit })
   }
 
-  // 技术栈多
   if (s.skills?.technical?.length >= 5) {
     tags.push({ text: '技术栈广', color: 'green', icon: Zap })
   }
@@ -570,7 +639,6 @@ const highlightTags = computed(() => {
   return tags.slice(0, 4)
 })
 
-// 技能分类
 const skillTags = computed(() => {
   const skills = summary.value.skills || {}
   return {
@@ -580,14 +648,36 @@ const skillTags = computed(() => {
   }
 })
 
-// 简历状态文字
+const skillTagsFlat = computed(() => {
+  const s = skillTags.value
+  return [...s.technical, ...s.languages, ...s.certifications]
+})
+
+const skillCloudItems = computed(() => {
+  const allSkills = []
+  const tech = skillTags.value.technical
+  const langs = skillTags.value.languages
+  const certs = skillTags.value.certifications
+
+  tech.forEach(s => allSkills.push({ name: s, category: 'technical', weight: 1 }))
+  langs.forEach(s => allSkills.push({ name: s, category: 'language', weight: 0.8 }))
+  certs.forEach(s => allSkills.push({ name: s, category: 'cert', weight: 0.7 }))
+
+  const maxWeight = Math.max(1, ...allSkills.map(s => s.weight))
+  return allSkills.map(s => ({
+    ...s,
+    size: 12 + Math.round((s.weight / maxWeight) * 6),
+  }))
+})
+
 const statusText = computed(() => {
   const status = resume.value?.summary_status
   const map = {
     completed: '已完成',
     processing: '处理中',
     failed: '失败',
-    pending: '等待中'
+    pending: '等待中',
+    extracting: '提取中'
   }
   return map[status] || '未知'
 })
@@ -597,11 +687,54 @@ const formatGithubUrl = (url) => {
   return url.replace(/^https?:\/\/github\.com\/?/, '').replace(/\/$/, '')
 }
 
+const startExtractListener = (resumeId) => {
+  stopExtractListener()
+  extractStage.value = 'extracting'
+
+  extractEventSource = watchExtractProgress(resumeId, {
+    onProgress: (data) => {
+      extractStage.value = data.stage || 'extracting'
+      if (data.stats) {
+        extractStats.value = { ...extractStats.value, ...data.stats }
+      }
+    },
+    onCompleted: () => {
+      extractStage.value = 'completed'
+      loadResumeDetail()
+      if (resume.value?.match_status !== 'completed') {
+        openMatchModal()
+      }
+    },
+    onFailed: () => {
+      extractStage.value = 'failed'
+    },
+  })
+}
+
+const stopExtractListener = () => {
+  if (extractEventSource) {
+    extractEventSource.close()
+    extractEventSource = null
+  }
+}
+
 const loadResumeDetail = async () => {
   loading.value = true
   try {
     const data = await resumeApi.getResumeDetail(route.params.resume_id)
     resume.value = data?.resume || null
+
+    const status = resume.value?.summary_status
+    if (status === 'completed') {
+      extractStage.value = 'completed'
+    } else if (status === 'processing' || status === 'extracting' || status === 'pending') {
+      if (extractStage.value !== 'parsing' && extractStage.value !== 'extracting') {
+        extractStage.value = 'extracting'
+      }
+      startExtractListener(route.params.resume_id)
+    } else if (status === 'failed') {
+      extractStage.value = 'failed'
+    }
   } catch (error) {
     console.error('加载简历详情失败:', error)
     message.error(error.message || '加载简历详情失败')
@@ -630,6 +763,99 @@ const handleDelete = async () => {
     message.error(error.message || '删除简历失败')
   } finally {
     deleting.value = false
+  }
+}
+
+const handleRetryExtract = async () => {
+  if (!resume.value?.id || retrying.value) return
+  try {
+    retrying.value = true
+    await resumeApi.retryExtract(resume.value.id)
+    extractStage.value = 'parsing'
+    startExtractListener(resume.value.id)
+    message.success('已重新开始分析简历')
+  } catch (error) {
+    message.error(error?.response?.data?.detail || '重试失败，请稍后再试')
+  } finally {
+    retrying.value = false
+  }
+}
+
+const matchLevelText = computed(() => {
+  const score = resume.value?.match_result?.overall_score || 0
+  if (score >= 80) return '优秀'
+  if (score >= 60) return '良好'
+  if (score >= 40) return '一般'
+  return '较差'
+})
+
+const matchLevelColor = computed(() => {
+  const score = resume.value?.match_result?.overall_score || 0
+  if (score >= 80) return 'green'
+  if (score >= 60) return 'blue'
+  if (score >= 40) return 'orange'
+  return 'red'
+})
+
+const openMatchModal = async () => {
+  selectedJobId.value = null
+  matchModalVisible.value = true
+  jobsLoading.value = true
+  try {
+    const data = await jobApi.getJobs({ status: 'active', limit: 100 })
+    availableJobs.value = data?.jobs || []
+  } catch (error) {
+    console.error('加载岗位列表失败:', error)
+    message.error('加载岗位列表失败')
+  } finally {
+    jobsLoading.value = false
+  }
+}
+
+const filterJobOption = (input, option) => {
+  const title = option.children?.[0]?.children || ''
+  return title.toLowerCase().includes(input.toLowerCase())
+}
+
+const handleMatch = async () => {
+  if (!selectedJobId.value || !resume.value?.id) {
+    message.warning('请先选择目标岗位')
+    return
+  }
+  matchLoading.value = true
+  try {
+    await resumeApi.matchResume(resume.value.id, selectedJobId.value)
+    message.success('匹配完成')
+    matchModalVisible.value = false
+    await loadResumeDetail()
+    showMatchDetail.value = true
+  } catch (error) {
+    console.error('匹配失败:', error)
+    message.error(error.message || '匹配失败')
+  } finally {
+    matchLoading.value = false
+  }
+}
+
+const handleChangeJob = () => {
+  const oldJobId = resume.value?.matched_job_id || null
+  emit('changeJob', { jobId: null, oldJobId })
+  openMatchModal()
+}
+
+const handleKeydown = (e) => {
+  if (e.ctrlKey && e.key === 'm') {
+    e.preventDefault()
+    if (resume.value?.match_status === 'completed' && resume.value?.match_result) {
+      showMatchDetail.value = true
+    } else {
+      openMatchModal()
+    }
+  }
+  if (e.key === 'ArrowLeft' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    const el = document.activeElement
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return
+    goBack()
   }
 }
 
@@ -664,7 +890,15 @@ const formatDateTime = (value) => {
 }
 
 onMounted(() => {
+  const shouldAnimate = route.query.extracting === '1'
+  if (shouldAnimate) {
+    extractStage.value = 'parsing'
+  }
   loadResumeDetail()
+})
+
+onBeforeUnmount(() => {
+  stopExtractListener()
 })
 </script>
 
@@ -672,6 +906,7 @@ onMounted(() => {
 .resume-detail-page {
   min-height: 100%;
   background: var(--gray-25);
+  outline: none;
 }
 
 .resume-detail-content {
@@ -690,10 +925,9 @@ onMounted(() => {
   border-radius: 20px;
   background: var(--gray-0);
   overflow: hidden;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 4px 24px var(--shadow-1);
 }
 
-// Hero 区域 - 专业深蓝色调
 .summary-hero {
   position: relative;
   padding: 36px 40px 28px;
@@ -736,13 +970,19 @@ onMounted(() => {
   position: relative;
   overflow: hidden;
 
-  // 照片占位符纹理
   &::after {
     content: '';
     position: absolute;
     inset: 0;
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
     pointer-events: none;
+  }
+
+  .avatar-photo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
   }
 }
 
@@ -778,11 +1018,10 @@ onMounted(() => {
   padding: 6px 14px;
   border-radius: 20px;
   backdrop-filter: blur(8px);
-  transition: all 0.2s ease;
+  transition: background 0.2s ease;
 
   &:hover {
     background: rgba(255, 255, 255, 0.2);
-    transform: translateY(-1px);
   }
 
   a {
@@ -818,15 +1057,13 @@ onMounted(() => {
   background: rgba(255, 255, 255, 0.15);
   color: #fff;
   backdrop-filter: blur(8px);
-  transition: all 0.2s ease;
+  transition: background 0.2s ease;
 
   &:hover {
     background: rgba(255, 255, 255, 0.25);
-    transform: translateY(-1px);
   }
 }
 
-// 完整度条
 .completeness-bar {
   padding: 20px 40px;
   background: linear-gradient(180deg, rgba(30, 58, 95, 0.04) 0%, transparent 100%);
@@ -891,7 +1128,6 @@ onMounted(() => {
   }
 }
 
-// 正文区域
 .summary-body {
   padding: 28px 40px;
   display: grid;
@@ -921,15 +1157,29 @@ onMounted(() => {
   svg {
     opacity: 0.8;
   }
+
+  &--education {
+    border-bottom-color: var(--color-info-700);
+    color: var(--color-info-700);
+  }
+
+  &--work {
+    border-bottom-color: #1e3a5f;
+    color: #1e3a5f;
+  }
+
+  &--project {
+    border-bottom-color: var(--color-accent-700);
+    color: var(--color-accent-700);
+  }
 }
 
-// 时间线样式
 .timeline-item {
   padding: 20px 22px;
   border: 1px solid var(--gray-200);
   border-radius: 16px;
   background: var(--gray-0);
-  transition: all 0.25s ease;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
   position: relative;
   overflow: hidden;
 
@@ -940,15 +1190,12 @@ onMounted(() => {
     top: 0;
     bottom: 0;
     width: 4px;
-    background: linear-gradient(180deg, #1e3a5f 0%, #2d4a6f 100%);
     opacity: 0;
     transition: opacity 0.25s ease;
   }
 
   &:hover {
-    border-color: rgba(30, 58, 95, 0.3);
     box-shadow: 0 4px 16px rgba(30, 58, 95, 0.08);
-    transform: translateY(-2px);
 
     &::before {
       opacity: 1;
@@ -957,6 +1204,42 @@ onMounted(() => {
 
   & + .timeline-item {
     margin-top: 16px;
+  }
+
+  &--education {
+    border-left: 3px solid var(--color-info-500);
+
+    &::before {
+      background: var(--color-info-500);
+    }
+
+    &:hover {
+      border-color: rgba(79, 159, 236, 0.3);
+    }
+  }
+
+  &--work {
+    border-left: 3px solid #1e3a5f;
+
+    &::before {
+      background: #1e3a5f;
+    }
+
+    &:hover {
+      border-color: rgba(30, 58, 95, 0.3);
+    }
+  }
+
+  &--project {
+    border-left: 3px solid var(--color-accent-500);
+
+    &::before {
+      background: var(--color-accent-500);
+    }
+
+    &:hover {
+      border-color: rgba(19, 194, 194, 0.3);
+    }
   }
 }
 
@@ -1049,7 +1332,6 @@ onMounted(() => {
   }
 }
 
-// 获奖卡片
 .awards-grid {
   display: grid;
   gap: 12px;
@@ -1066,10 +1348,9 @@ onMounted(() => {
   color: var(--gray-900);
   line-height: 1.6;
   background: linear-gradient(135deg, var(--gray-0) 0%, #fffbeb 100%);
-  transition: all 0.25s ease;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
 
   &:hover {
-    transform: translateX(4px);
     box-shadow: 0 4px 12px rgba(250, 173, 20, 0.15);
   }
 }
@@ -1079,7 +1360,6 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-// 培训
 .training-list {
   display: flex;
   flex-direction: column;
@@ -1093,7 +1373,7 @@ onMounted(() => {
   color: var(--gray-800);
   font-size: 14px;
   background: var(--gray-0);
-  transition: all 0.25s ease;
+  transition: border-color 0.25s ease, background 0.25s ease;
 
   &:hover {
     border-color: #1e3a5f;
@@ -1101,13 +1381,12 @@ onMounted(() => {
   }
 }
 
-// 侧边栏卡片
 .side-card {
   padding: 22px;
   border: 1px solid var(--gray-200);
   border-radius: 16px;
   background: var(--gray-0);
-  transition: all 0.25s ease;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
 
   &:hover {
     border-color: rgba(30, 58, 95, 0.2);
@@ -1115,7 +1394,6 @@ onMounted(() => {
   }
 }
 
-// 求职偏好
 .preference-list {
   display: flex;
   flex-direction: column;
@@ -1129,7 +1407,7 @@ onMounted(() => {
   padding: 12px 14px;
   background: var(--gray-50);
   border-radius: 10px;
-  transition: all 0.2s ease;
+  transition: background 0.2s ease;
 
   &:hover {
     background: rgba(30, 58, 95, 0.04);
@@ -1150,57 +1428,125 @@ onMounted(() => {
   font-weight: 600;
 }
 
-// 技能
-.skills-category {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.skill-group {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.skill-group-label {
-  font-size: 12px;
-  color: var(--gray-500);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+// Inline match panel with ring
+.match-panel__card--inline {
   display: flex;
   align-items: center;
-  gap: 6px;
-
-  &::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: var(--gray-200);
-  }
+  gap: 16px;
+  padding: 16px;
+  background: var(--gray-50);
+  border-radius: 12px;
+  margin-bottom: 12px;
 }
 
-.skills-wrap {
+.match-inline__score-ring {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+}
+
+.match-ring-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.match-ring-bg {
+  fill: none;
+  stroke: var(--gray-200);
+  stroke-width: 3;
+}
+
+.match-ring-fill {
+  fill: none;
+  stroke: var(--main-color);
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.6s ease;
+}
+
+.match-ring-text {
+  position: absolute;
+  inset: 0;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e3a5f;
 }
 
-.skill-tag {
-  border-radius: 10px;
+.match-inline__info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.match-inline__job {
   font-size: 13px;
-  padding: 5px 12px;
-  font-weight: 500;
-  transition: all 0.2s ease;
+  color: var(--gray-600);
+}
+
+.match-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.match-detail-link {
+  color: var(--main-color);
+  font-size: 13px;
+  cursor: pointer;
+  transition: opacity 0.2s;
 
   &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    opacity: 0.8;
   }
 }
 
-// 自我评价
+.match-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--gray-500);
+  font-size: 13px;
+}
+
+// Skill cloud
+.skill-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 0;
+}
+
+.skill-cloud__tag {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  transition: background 0.2s ease;
+
+  &--technical {
+    background: var(--color-info-50);
+    color: var(--color-info-700);
+  }
+
+  &--language {
+    background: var(--color-success-50);
+    color: var(--color-success-700);
+  }
+
+  &--cert {
+    background: var(--color-warning-50);
+    color: var(--color-warning-700);
+  }
+}
+
 .self-eval-text {
   color: var(--gray-700);
   font-size: 14px;
@@ -1211,7 +1557,30 @@ onMounted(() => {
   border-left: 4px solid #1e3a5f;
 }
 
-// 元信息
+.match-summary-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.match-score {
+  font-size: 36px;
+  font-weight: 700;
+  color: #1e3a5f;
+  line-height: 1;
+}
+
+.match-score-unit {
+  font-size: 14px;
+  color: var(--gray-500);
+  margin-right: 8px;
+}
+
+.match-level-tag {
+  margin-left: 4px;
+}
+
 .meta-section {
   background: linear-gradient(180deg, var(--gray-50) 0%, var(--gray-0) 100%);
   border-color: var(--gray-200);
@@ -1230,7 +1599,6 @@ onMounted(() => {
   }
 }
 
-// 空状态
 .empty-state {
   padding: 80px 40px;
   text-align: center;
@@ -1252,6 +1620,23 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+// Slide-up animation
+.slide-up {
+  animation: slideUp 0.4s ease-out both;
+  animation-delay: var(--delay, 0s);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @media (max-width: 1100px) {
@@ -1315,5 +1700,38 @@ onMounted(() => {
     font-size: 12px;
     padding: 5px 12px;
   }
+}
+
+.extract-failed-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 48px 24px;
+  background: linear-gradient(135deg, #fff7e6 0%, var(--gray-0) 50%, #fff1f0 100%);
+  border-radius: 12px;
+  border: 1px solid var(--gray-150);
+}
+
+.extract-failed__icon {
+  color: #faad14;
+}
+
+.extract-failed__title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--gray-800);
+}
+
+.extract-failed__error {
+  font-size: 13px;
+  color: var(--gray-500);
+  max-width: 360px;
+  text-align: center;
+}
+
+.extract-failed__hint {
+  font-size: 13px;
+  color: var(--gray-500);
 }
 </style>

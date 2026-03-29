@@ -10,7 +10,6 @@ import {
   FileText,
   PanelLeftClose,
   PanelLeftOpen,
-  Briefcase
 } from 'lucide-vue-next'
 
 import { useConfigStore } from '@/stores/config'
@@ -142,12 +141,6 @@ const mainList = computed(() => {
       path: '/resume',
       icon: FileText,
       activeIcon: FileText
-    },
-    {
-      name: '职位管理',
-      path: '/job',
-      icon: Briefcase,
-      activeIcon: Briefcase
     },
     {
       name: '知识库',

@@ -137,6 +137,13 @@ class UserResume(Base):
     # 摘要生成状态: pending/processing/completed/failed
     summary_status = Column(String(32), nullable=False, default="pending")
     summary_error = Column(Text, nullable=True, comment="摘要生成失败原因")
+
+    # 岗位匹配相关
+    target_job_id = Column(Integer, nullable=True, comment="用户选择的目标岗位ID（对应 builtin_jobs）")
+    detected_position = Column(String(200), nullable=True, comment="LLM 从简历中提取的意向岗位名")
+    match_result = Column(JSON, nullable=True, comment="匹配结果（持久化）")
+    match_status = Column(String(32), nullable=False, default="none", comment="匹配状态: none/pending/processing/completed/failed")
+
     created_at = Column(DateTime, default=utc_now_naive)
     updated_at = Column(DateTime, default=utc_now_naive, onupdate=utc_now_naive)
 
@@ -151,6 +158,9 @@ class UserResume(Base):
             "parser_name": self.parser_name,
             "summary_status": self.summary_status,
             "summary_error": self.summary_error,
+            "target_job_id": self.target_job_id,
+            "detected_position": self.detected_position,
+            "match_status": self.match_status,
             "created_at": format_utc_datetime(self.created_at),
             "updated_at": format_utc_datetime(self.updated_at),
         }
@@ -158,6 +168,8 @@ class UserResume(Base):
             data["markdown_content"] = self.markdown_content
         if self.summary_json:
             data["summary_json"] = self.summary_json
+        if self.match_result:
+            data["match_result"] = self.match_result
         return data
 
 

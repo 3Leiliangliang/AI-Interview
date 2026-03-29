@@ -1,5 +1,6 @@
 """简历结构化摘要服务 - 使用 LLM 提取简历关键信息。"""
 
+import asyncio
 import json
 import re
 from typing import Any
@@ -10,7 +11,12 @@ from src.storage.postgres.models_business import UserResume
 from src.utils import logger
 from src.utils.prompts import resume_extraction_prompt
 
-# 默认使用 siliconflow 的 DeepSeek V3 进行摘要提取
+# LLM 调用重试配置
+MAX_RETRIES = 3
+RETRY_DELAY = 2  # 秒
+LLM_TIMEOUT = 120  # 秒
+
+# 默认使用可靠模型进行摘要提取
 DEFAULT_SUMMARY_MODEL = "siliconflow/Pro/deepseek-ai/DeepSeek-V3.2"
 
 
@@ -20,48 +26,72 @@ class ResumeSummaryService:
     def __init__(self, model_name: str = DEFAULT_SUMMARY_MODEL) -> None:
         self.model_name = model_name
 
-    async def extract_summary(self, markdown_content: str) -> dict[str, Any] | None:
+    async def extract_summary(self, markdown_content: str) -> dict[str, Any]:
         """
-        调用 LLM 提取简历结构化信息。
+        调用 LLM 提取简历结构化信息，支持重试和超时。
 
         Args:
             markdown_content: 简历的 markdown 内容
 
         Returns:
-            提取的结构化字典，失败返回 None
+            提取的结构化字典
+
+        Raises:
+            ValueError: 简历内容为空或提取失败
         """
         if not markdown_content or not markdown_content.strip():
-            logger.warning("简历内容为空，无法提取摘要")
-            return None
+            raise ValueError("简历内容为空，无法提取摘要")
 
-        try:
-            model = load_chat_model(self.model_name)
-            prompt = resume_extraction_prompt.replace("{resume_text}", markdown_content)
+        model = load_chat_model(self.model_name)
+        prompt = resume_extraction_prompt.replace("{resume_text}", markdown_content)
 
-            response = await model.ainvoke(prompt)
-            content = response.content if hasattr(response, "content") else str(response)
+        last_error = None
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                logger.info(f"LLM 提取尝试 {attempt}/{MAX_RETRIES}")
+                response = await asyncio.wait_for(model.ainvoke(prompt), timeout=LLM_TIMEOUT)
+                content = response.content if hasattr(response, "content") else str(response)
 
-            logger.debug(f"LLM 原始响应长度: {len(content)} 字符")
+                logger.debug(f"LLM 原始响应长度: {len(content)} 字符")
+                logger.debug(f"LLM 完整响应: {content}")
 
-            # 尝试多种方式解析 JSON
-            summary = self._parse_json_response(content)
-            if summary:
-                logger.info("简历摘要提取成功")
-                return summary
-            else:
-                logger.warning(f"简历摘要 JSON 解析失败，原始响应: {content[:500]}")
-                return None
+                # 尝试多种方式解析 JSON
+                summary = self._parse_json_response(content)
+                if summary:
+                    logger.info("简历摘要提取成功")
+                    return summary
+                else:
+                    # JSON 解析失败，LLM 已返回内容，重试可能得到不同结果
+                    last_error = "JSON 解析失败"
+                    logger.warning(f"第 {attempt} 次 JSON 解析失败，原始响应: {content[:500]}")
+                    if attempt < MAX_RETRIES:
+                        await asyncio.sleep(RETRY_DELAY)
+                    continue
 
-        except Exception as e:
-            logger.error(f"简历摘要提取失败: {e}")
-            return None
+            except asyncio.TimeoutError:
+                last_error = f"LLM 调用超时（{LLM_TIMEOUT}s）"
+                logger.warning(f"第 {attempt} 次 LLM 调用超时")
+                if attempt < MAX_RETRIES:
+                    await asyncio.sleep(RETRY_DELAY)
+            except (ConnectionError, OSError) as e:
+                last_error = str(e)
+                logger.warning(f"第 {attempt} 次 LLM 网络错误: {e}")
+                if attempt < MAX_RETRIES:
+                    await asyncio.sleep(RETRY_DELAY)
+            except Exception as e:
+                last_error = str(e)
+                logger.error(f"简历摘要提取失败: {e}")
+                # 不再继续重试，直接抛出
+                raise ValueError(f"LLM 提取失败: {last_error}") from e
+
+        raise ValueError(f"简历摘要提取失败（已重试 {MAX_RETRIES} 次）: {last_error}")
 
     def _preprocess_json_text(self, text: str) -> str:
         """
         预处理 JSON 文本，修复常见问题。
         """
         # 修复 LaTeX 公式残留（如 $10 \$ → 10%）
-        text = re.sub(r"\$+([^$]*)\$+", lambda m: self._decode_latex片段(m.group(1)), text)
+        text = re.sub(r"\$+([^$]*)\$+", lambda m: self._decode_latex_fragment(m.group(1)), text)
 
         # 修复换行符问题
         text = text.replace("\\n", "\n").replace("\n", " ")
@@ -71,7 +101,7 @@ class ResumeSummaryService:
 
         return text
 
-    def _decode_latex片段(self, latex: str) -> str:
+    def _decode_latex_fragment(self, latex: str) -> str:
         """
         解码 LaTeX 公式片段为正常文本。
         """
@@ -273,12 +303,26 @@ class ResumeSummaryService:
             await session.commit()
 
             try:
-                summary = await self.extract_summary(resume.markdown_content or "")
+                markdown_content = resume.markdown_content or ""
+                if not markdown_content.strip():
+                    logger.warning(f"简历 markdown_content 为空，跳过提取，resume_id={resume_id}")
+                    resume.summary_status = "failed"
+                    resume.summary_error = "PDF 解析结果为空，无法提取摘要"
+                    await session.commit()
+                    return False
+
+                summary = await self.extract_summary(markdown_content)
 
                 if summary:
                     resume.summary_json = summary
                     resume.summary_status = "completed"
                     resume.summary_error = None
+
+                    # 回填意向岗位
+                    detected = summary.get("job_preference", {}).get("job_intention", "")
+                    if detected and not resume.detected_position:
+                        resume.detected_position = detected
+
                     logger.info(f"简历摘要更新成功，ID: {resume_id}")
                 else:
                     resume.summary_status = "failed"

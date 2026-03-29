@@ -7,8 +7,8 @@ from typing import Any
 from src.utils import logger
 
 DEFAULT_WEIGHTS = {
-    "skills": 0.55,
-    "experience": 0.45,
+    "skills": 0.45,
+    "experience": 0.35,
     "education": 0.20,
 }
 
@@ -129,6 +129,19 @@ class MatchService:
         "c#": "csharp",
         "jquery": "javascript",
         "boot": "bootstrap",
+        # 中文技能同义词映射（中文 -> 标准英文名）
+        "深度学习": "deep learning",
+        "机器学习": "machine learning",
+        "神经网络": "neural network",
+        "人工智能": "artificial intelligence",
+        "前端开发": "frontend",
+        "后端开发": "backend",
+        "数据分析": "data analysis",
+        "自然语言处理": "nlp",
+        "计算机视觉": "computer vision",
+        "推荐系统": "recommendation system",
+        "大模型": "large language model",
+        "大语言模型": "large language model",
     }
 
     # 需要特殊处理的短技能词（避免模糊匹配误匹配）
@@ -143,6 +156,7 @@ class MatchService:
 
     def __init__(self):
         self.weights = DEFAULT_WEIGHTS
+        assert abs(sum(self.weights.values()) - 1.0) < 1e-6, f"权重总和必须为 1.0，当前为 {sum(self.weights.values())}"
 
     def _extract_skill_names(self, skills_data: list[str] | dict | None) -> list[str]:
         """
@@ -449,6 +463,40 @@ class MatchService:
                 return level_value
         return 0
 
+    def _calculate_education_match(
+        self,
+        required_level: str | None,
+        resume_education: list[dict[str, Any]] | None,
+    ) -> dict[str, Any]:
+        """计算教育匹配度"""
+        # 无学历要求时返回中性分
+        if not required_level:
+            return {"score": 50.0, "meets_requirement": True}
+
+        req_level = self._extract_education_level(required_level)
+        if req_level == 0:
+            return {"score": 50.0, "meets_requirement": True}
+
+        # 从简历中取最高学历
+        if not resume_education:
+            return {"score": 20.0, "meets_requirement": False}
+
+        max_level = 0
+        for edu in resume_education:
+            degree = edu.get("degree", "")
+            level = self._extract_education_level(degree)
+            if level > max_level:
+                max_level = level
+
+        if max_level >= req_level:
+            # 满足要求: 50-100 分，基础分 50，每高一级 +10
+            score = min(100.0, 50.0 + (max_level - req_level) * 10.0)
+            return {"score": score, "meets_requirement": True}
+        else:
+            # 不满足要求: 0-50 分，基础分 50，每低一级 -15
+            score = max(0.0, 50.0 - (req_level - max_level) * 15.0)
+            return {"score": score, "meets_requirement": False}
+
     def _identify_risk_points(
         self,
         skill_match: SkillMatchResult,
@@ -469,10 +517,17 @@ class MatchService:
         if education_level and resume_education:
             required_level = self._extract_education_level(education_level)
             if required_level > 0:
-                resume_degree = resume_education[0].get("degree", "") if resume_education else ""
-                actual_level = self._extract_education_level(resume_degree)
-                if actual_level < required_level:
-                    risk_points.append(f"学历低于岗位要求（需要{education_level}，候选人为{resume_degree}）")
+                # 取最高学历
+                max_actual_level = 0
+                max_degree = ""
+                for edu in resume_education:
+                    degree = edu.get("degree", "")
+                    level = self._extract_education_level(degree)
+                    if level > max_actual_level:
+                        max_actual_level = level
+                        max_degree = degree
+                if max_actual_level < required_level:
+                    risk_points.append(f"学历低于岗位要求（需要{education_level}，候选人为{max_degree}）")
 
         return risk_points
 
@@ -537,6 +592,13 @@ class MatchService:
             project_experience = validated_summary.get("project_experience", [])
             education = validated_summary.get("education", [])
 
+            # 从 project_experience 的 tech_stack 中提取技能补充到技能池
+            if isinstance(project_experience, list):
+                for proj in project_experience:
+                    tech_stack = proj.get("tech_stack", [])
+                    if isinstance(tech_stack, list):
+                        resume_skills.extend(tech_stack)
+
             all_jd_skills = jd_skills + jd_preferred_skills
             skill_match = self._calculate_skill_match(all_jd_skills, resume_skills)
 
@@ -544,12 +606,19 @@ class MatchService:
                 min_experience, work_experience, project_experience
             )
 
-            # 使用更新后的权重（education未参与计算，重新分配权重）
+            education_match = self._calculate_education_match(
+                education_level, education
+            )
+
+            # 三维度加权：技能、经验、教育
             skill_weight = self.weights["skills"]
             exp_weight = self.weights["experience"]
+            edu_weight = self.weights["education"]
 
             overall_score = (
-                skill_match.score * skill_weight + experience_match.score * exp_weight
+                skill_match.score * skill_weight
+                + experience_match.score * exp_weight
+                + education_match["score"] * edu_weight
             )
 
             risk_points = self._identify_risk_points(
@@ -566,7 +635,9 @@ class MatchService:
                 summary=summary,
             )
 
-            return match_result.to_dict()
+            result = match_result.to_dict()
+            result["education_match"] = education_match
+            return result
 
         except Exception as e:
             logger.error("匹配计算失败: " + str(e))
@@ -586,6 +657,10 @@ class MatchService:
                     "years_match": False,
                     "project_relevance": 0,
                     "details": ["匹配计算失败: " + str(e)],
+                },
+                "education_match": {
+                    "score": 0,
+                    "meets_requirement": False,
                 },
                 "risk_points": ["匹配计算过程出错"],
                 "summary": "匹配失败",

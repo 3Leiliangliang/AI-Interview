@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import re
 import tempfile
@@ -6,7 +7,9 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,9 +17,11 @@ from server.utils.auth_middleware import get_db, get_required_user
 from src.knowledge.indexing import process_file_to_markdown
 from src.knowledge.utils import calculate_content_hash
 from src.plugins.document_processor_base import DocumentProcessorException
+from src.services.match_service import match_service
 from src.services.openviking_service import openviking_service
 from src.services.resume_summary_service import resume_summary_service
 from src.storage.minio import aupload_file_to_minio, get_minio_client
+from src.storage.postgres.manager import pg_manager
 from src.storage.postgres.models_business import User, UserResume
 from src.utils import logger
 
@@ -524,12 +529,31 @@ def _serialize_resume(resume_record: UserResume, include_markdown: bool = True) 
     return data
 
 
+def _fire_and_forget(coro) -> None:
+    """创建后台任务并追踪异常，防止静默丢失"""
+    task = asyncio.create_task(coro)
+    task.add_done_callback(lambda t: t.exception() is not None and logger.error(f"后台任务异常: {t.exception()}"))
+
+
 async def _trigger_summary_extraction(resume_id: int) -> None:
     """触发简历摘要提取（异步执行，不阻塞主流程）"""
     try:
         await resume_summary_service.update_resume_summary(resume_id)
     except Exception as e:
         logger.error(f"触发简历摘要提取失败，resume_id={resume_id}: {e}")
+        # 显式更新 DB 状态为 failed，防止永远停留在 processing
+        try:
+            async with pg_manager.get_async_session_context() as session:
+                from sqlalchemy import select
+
+                result = await session.execute(select(UserResume).where(UserResume.id == resume_id))
+                record = result.scalar_one_or_none()
+                if record and record.summary_status == "processing":
+                    record.summary_status = "failed"
+                    record.summary_error = f"后台任务异常: {e}"
+                    await session.commit()
+        except Exception as db_err:
+            logger.error(f"更新失败状态时出错，resume_id={resume_id}: {db_err}")
 
 
 @resume.get("")
@@ -566,9 +590,93 @@ async def get_my_resume_detail(
     }
 
 
+@resume.get("/{resume_id}/extract-progress")
+async def extract_progress(
+    resume_id: int,
+    current_user: User = Depends(get_required_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """SSE 端点：流式返回简历提取进度"""
+    # 验证简历归属
+    result = await db.execute(
+        select(UserResume).where(
+            UserResume.id == resume_id,
+            UserResume.user_id == current_user.id,
+        )
+    )
+    resume_record = result.scalar_one_or_none()
+    if resume_record is None:
+        raise HTTPException(status_code=404, detail="简历不存在")
+
+    async def event_stream():
+        from src.storage.postgres.manager import pg_manager
+
+        while True:
+            try:
+                async with pg_manager.get_async_session_context() as session:
+                    result = await session.execute(
+                        select(UserResume).where(UserResume.id == resume_id)
+                    )
+                    record = result.scalar_one_or_none()
+                    if record is None:
+                        yield f"data: {json.dumps({'stage': 'failed', 'error': '简历记录不存在'})}\n\n"
+                        break
+
+                    status = record.summary_status or "pending"
+
+                    if status == "completed":
+                        yield f"data: {json.dumps({'stage': 'completed', 'summary': record.summary_json})}\n\n"
+                        break
+                    elif status == "failed":
+                        yield f"data: {json.dumps({'stage': 'failed', 'error': record.summary_error or '提取失败'})}\n\n"
+                        break
+                    else:
+                        yield f"data: {json.dumps({'stage': 'extracting', 'status': status})}\n\n"
+            except Exception as e:
+                logger.error(f"SSE 进度查询异常: {e}")
+                yield f"data: {json.dumps({'stage': 'failed', 'error': str(e)})}\n\n"
+                break
+
+            await asyncio.sleep(2)
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@resume.post("/{resume_id}/retry-extract")
+async def retry_extract_resume(
+    resume_id: int,
+    current_user: User = Depends(get_required_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """重新触发简历摘要提取"""
+    result = await db.execute(
+        select(UserResume).where(
+            UserResume.id == resume_id,
+            UserResume.user_id == current_user.id,
+        )
+    )
+    record = result.scalar_one_or_none()
+    if record is None:
+        raise HTTPException(status_code=404, detail="简历不存在")
+
+    if record.summary_status not in ("failed", "completed"):
+        raise HTTPException(status_code=400, detail="简历正在处理中，请稍后重试")
+
+    # 重置状态
+    record.summary_status = "pending"
+    record.summary_error = None
+    await db.commit()
+
+    # 异步触发重新提取
+    _fire_and_forget(_trigger_summary_extraction(resume_id))
+
+    return {"message": "success", "resume_id": resume_id}
+
+
 @resume.post("")
 async def upload_my_resume(
     file: UploadFile = File(...),
+    job_id: int | None = Form(None),
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -599,6 +707,10 @@ async def upload_my_resume(
             },
         )
 
+        if not markdown_content or not markdown_content.strip():
+            logger.warning(f"PDF 解析结果为空，filename={filename}, user={current_user.user_id}")
+            raise HTTPException(status_code=422, detail="PDF 解析失败：未能从文件中提取到文本内容，请检查文件是否损坏")
+
         object_name = f"{current_user.user_id}/{uuid.uuid4().hex}{Path(filename).suffix.lower()}"
         file_url = await aupload_file_to_minio("user-resumes", object_name, file_bytes, "pdf")
 
@@ -625,8 +737,15 @@ async def upload_my_resume(
             except Exception as exc:
                 logger.warning("Sync resume to OpenViking failed for user %s: %s", current_user.user_id, exc)
 
-        # 异步触发 LLM 简历摘要提取（不阻塞主流程）
-        asyncio.create_task(_trigger_summary_extraction(resume_record.id))
+        # 异步触发 LLM 瑘历摘要提取（不阻塞主流程）
+        _fire_and_forget(_trigger_summary_extraction(resume_record.id))
+
+        # 如果指定了目标岗位，异步触发匹配
+        if job_id:
+            resume_record.target_job_id = job_id
+            resume_record.match_status = "pending"
+            await db.commit()
+            _fire_and_forget(_trigger_resume_match(resume_record.id, job_id))
 
         return {
             "message": "success",
@@ -680,3 +799,179 @@ async def delete_my_resume(
     except Exception as exc:
         logger.error(f"Resume delete failed for user {current_user.user_id}: {exc}")
         raise HTTPException(status_code=500, detail=f"删除简历失败：{exc}") from exc
+
+
+# ─── 简历匹配相关 API ───
+
+
+class ResumeMatchRequest(BaseModel):
+    """简历匹配请求"""
+    job_id: int | None = None
+    auto_detect: bool = False
+
+
+async def _trigger_resume_match(resume_id: int, job_id: int) -> None:
+    """异步触发简历匹配"""
+    from src.services.builtin_jobs import get_builtin_job
+    from src.storage.postgres.manager import pg_manager
+
+    try:
+        # 从内置岗位数据获取 JD
+        job_dict = get_builtin_job(job_id)
+        if not job_dict:
+            logger.warning(f"简历匹配跳过：岗位不存在，job_id={job_id}")
+            return
+
+        async with pg_manager.get_async_session_context() as session:
+            result = await session.execute(select(UserResume).where(UserResume.id == resume_id))
+            resume = result.scalar_one_or_none()
+            if not resume or not resume.summary_json:
+                logger.warning(f"简历匹配跳过：简历不存在或摘要为空，resume_id={resume_id}")
+                return
+
+            resume.match_status = "processing"
+            await session.commit()
+
+            match_result = await asyncio.to_thread(
+                match_service.calculate_match,
+                job_dict,
+                resume.summary_json,
+            )
+
+            resume.match_result = match_result
+            resume.match_status = "completed"
+            resume.target_job_id = job_id
+            await session.commit()
+            logger.info(f"简历匹配完成，resume_id={resume_id}, job_id={job_id}")
+    except Exception as e:
+        logger.error(f"简历匹配失败，resume_id={resume_id}: {e}")
+        try:
+            async with pg_manager.get_async_session_context() as session:
+                result = await session.execute(select(UserResume).where(UserResume.id == resume_id))
+                resume = result.scalar_one_or_none()
+                if resume:
+                    resume.match_status = "failed"
+                    await session.commit()
+        except Exception:
+            logger.error(f"更新匹配失败状态也失败，resume_id={resume_id}")
+
+
+@resume.post("/{resume_id}/match")
+async def match_resume_with_job(
+    resume_id: int,
+    match_request: ResumeMatchRequest,
+    current_user: User = Depends(get_required_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """简历与岗位匹配"""
+    result = await db.execute(
+        select(UserResume).where(
+            UserResume.id == resume_id,
+            UserResume.user_id == current_user.id,
+        )
+    )
+    resume_record = result.scalar_one_or_none()
+    if resume_record is None:
+        raise HTTPException(status_code=404, detail="简历不存在")
+
+    if not resume_record.summary_json:
+        raise HTTPException(status_code=400, detail="简历摘要尚未提取完成，请稍后再试")
+
+    job_id = match_request.job_id
+    job_dict = None
+
+    # 自动检测：从简历意向岗位匹配内置岗位
+    if match_request.auto_detect and not job_id:
+        detected = resume_record.summary_json.get("job_preference", {}).get("job_intention", "")
+        if detected:
+            from src.services.builtin_jobs import get_all_builtin_jobs
+
+            for job in get_all_builtin_jobs():
+                if detected in job["title"] or detected in job.get("description", ""):
+                    job_dict = job
+                    job_id = job["id"]
+                    break
+
+    if not job_id:
+        raise HTTPException(status_code=400, detail="请指定目标岗位或开启自动检测")
+
+    # 获取内置岗位
+    if not job_dict:
+        from src.services.builtin_jobs import get_builtin_job
+
+        job_dict = get_builtin_job(job_id)
+    if not job_dict:
+        raise HTTPException(status_code=404, detail="岗位不存在")
+
+    # 执行匹配（在线程池中运行避免阻塞事件循环）
+    match_result = await asyncio.to_thread(
+        job_dict=job_dict,
+        resume_summary=resume_record.summary_json,
+    )
+
+    # 持久化
+    resume_record.target_job_id = job_id
+    resume_record.match_result = match_result
+    resume_record.match_status = "completed"
+    await db.commit()
+    await db.refresh(resume_record)
+
+    return {
+        "message": "success",
+        "match_result": match_result,
+        "resume_summary": resume_record.summary_json,
+        "job": job_dict,
+    }
+
+
+@resume.post("/{resume_id}/detect-position")
+async def detect_resume_position(
+    resume_id: int,
+    current_user: User = Depends(get_required_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """从简历中检测意向岗位并推荐匹配岗位"""
+    result = await db.execute(
+        select(UserResume).where(
+            UserResume.id == resume_id,
+            UserResume.user_id == current_user.id,
+        )
+    )
+    resume_record = result.scalar_one_or_none()
+    if resume_record is None:
+        raise HTTPException(status_code=404, detail="简历不存在")
+
+    if not resume_record.summary_json:
+        raise HTTPException(status_code=400, detail="简历摘要尚未提取完成，请稍后再试")
+
+    detected_position = (
+        resume_record.summary_json.get("job_preference", {}).get("job_intention", "")
+        or resume_record.detected_position
+        or ""
+    )
+
+    if not detected_position:
+        # 尝试从 structured_resume 中提取
+        structured = _build_structured_resume(resume_record.markdown_content or "", resume_record.filename)
+        detected_position = structured.get("basic_info", {}).get("intention", "")
+
+    recommended_jobs = []
+    if detected_position:
+        # 更新 detected_position
+        resume_record.detected_position = detected_position
+        await db.commit()
+
+        # 从内置岗位中搜索匹配
+        from src.services.builtin_jobs import get_all_builtin_jobs
+
+        for job in get_all_builtin_jobs():
+            if detected_position in job["title"] or detected_position in job.get("description", ""):
+                recommended_jobs.append(job)
+            if len(recommended_jobs) >= 10:
+                break
+
+    return {
+        "message": "success",
+        "detected_position": detected_position,
+        "recommended_jobs": recommended_jobs,
+    }
