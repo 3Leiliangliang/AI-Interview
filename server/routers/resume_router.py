@@ -905,6 +905,7 @@ async def match_resume_with_job(
 
     # 执行匹配（在线程池中运行避免阻塞事件循环）
     match_result = await asyncio.to_thread(
+        match_service.calculate_match,
         job_dict=job_dict,
         resume_summary=resume_record.summary_json,
     )
