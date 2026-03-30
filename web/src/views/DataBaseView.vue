@@ -767,7 +767,8 @@ onMounted(() => {
   width: 100%;
   padding: 16px;
   border-radius: 16px;
-  height: 156px;
+  min-height: 156px;
+  height: auto;
   cursor: pointer;
   display: flex;
   flex-direction: column;

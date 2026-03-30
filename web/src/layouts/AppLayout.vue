@@ -7,10 +7,9 @@ import {
   BarChart3,
   CircleCheck,
   Blocks,
-  Code2,
   FileText,
   PanelLeftClose,
-  PanelLeftOpen,
+  PanelLeftOpen
 } from 'lucide-vue-next'
 
 import { useConfigStore } from '@/stores/config'
@@ -128,6 +127,13 @@ const sidebarBrand = computed(() => {
   }
 })
 
+const showSidebarCollapseBtn = computed(() => {
+  if (layoutSettings.useTopBar) {
+    return false
+  }
+  return !route.path.startsWith('/dashboard')
+})
+
 // 下面是导航菜单部分，添加智能体项
 const mainList = computed(() => {
   const items = [
@@ -142,18 +148,6 @@ const mainList = computed(() => {
       path: '/resume',
       icon: FileText,
       activeIcon: FileText
-    },
-    {
-      name: 'OJ 工作台',
-      path: '/oj',
-      icon: Code2,
-      activeIcon: Code2
-    },
-    {
-      name: '题库管理',
-      path: '/problemsets',
-      icon: Blocks,
-      activeIcon: Blocks
     },
     {
       name: '知识库',
@@ -201,7 +195,7 @@ provide('settingsModal', {
           </router-link>
         </div>
         <button
-          v-if="!layoutSettings.useTopBar"
+          v-if="showSidebarCollapseBtn"
           type="button"
           class="collapse-btn"
           @click="toggleSidebar"
@@ -330,9 +324,25 @@ div.header,
     padding: 12px 8px;
 
     .header-top {
-      flex-direction: row;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
+      gap: 8px;
+      min-height: auto;
+      margin-bottom: 14px;
+    }
+
+    .logo {
+      width: 100%;
+
+      > a {
+        justify-content: center;
+      }
+    }
+
+    .collapse-btn {
+      position: static;
+      margin-left: 0;
     }
 
     .nav-item {
@@ -356,6 +366,7 @@ div.header,
     justify-content: flex-start;
     gap: 8px;
     margin-bottom: 20px;
+    min-height: 36px;
   }
 
   .nav {
@@ -437,11 +448,9 @@ div.header,
   }
 
   .collapse-btn {
-    position: absolute;
-    top: clamp(0.35rem, 0.8vw, 0.6rem);
-    right: 0;
-    transform: translateX(calc(100% + clamp(0.75rem, 1.2vw, 1rem)));
-    z-index: 10;
+    position: relative;
+    margin-left: auto;
+    flex-shrink: 0;
     width: 28px;
     height: 28px;
     display: flex;
@@ -452,7 +461,6 @@ div.header,
     background: var(--main-0);
     color: var(--gray-700);
     cursor: pointer;
-    box-shadow: 0 4px 12px var(--shadow-1);
     transition:
       background-color 0.2s ease,
       color 0.2s ease,
