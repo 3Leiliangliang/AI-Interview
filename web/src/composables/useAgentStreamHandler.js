@@ -67,7 +67,8 @@ export function useAgentStreamHandler({
   processApprovalInStream,
   currentAgentId,
   supportsTodo,
-  supportsFiles
+  supportsFiles,
+  onAgentStateChange = null
 }) {
   const debugPrefix = '[AgentStateDebug]'
   /**
@@ -136,6 +137,9 @@ export function useAgentStreamHandler({
             files: chunk.agent_state?.files || []
           })
           threadState.agentState = chunk.agent_state
+          if (typeof onAgentStateChange === 'function') {
+            onAgentStateChange(chunk.agent_state, threadId)
+          }
         } else {
           console.warn(`${debugPrefix}[agent_state_skip]`, {
             reason: 'empty_state',

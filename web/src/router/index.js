@@ -44,6 +44,12 @@ const router = createRouter({
           meta: { keepAlive: false, requiresAuth: true }
         },
         {
+          path: 'interview/code',
+          name: 'InterviewCodingWorkbench',
+          component: () => import('../views/InterviewCodingView.vue'),
+          meta: { keepAlive: false, requiresAuth: true }
+        },
+        {
           path: ':agent_id',
           redirect: '/agent'
         }
@@ -69,6 +75,19 @@ const router = createRouter({
       ]
     },
     {
+      path: '/oj',
+      name: 'oj',
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'OJWorkbenchComp',
+          component: () => import('../views/InterviewCodingView.vue'),
+          meta: { keepAlive: false, requiresAuth: true }
+        }
+      ]
+    },
+    {
       path: '/database',
       name: 'database',
       component: AppLayout,
@@ -84,6 +103,19 @@ const router = createRouter({
           name: 'DatabaseInfoComp',
           component: () => import('../views/DataBaseInfoView.vue'),
           meta: { keepAlive: false, requiresAuth: true, requiresAdmin: true }
+        }
+      ]
+    },
+    {
+      path: '/problemsets',
+      name: 'problemsets',
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'ProblemSetManageComp',
+          component: () => import('../views/ProblemSetManageView.vue'),
+          meta: { keepAlive: false, requiresAuth: true }
         }
       ]
     },

@@ -259,7 +259,7 @@ const props = defineProps({
     default: '暂无对话历史'
   }
 })
-const emit = defineEmits(['open-config', 'open-agent-modal'])
+const emit = defineEmits(['open-config', 'open-agent-modal', 'agent-state-change'])
 
 // ==================== STORE MANAGEMENT ====================
 const agentStore = useAgentStore()
@@ -416,6 +416,14 @@ const hasAgentStateContent = computed(() => {
 })
 
 const hasUploadedFiles = computed(() => countFiles(currentAgentState.value?.files) > 0)
+
+watch(
+  currentAgentState,
+  (value) => {
+    emit('agent-state-change', value || null)
+  },
+  { deep: true }
+)
 
 const inputPlaceholder = computed(() => {
   if (!isResumeInterviewMode.value) return '输入问题...'
@@ -830,12 +838,14 @@ const fetchAgentState = async (agentId, threadId) => {
     const res = await agentApi.getAgentState(agentId, threadId)
     const targetChatId = currentChatId.value || threadId
     const ts = getThreadState(targetChatId)
+    let nextAgentState = res.agent_state || null
     if (ts) {
-      ts.agentState = res.agent_state || null
+      ts.agentState = nextAgentState
     } else {
       const newTs = getThreadState(threadId)
-      if (newTs) newTs.agentState = res.agent_state || null
+      if (newTs) newTs.agentState = nextAgentState
     }
+    emit('agent-state-change', nextAgentState)
   } catch {
     // 忽略状态拉取失败，不阻塞主流程
   }
@@ -1306,7 +1316,8 @@ const { handleAgentResponse, handleStreamChunk } = useAgentStreamHandler({
   processApprovalInStream,
   currentAgentId,
   supportsTodo,
-  supportsFiles
+  supportsFiles,
+  onAgentStateChange: (nextAgentState) => emit('agent-state-change', nextAgentState || null)
 })
 
 const buildAgentRequestConfig = (threadId) => {
