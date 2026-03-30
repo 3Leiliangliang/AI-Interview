@@ -1,5 +1,8 @@
+# CLAUDE.md
 
-# 项目目录结构 (Project Overview)
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+# 项目概览
 
 伯乐（Bole）是一个基于大模型的智能知识库与智能体开发平台，聚焦 RAG、知识库检索与面试场景，基于 LangGraph v1 + Vue.js + FastAPI 架构构建。项目完全通过 Docker Compose 进行管理，支持热重载开发。
 
@@ -13,39 +16,113 @@ Don't add error handling, fallbacks, or validation for scenarios that can't happ
 
 Don't create helpers, utilities, or abstractions for one-time operations. Don't design for hypothetical future requirements. The right amount of complexity is the minimum needed for the current task. Reuse existing abstractions where possible and follow the DRY principle.
 
-## 开发与调试工作流 (Development & Debugging Workflow)
-
-本项目完全通过 Docker Compose 进行管理。所有开发和调试都应在运行的容器环境中进行。使用 `docker compose up -d` 命令进行构建和启动。
-
-**核心原则**: 由于 api-dev 和 web-dev 服务均配置了热重载 (hot-reloading)，本地修改代码后无需重启容器，服务会自动更新。应该先检查项目是否已经在后台启动（`docker ps`），查看日志（`docker logs api-dev --tail 100`）具体的可以阅读 [docker-compose.yml](docker-compose.yml).
-
-### 前端开发规范
-
-- API 接口规范：所有的 API 接口都应该定义在 web/src/apis 下面
-- Icon 应该从 @ant-design/icons-vue 或者 lucide-vue-next （推荐，但是需要注意尺寸）
-- Vue 中的样式使用 less，非必要情况必须使用[base.css](web/src/assets/css/base.css) 中的颜色变量。
-- UI风格要简洁，同时要保持一致性，不要悬停位移，不要过度使用阴影以及渐变色。
-- 开发完成后，可以在 docker 的 web 文件夹下，运行 npm run format 格式化代码
-
-
-### 后端开发规范
+## 常用命令
 
 ```bash
-# 代码检查和格式化
-make lint          # 检查代码规范
-make format        # 格式化代码
+# 启动/停止服务
+make start              # docker compose up -d
+make stop                # docker compose down
 
-# 直接在容器内执行命令
-docker compose exec api uv run python test/your_script.py  # 放在 test 文件夹
+# 查看容器状态和日志
+docker compose ps
+docker compose logs api-dev -f --tail 100
+docker compose logs web-dev -f --tail 100
+
+# 后端代码检查和格式化
+make lint               # ruff check + format check
+make format             # ruff format + fix + isort
+
+# 运行测试
+make router-tests       # pytest test/api/
+docker compose exec api uv run --group test pytest test/your_script.py
+
+# 在容器内执行 Python 脚本
+docker compose exec api uv run python test/your_script.py
 ```
 
-注意：
+**热重载**: api-dev 和 web-dev 服务均配置了热重载，修改代码后无需重启容器。
 
-- Python 代码要符合 Python 的规范，符合 pythonic 风格
-- 尽量使用较新的语法，避免使用旧版本的语法（版本兼容到 3.12+）
+## 技能系统 (Skills)
 
-**其他**：
+Agent 的能力通过 `src/agents/skills/*/SKILLS.md` 定义。修改或新增 Agent 技能时，需同时更新对应的 SKILLS.md 文件。
 
-- 使用 BOLE_SUPER_ADMIN_NAME / BOLE_SUPER_ADMIN_PASSWORD 调试接口
-- 如果需要新建说明文档（仅开发者可见，非必要不创建），则保存在 `docs/vibe` 文件夹下面
-- 代码更新后要检查文档部分是否有需要更新的地方，文档的目录定义在 `docs/.vitepress/config.mts` 中。文档应该更新最新版（`docs/latest`）
+## 架构概览
+
+### 后端目录结构
+
+```
+server/                   # FastAPI 应用层
+├── main.py              # 应用入口，中间件配置
+├── worker_main.py       # arq 后台任务 worker
+├── routers/             # API 路由 (auth, chat, knowledge, resume, job, dashboard, evaluation 等)
+└── utils/               # 中间件、认证、工具函数
+
+src/                      # 核心业务逻辑
+├── agents/              # LangGraph 智能体
+│   ├── common/          # 基础设施：BaseAgent、中间件、工具集
+│   ├── interview_agent/ # 模拟面试智能体 (6步任务清单)
+│   ├── chatbot/         # 通用聊天智能体
+│   ├── reporter/        # 报表生成智能体
+│   ├── deep_agent/      # 深度分析智能体
+│   └── skills/          # 技能定义 (SKILLS.md)
+├── knowledge/           # 知识库系统 (RAG)
+├── models/              # 模型封装 (chat, embed, rerank)
+├── repositories/        # 数据访问层 (SQLAlchemy)
+└── services/            # 业务服务层
+```
+
+### 前端目录结构
+
+```
+web/src/
+├── apis/                # API 接口定义 (统一管理 HTTP 请求)
+├── views/                # 页面视图
+├── components/           # 通用组件
+├── router/               # Vue Router 配置
+└── stores/               # Pinia 状态管理
+```
+
+### Docker 服务
+
+| 服务 | 说明 | 端口 |
+|------|------|------|
+| api-dev | FastAPI 后端 | 5050 |
+| worker-dev | arq 后台任务处理 | - |
+| web-dev | Vue.js 前端 (热重载) | 5173 |
+| postgres | PostgreSQL 16 | 5432 |
+| redis | Redis 7 | - |
+| minio | 对象存储 | 9000/9001 |
+
+可选服务 (需 `docker compose --profile all up`): mineru-vllm-server, mineru-api, paddlex
+
+### 核心概念
+
+- **LangGraph State**: Agent 间共享状态通过 `src/agents/common/state.py` 定义
+- **Middlewares**: 请求/响应拦截处理，位于 `src/agents/common/middlewares/`
+- **Toolkits**: 工具集注册与调用，位于 `src/agents/common/toolkits/`
+- **Knowledge Base**: 知识库抽象基类 `src/knowledge/base.py`，分块策略 `src/knowledge/chunking/`
+
+## 开发规范
+
+### 前端
+
+- API 接口定义在 `web/src/apis/` 下
+- 图标使用 `@ant-design/icons-vue` 或 `lucide-vue-next`
+- 样式使用 less，通过 `web/src/assets/css/base.css` 中的变量保持一致性
+- UI 简洁，禁止悬停位移、过度阴影和渐变色
+
+### 后端
+
+- Python 3.12+，遵循 pythonic 风格
+- 使用 `uv` 管理依赖
+- 超级管理员调试：`BOLE_SUPER_ADMIN_NAME` / `BOLE_SUPER_ADMIN_PASSWORD`
+
+### 文档
+
+- 开发者文档保存在 `docs/vibe/`
+- 文档目录定义在 `docs/.vitepress/config.mts`，更新到 `docs/latest`
+
+### 知识库初始化
+
+- `.knowledge/` 为运行时缓存，已加入 gitignore
+- 设置 `AUTO_IMPORT_INTERVIEW_KB=true` 可自动导入 JavaGuide、reactjs-interview-questions、Waking-Up

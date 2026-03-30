@@ -299,7 +299,7 @@ class KnowledgeBase(ABC):
                 params["db_id"] = db_id
 
                 # Process file to Markdown
-                markdown_content = await process_file_to_markdown(file_path, params=params)
+                markdown_content, _ = await process_file_to_markdown(file_path, params=params)
 
             # Save Markdown to MinIO
             markdown_file_path = await self._save_markdown_to_minio(db_id, file_id, markdown_content)

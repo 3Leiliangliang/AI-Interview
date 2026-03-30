@@ -178,6 +178,10 @@ class ApiClient:
                 "embed_model_name": DEFAULT_EMBED_MODEL,
                 "kb_type": "openviking",
                 "additional_params": build_index_params(plan.chunk_preset_id),
+                "llm_info": {
+                    "provider": "siliconflow",
+                    "model_name": "Pro/deepseek-ai/DeepSeek-V3",
+                },
             },
         )
         return created

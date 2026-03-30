@@ -7,6 +7,7 @@ from server.routers.department_router import department
 from server.routers.knowledge_router import knowledge
 from server.routers.evaluation_router import evaluation
 from server.routers.interview_router import interview
+from server.routers.job_router import job
 from server.routers.mcp_router import mcp
 from server.routers.mindmap_router import mindmap
 from server.routers.resume_router import resume
@@ -25,6 +26,7 @@ router.include_router(department)
 router.include_router(knowledge)
 router.include_router(evaluation)
 router.include_router(interview)
+router.include_router(job)
 router.include_router(mindmap)
 router.include_router(resume)
 router.include_router(tasks)

@@ -71,3 +71,88 @@ HYDE_PROMPT_TEMPLATE = (
     "Try to include as many key details as possible.\n\n\n"
     "{context_str}\n\n{query}\n\nPassage:\n"
 )
+
+resume_extraction_prompt = """
+<指令>请从以下简历文本中提取结构化的关键信息，并以 JSON 格式返回。<指令>
+
+<重要：文本清理规则>
+1. 输入文本可能包含 LaTeX 公式残留，如 `$10 \\%$` 表示百分比 10%，`$^ { 2 0 + }$` 表示数字 20+，请将此类公式残留还原为正常数字和符号
+2. 百分比格式如 `$2 5 \\%$` 应解读为 25%，`$52 \\%$` 应解读为 52%
+3. 图片占位符如 `![](url)` 表示简历中的图片。如果是证件照（通常位于简历顶部/基本信息区域的人像照片），请将其 URL 填入 basic_info.photo_url 字段。其他图片可忽略
+4. 清理后的文本用于提取，不要在输出中保留任何 LaTeX 公式
+</重要>
+
+请严格按照以下 JSON Schema 提取字段，如果某字段在简历中不存在或无法确定，请使用 null 或空数组，不要编造内容。
+
+<重要：技能提取规则>
+在提取 skills.technical 时，除了简历中明确列出的技能，还需从以下来源分析并补充相关技能：
+1. 从 project_experience 的 description 和 tech_stack 中分析隐含技能。例如：如果项目描述提到"使用深度学习实现图像分类"，应将"深度学习"添加到 technical 技能列表中。
+2. 如果项目使用了 PyTorch 框架，也应将"PyTorch"添加到技术技能列表。
+3. 从 work_experience 的 highlights 中提取技术关键词。
+4. 确保技能列表去重，同一技能不应出现两次。
+</重要>
+
+<JSON Schema>
+{
+  "basic_info": {
+    "name": "姓名（字符串）",
+    "gender": "性别（字符串，如：男/女）",
+    "age": "年龄（数字）",
+    "phone": "手机号（字符串）",
+    "email": "电子邮箱（字符串）",
+    "location": "所在地（字符串）",
+    "github": "GitHub 地址（字符串）",
+    "linkedin": "LinkedIn 地址（字符串）",
+    "photo_url": "证件照图片URL（字符串），从简历中的图片占位符提取。通常为简历顶部/基本信息区域的第一个图片。如无证件照则为 null"
+  },
+  "education": [
+    {
+      "school": "学校名称",
+      "major": "专业",
+      "degree": "学历（本科/硕士/博士等）",
+      "duration": "就读时间（如：2020.09-2024.06）",
+      "gpa": "GPA（字符串，如：3.8/4.0 或 90/100）",
+      "ranking": "排名（字符串，如：前10%）"
+    }
+  ],
+  "work_experience": [
+    {
+      "company": "公司名称",
+      "position": "职位",
+      "duration": "工作时间",
+      "highlights": "工作亮点/主要成就（字符串数组）"
+    }
+  ],
+  "project_experience": [
+    {
+      "name": "项目名称",
+      "role": "个人角色/职责",
+      "duration": "项目时间",
+      "tech_stack": "技术栈（字符串数组）",
+      "team_size": "团队规模（数字）",
+      "description": "项目描述",
+      "results": "项目成果/业绩（字符串数组）"
+    }
+  ],
+  "skills": {
+    "technical": "技术技能（字符串数组，如编程语言、框架、工具）",
+    "languages": "语言能力（字符串数组，如：英语 CET-6、日语 N2）",
+    "certifications": "证书/资质（字符串数组）"
+  },
+  "awards": "获奖情况/荣誉（字符串数组）",
+  "training": "培训经历（字符串数组）",
+  "self_evaluation": "自我评价（字符串）",
+  "job_preference": {
+    "job_intention": "求职意向/目标岗位",
+    "expected_salary": "期望薪资（字符串）",
+    "desired_location": "期望工作地点"
+  }
+}
+</JSON Schema>
+
+<简历文本>
+{resume_text}
+</简历文本>
+
+请直接返回 JSON，不要包含 markdown 代码块标记或其他解释文字。
+"""

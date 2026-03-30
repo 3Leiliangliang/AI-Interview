@@ -1341,7 +1341,7 @@ async def mark_it_down(file: UploadFile = File(...), current_user: User = Depend
     """调用 src.knowledge.indexing 下面的 process_file_to_markdown 解析为 markdown，参数是文件，需要管理员权限"""
     try:
         content = await file.read()
-        markdown_content = await process_file_to_markdown(content)
+        markdown_content, _ = await process_file_to_markdown(content)
         return {"markdown_content": markdown_content, "message": "success"}
     except Exception as e:
         logger.error(f"文件解析失败 {e}, {traceback.format_exc()}")

@@ -10,7 +10,7 @@ import {
   Code2,
   FileText,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
 } from 'lucide-vue-next'
 
 import { useConfigStore } from '@/stores/config'
