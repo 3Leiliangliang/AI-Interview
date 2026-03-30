@@ -6,17 +6,13 @@ import {
   LibraryBig,
   BarChart3,
   CircleCheck,
-  Blocks,
-  FileText,
-  PanelLeftClose,
-  PanelLeftOpen
+  FileText
 } from 'lucide-vue-next'
 
 import { useConfigStore } from '@/stores/config'
 import { useDatabaseStore } from '@/stores/database'
 import { useInfoStore } from '@/stores/info'
 import { useTaskerStore } from '@/stores/tasker'
-import { useUserStore } from '@/stores/user'
 import { storeToRefs } from 'pinia'
 import UserInfoComponent from '@/components/UserInfoComponent.vue'
 import DebugComponent from '@/components/DebugComponent.vue'
@@ -27,9 +23,7 @@ const configStore = useConfigStore()
 const databaseStore = useDatabaseStore()
 const infoStore = useInfoStore()
 const taskerStore = useTaskerStore()
-const userStore = useUserStore()
 const { activeCount: activeCountRef, isDrawerOpen } = storeToRefs(taskerStore)
-const APP_LAYOUT_SIDEBAR_COLLAPSED_KEY = 'app_layout_sidebar_collapsed'
 
 const layoutSettings = reactive({
   showDebug: false,
@@ -45,16 +39,10 @@ const showDebugModal = ref(false)
 
 // Add state for settings modal
 const showSettingsModal = ref(false)
-const isSidebarCollapsed = ref(localStorage.getItem(APP_LAYOUT_SIDEBAR_COLLAPSED_KEY) === 'true')
 
 // Provide settings modal methods to child components
 const openSettingsModal = () => {
   showSettingsModal.value = true
-}
-
-const toggleSidebar = () => {
-  isSidebarCollapsed.value = !isSidebarCollapsed.value
-  localStorage.setItem(APP_LAYOUT_SIDEBAR_COLLAPSED_KEY, String(isSidebarCollapsed.value))
 }
 
 // Handle debug modal close
@@ -101,9 +89,6 @@ const route = useRoute()
 console.log(route)
 
 const activeTaskCount = computed(() => activeCountRef.value || 0)
-const sidebarToggleIcon = computed(() =>
-  isSidebarCollapsed.value ? PanelLeftOpen : PanelLeftClose
-)
 const organizationName = computed(() => {
   const name = String(infoStore.organization?.name || '').trim()
   if (!name || /^ai[\s-]*interview$/i.test(name)) {
@@ -125,13 +110,6 @@ const sidebarBrand = computed(() => {
     leading: name,
     trailing: ''
   }
-})
-
-const showSidebarCollapseBtn = computed(() => {
-  if (layoutSettings.useTopBar) {
-    return false
-  }
-  return !route.path.startsWith('/dashboard')
 })
 
 // 下面是导航菜单部分，添加智能体项
@@ -175,15 +153,12 @@ provide('settingsModal', {
 
 <template>
   <div class="app-layout" :class="{ 'use-top-bar': layoutSettings.useTopBar }">
-    <div
-      class="header"
-      :class="{ 'top-bar': layoutSettings.useTopBar, collapsed: isSidebarCollapsed }"
-    >
+    <div class="header" :class="{ 'top-bar': layoutSettings.useTopBar }">
       <div class="header-top">
         <div class="logo circle">
           <router-link to="/">
             <img :src="infoStore.organization.avatar" />
-            <span v-if="!isSidebarCollapsed" class="logo-title">
+            <span class="logo-title">
               <span v-if="sidebarBrand.eyebrow" class="logo-eyebrow">{{ sidebarBrand.eyebrow }}</span>
               <span class="logo-title-main">
                 <span class="logo-title-leading">{{ sidebarBrand.leading }}</span>
@@ -194,14 +169,6 @@ provide('settingsModal', {
             </span>
           </router-link>
         </div>
-        <button
-          v-if="showSidebarCollapseBtn"
-          type="button"
-          class="collapse-btn"
-          @click="toggleSidebar"
-        >
-          <component :is="sidebarToggleIcon" :size="18" />
-        </button>
       </div>
       <div class="nav">
         <!-- 使用mainList渲染导航项 -->
@@ -213,14 +180,14 @@ provide('settingsModal', {
           class="nav-item"
           active-class="active"
         >
-          <a-tooltip placement="right" :title="isSidebarCollapsed ? item.name : null">
+          <a-tooltip placement="right" :title="null">
             <span class="nav-item-inner">
               <component
                 class="icon"
                 :is="route.path.startsWith(item.path) ? item.activeIcon : item.icon"
                 size="22"
               />
-              <span v-if="!isSidebarCollapsed" class="text">{{ item.name }}</span>
+              <span class="text">{{ item.name }}</span>
             </span>
           </a-tooltip>
         </RouterLink>
@@ -229,7 +196,7 @@ provide('settingsModal', {
           :class="{ active: isDrawerOpen }"
           @click="taskerStore.openDrawer()"
         >
-          <a-tooltip placement="right" :title="isSidebarCollapsed ? '任务中心' : null">
+          <a-tooltip placement="right" :title="null">
             <span class="nav-item-inner">
               <a-badge
                 :count="activeTaskCount"
@@ -239,7 +206,7 @@ provide('settingsModal', {
               >
                 <CircleCheck class="icon" size="22" />
               </a-badge>
-              <span v-if="!isSidebarCollapsed" class="text">任务中心</span>
+              <span class="text">任务中心</span>
             </span>
           </a-tooltip>
         </div>
@@ -247,7 +214,7 @@ provide('settingsModal', {
       <div class="fill"></div>
       <!-- 用户信息组件 -->
       <div class="nav-item user-info">
-        <UserInfoComponent :show-role="!isSidebarCollapsed" />
+        <UserInfoComponent :show-role="true" />
       </div>
     </div>
     <router-view v-slot="{ Component, route }" id="app-router-view">
@@ -278,7 +245,6 @@ provide('settingsModal', {
 <style lang="less" scoped>
 // Less 变量定义
 @header-width: 220px;
-@header-width-collapsed: 64px;
 
 .app-layout {
   display: flex;
@@ -318,47 +284,6 @@ div.header,
     flex-basis 0.2s ease,
     padding 0.2s ease;
 
-  &.collapsed {
-    flex-basis: @header-width-collapsed;
-    width: @header-width-collapsed;
-    padding: 12px 8px;
-
-    .header-top {
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      gap: 8px;
-      min-height: auto;
-      margin-bottom: 14px;
-    }
-
-    .logo {
-      width: 100%;
-
-      > a {
-        justify-content: center;
-      }
-    }
-
-    .collapse-btn {
-      position: static;
-      margin-left: 0;
-    }
-
-    .nav-item {
-      width: 100%;
-      justify-content: center;
-      padding: 10px 0;
-
-      .nav-item-inner {
-        justify-content: center;
-      }
-    }
-
-    .user-info {
-      justify-content: center;
-    }
-  }
 
   .header-top {
     display: flex;
@@ -447,31 +372,6 @@ div.header,
     }
   }
 
-  .collapse-btn {
-    position: relative;
-    margin-left: auto;
-    flex-shrink: 0;
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--main-100);
-    border-radius: 10px;
-    background: var(--main-0);
-    color: var(--gray-700);
-    cursor: pointer;
-    transition:
-      background-color 0.2s ease,
-      color 0.2s ease,
-      border-color 0.2s ease;
-
-    &:hover {
-      background-color: var(--main-20);
-      border-color: var(--main-200);
-      color: var(--main-color);
-    }
-  }
 
   .nav-item {
     display: flex;
