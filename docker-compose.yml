@@ -37,6 +37,8 @@ services:
       - RUNNING_IN_DOCKER=true
       - NO_PROXY=localhost,127.0.0.1,minio,mineru,paddlex,api.siliconflow.cn
       - no_proxy=localhost,127.0.0.1,minio,mineru,paddlex,api.siliconflow.cn
+      - OJ_API_BASE_URL=${OJ_API_BASE_URL:-http://oj-backend.local:8000/api}
+      - OJ_JUDGE_SERVER_URL=${OJ_JUDGE_SERVER_URL:-http://oj-judge-server:12358}
     # endregion api_envs
     command: uv run --no-dev uvicorn server.main:app --host 0.0.0.0 --port 5050 --reload
     restart: unless-stopped
@@ -88,6 +90,8 @@ services:
       - RUNNING_IN_DOCKER=true
       - NO_PROXY=localhost,127.0.0.1,minio,mineru,paddlex,api.siliconflow.cn
       - no_proxy=localhost,127.0.0.1,minio,mineru,paddlex,api.siliconflow.cn
+      - OJ_API_BASE_URL=${OJ_API_BASE_URL:-http://oj-backend.local:8000/api}
+      - OJ_JUDGE_SERVER_URL=${OJ_JUDGE_SERVER_URL:-http://oj-judge-server:12358}
     command: uv run --no-dev arq server.worker_main.WorkerSettings
     restart: unless-stopped
     depends_on:
@@ -201,6 +205,149 @@ services:
     networks:
       - app-network
     restart: unless-stopped
+
+  oj-redis:
+    image: redis:7-alpine
+    container_name: oj-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - ./docker/volumes/oj/redis:/data
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  oj-postgres:
+    image: postgres:14-alpine
+    container_name: oj-postgres
+    environment:
+      - POSTGRES_USER=${OJ_POSTGRES_USER:-onlinejudge}
+      - POSTGRES_PASSWORD=${OJ_POSTGRES_PASSWORD:-onlinejudge}
+      - POSTGRES_DB=${OJ_POSTGRES_DB:-onlinejudge}
+    volumes:
+      - ./docker/volumes/oj/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${OJ_POSTGRES_USER:-onlinejudge} -d ${OJ_POSTGRES_DB:-onlinejudge} || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  oj-judge-server:
+    image: registry.cn-hongkong.aliyuncs.com/oj-image/judge:1.6.1
+    container_name: oj-judge-server
+    entrypoint:
+      - /bin/sh
+      - -lc
+      - |
+        (
+          while true; do
+            .venv/bin/python /app/service.py || true
+            sleep 10
+          done
+        ) &
+        exec /app/entrypoint.sh
+    read_only: true
+    cap_drop:
+      - SETPCAP
+      - MKNOD
+      - NET_BIND_SERVICE
+      - SYS_CHROOT
+      - SETFCAP
+      - FSETID
+    tmpfs:
+      - /tmp
+    environment:
+      - SERVICE_URL=http://oj-judge-server:8080
+      - BACKEND_URL=http://oj-backend:8000/api/judge_server_heartbeat/
+      - TOKEN=${OJ_JUDGE_SERVER_TOKEN:-CHANGE_ME}
+    volumes:
+      - ./docker/volumes/oj/data/test_case:/test_case:ro
+      - ./docker/volumes/oj/log:/log
+      - ./docker/volumes/oj/run:/judger
+    networks:
+      - app-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          ".venv/bin/python -c \"import socket; s=socket.create_connection(('127.0.0.1', 8080), 2); s.close()\" || exit 1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 180s
+    restart: unless-stopped
+
+  oj-backend:
+    image: registry.cn-hongkong.aliyuncs.com/oj-image/backend:1.6.1
+    container_name: oj-backend
+    entrypoint:
+      - /bin/sh
+      - /app/oj_backend_entrypoint.sh
+    environment:
+      - POSTGRES_DB=${OJ_POSTGRES_DB:-onlinejudge}
+      - POSTGRES_USER=${OJ_POSTGRES_USER:-onlinejudge}
+      - POSTGRES_PASSWORD=${OJ_POSTGRES_PASSWORD:-onlinejudge}
+      - JUDGE_SERVER_TOKEN=${OJ_JUDGE_SERVER_TOKEN:-CHANGE_ME}
+    depends_on:
+      oj-postgres:
+        condition: service_healthy
+      oj-redis:
+        condition: service_started
+      oj-judge-server:
+        condition: service_started
+    ports:
+      - "8088:8000"
+    volumes:
+      - ./docker/volumes/oj/data:/data
+      - ./docker/volumes/oj/data/test_case:/data/test_case
+      - ./docker/oj_backend_entrypoint.sh:/app/oj_backend_entrypoint.sh:ro
+    networks:
+      app-network:
+        aliases:
+          - oj-backend.local
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import socket; s=socket.create_connection(('127.0.0.1', 8000), 2); s.close()\" || exit 1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 600s
+    restart: unless-stopped
+
+  oj-problem-seed:
+    image: bole-api:0.5.dev
+    container_name: oj-problem-seed
+    working_dir: /app
+    volumes:
+      - ./scripts:/app/scripts
+      - ./src:/app/src
+      - ./.env:/app/.env
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./uv.lock:/app/uv.lock
+    networks:
+      - app-network
+    env_file:
+      - .env
+    environment:
+      - OJ_ADMIN_BASE_URL=http://oj-backend.local:8000
+      - OJ_USERNAME=${OJ_USERNAME:-root}
+      - OJ_PASSWORD=${OJ_PASSWORD:-rootroot}
+    command: >
+      sh -lc "until curl -sf http://oj-backend.local:8000/api/profile >/dev/null; do sleep 2; done;
+      uv run python /app/scripts/import_interview_problems_to_oj.py"
+    restart: "no"
+    depends_on:
+      api:
+        condition: service_started
+      oj-backend:
+        condition: service_healthy
+
 
   # lastest version: wget https://gcore.jsdelivr.net/gh/opendatalab/MinerU@master/docker/compose.yaml
   mineru-vllm-server:

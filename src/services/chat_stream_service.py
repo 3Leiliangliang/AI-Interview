@@ -72,18 +72,34 @@ async def _get_langgraph_messages(agent_instance, config_dict):
 
 
 def extract_agent_state(values: dict) -> dict:
-    """从 LangGraph state 中提取 agent 状态"""
+    """? LangGraph state ???????? agent state?"""
     if not isinstance(values, dict):
         return {}
 
-    # 直接获取，信任 state 的数据结构
     todos = values.get("todos")
-    result = {
+    coding_session = values.get("coding_session")
+    return {
         "todos": list(todos)[:20] if todos else [],
         "files": values.get("files") or {},
+        "coding_session": coding_session if isinstance(coding_session, dict) else None,
     }
 
-    return result
+
+async def enrich_agent_state_with_conversation_metadata(
+    conv_repo: ConversationRepository,
+    *,
+    thread_id: str,
+    agent_state: dict | None,
+) -> dict:
+    next_state = dict(agent_state or {})
+    if isinstance(next_state.get("coding_session"), dict):
+        return next_state
+
+    conversation = await conv_repo.get_conversation_by_thread_id(thread_id)
+    metadata = getattr(conversation, "extra_metadata", None)
+    if isinstance(metadata, dict) and isinstance(metadata.get("coding_session"), dict):
+        next_state["coding_session"] = metadata["coding_session"]
+    return next_state
 
 
 async def _get_existing_message_ids(conv_repo: ConversationRepository, thread_id: str) -> set[str]:
@@ -534,6 +550,11 @@ async def stream_agent_chat(
                         state = await graph.aget_state(langgraph_config)
                         agent_state = extract_agent_state(getattr(state, "values", {})) if state else {}
                         if agent_state:
+                            agent_state = await enrich_agent_state_with_conversation_metadata(
+                                conv_repo,
+                                thread_id=thread_id,
+                                agent_state=agent_state,
+                            )
                             yield make_chunk(status="agent_state", agent_state=agent_state, meta=meta)
                 except Exception as e:
                     logger.error(f"Error processing tool message: {e}")
@@ -554,6 +575,11 @@ async def stream_agent_chat(
             graph = await agent.get_graph()
             state = await graph.aget_state(langgraph_config)
             agent_state = extract_agent_state(getattr(state, "values", {})) if state else {}
+            agent_state = await enrich_agent_state_with_conversation_metadata(
+                conv_repo,
+                thread_id=thread_id,
+                agent_state=agent_state,
+            )
         except Exception:
             agent_state = {}
 
@@ -767,6 +793,12 @@ async def get_agent_state_view(
     langgraph_config = {"configurable": {"user_id": str(current_user_id), "thread_id": thread_id}}
     state = await graph.aget_state(langgraph_config)
     agent_state = extract_agent_state(getattr(state, "values", {})) if state else {}
+
+    coding_session = None
+    if isinstance(conversation.extra_metadata, dict):
+        coding_session = conversation.extra_metadata.get("coding_session")
+    if isinstance(coding_session, dict):
+        agent_state["coding_session"] = coding_session
 
     # 如果 state 中没有 files，从附件构建
     # 这确保了上传附件后立即可以在文件列表中看到文件

@@ -7,6 +7,7 @@ import {
   BarChart3,
   CircleCheck,
   Blocks,
+  Code2,
   FileText,
   PanelLeftClose,
   PanelLeftOpen
@@ -141,6 +142,18 @@ const mainList = computed(() => {
       path: '/resume',
       icon: FileText,
       activeIcon: FileText
+    },
+    {
+      name: 'OJ 工作台',
+      path: '/oj',
+      icon: Code2,
+      activeIcon: Code2
+    },
+    {
+      name: '题库管理',
+      path: '/problemsets',
+      icon: Blocks,
+      activeIcon: Blocks
     },
     {
       name: '知识库',

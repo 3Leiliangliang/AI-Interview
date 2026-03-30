@@ -14,6 +14,10 @@ from langgraph.graph.state import CompiledStateGraph
 
 from src import config as sys_config
 from src.agents.common.context import BaseContext
+from src.agents.common.runtime_request_context import (
+    reset_agent_request_context,
+    set_agent_request_context,
+)
 from src.utils import logger
 
 
@@ -92,13 +96,21 @@ class BaseAgent:
             "recursion_limit": 300,
         }
 
-        async for msg, metadata in graph.astream(
-            {"messages": messages},
-            stream_mode="messages",
-            context=context,
-            config=input_config,
-        ):
-            yield msg, metadata
+        token = set_agent_request_context(
+            thread_id=context.thread_id,
+            user_id=context.user_id,
+            target_position=getattr(context, "target_position", ""),
+        )
+        try:
+            async for msg, metadata in graph.astream(
+                {"messages": messages},
+                stream_mode="messages",
+                context=context,
+                config=input_config,
+            ):
+                yield msg, metadata
+        finally:
+            reset_agent_request_context(token)
 
     async def invoke_messages(self, messages: list[str], input_context=None, **kwargs):
         graph = await self.get_graph()
@@ -115,12 +127,20 @@ class BaseAgent:
             "recursion_limit": 100,
         }
 
-        msg = await graph.ainvoke(
-            {"messages": messages},
-            context=context,
-            config=input_config,
+        token = set_agent_request_context(
+            thread_id=context.thread_id,
+            user_id=context.user_id,
+            target_position=getattr(context, "target_position", ""),
         )
-        return msg
+        try:
+            msg = await graph.ainvoke(
+                {"messages": messages},
+                context=context,
+                config=input_config,
+            )
+            return msg
+        finally:
+            reset_agent_request_context(token)
 
     async def check_checkpointer(self):
         app = await self.get_graph()

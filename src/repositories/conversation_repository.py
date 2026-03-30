@@ -274,7 +274,7 @@ class ConversationRepository:
             conversation.is_pinned = is_pinned
 
         if metadata is not None:
-            current_metadata = conversation.extra_metadata or {}
+            current_metadata = dict(conversation.extra_metadata or {})
             current_metadata.update(metadata)
             conversation.extra_metadata = current_metadata
 
