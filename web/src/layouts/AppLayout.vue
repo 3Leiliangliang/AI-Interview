@@ -6,6 +6,7 @@ import {
   LibraryBig,
   BarChart3,
   CircleCheck,
+  Blocks,
   FileText
 } from 'lucide-vue-next'
 
@@ -132,6 +133,12 @@ const mainList = computed(() => {
       path: '/database',
       icon: LibraryBig,
       activeIcon: LibraryBig
+    },
+    {
+      name: '题库管理',
+      path: '/problemsets',
+      icon: Blocks,
+      activeIcon: Blocks
     }
   ]
 
