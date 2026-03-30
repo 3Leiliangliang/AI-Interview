@@ -6,11 +6,12 @@ export class MessageProcessor {
     const content = typeof message?.content === 'string' ? message.content.trim() : ''
     if (!content) return false
 
+    // 匹配面试开场指令，将其隐藏。
+    // 指令通常包含特定的引导词和阶段描述。
     return (
-      content.startsWith('\u73b0\u5728\u5f00\u59cb\u4e00\u8f6e') &&
-      content.includes('\u4f60\u5fc5\u987b\u59cb\u7ec8\u4ee5\u9762\u8bd5\u5b98\u8eab\u4efd\u53d1\u8a00') &&
-      content.includes('\u8bf7\u5148\u7ef4\u62a4\u56fa\u5b9a 5 \u6b65\u9762\u8bd5\u4efb\u52a1') &&
-      content.includes('\u62ff\u5230\u7b80\u5386\u540e\u7acb\u523b\u8fdb\u5165\u7b2c\u4e00\u95ee')
+      content.includes('现在开始一轮') &&
+      content.includes('你必须始终以面试官身份发言') &&
+      (content.includes('请维护固定 7 个阶段 todo') || content.includes('请维护固定 5 步面试任务'))
     )
   }
 
