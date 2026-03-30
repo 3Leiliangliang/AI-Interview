@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from src import knowledge_base
+from src.agents.common.runtime_request_context import get_agent_request_context
 from src.services.openviking_service import openviking_service
 from src.storage.postgres.manager import pg_manager
 from src.storage.postgres.models_business import UserResume
@@ -22,6 +23,30 @@ MAX_RESUME_CONTENT_CHARS = 8000
 INDEXED_FILE_STATUSES = {"indexed", "done"}
 QA_QUESTION_PREFIX_RE = re.compile(r"^(?:问题|question)\s*[:：]\s*", flags=re.IGNORECASE)
 QA_ANSWER_SPLIT_RE = re.compile(r"(?:回答|答案|answer)\s*[:：]", flags=re.IGNORECASE)
+BACKEND_ROLE_KEYWORDS = ("后端", "backend", "java")
+FRONTEND_ROLE_KEYWORDS = ("前端", "frontend", "react", "vue")
+BACKEND_KB_KEYWORDS = (
+    "后端",
+    "backend",
+    "java",
+    "javaguide",
+    "waking-up",
+    "database",
+    "mysql",
+    "redis",
+    "kafka",
+    "rabbitmq",
+    "rocketmq",
+    "操作系统",
+    "计算机网络",
+    "python",
+)
+FRONTEND_KB_KEYWORDS = ("前端", "frontend", "react", "vue", "javascript", "typescript", "css", "html")
+QUESTION_FILE_KEYWORDS = ("question", "questions", "interview", "面试", "题")
+INTERVIEW_POSITION_TO_KB_NAMES = {
+    "backend": ["JavaGuide", "Waking-Up"],
+    "frontend": ["React Interview Questions"],
+}
 
 
 def _normalize_runtime_user_id(runtime: ToolRuntime) -> int | None:
@@ -252,35 +277,132 @@ def _extract_question_from_chunk_content(chunk_content: str) -> str | None:
     if not question_part:
         return None
 
+    if not QA_QUESTION_PREFIX_RE.match(question_part) and not question_part.endswith(("?", "？")):
+        return None
+
     question_part = QA_ANSWER_SPLIT_RE.split(question_part, maxsplit=1)[0].strip()
     question = QA_QUESTION_PREFIX_RE.sub("", question_part).strip()
     return question or None
+
+
+def _build_kb_search_text(kb_info: dict[str, Any]) -> str:
+    return " ".join(
+        str(part).strip().lower()
+        for part in (
+            kb_info.get("name"),
+            kb_info.get("description"),
+        )
+        if part
+    )
+
+
+def _match_role_based_kbs(requested_name: str, all_kbs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized_name = requested_name.strip().lower()
+    if not normalized_name:
+        return []
+
+    if any(keyword in normalized_name for keyword in BACKEND_ROLE_KEYWORDS):
+        keywords = BACKEND_KB_KEYWORDS
+    elif any(keyword in normalized_name for keyword in FRONTEND_ROLE_KEYWORDS):
+        keywords = FRONTEND_KB_KEYWORDS
+    else:
+        return []
+
+    return [
+        kb_info
+        for kb_info in all_kbs
+        if any(keyword in _build_kb_search_text(kb_info) for keyword in keywords)
+    ]
+
+
+def _normalize_interview_position_tag(target_position: str | None) -> str:
+    position = str(target_position or "").strip().lower()
+    if not position:
+        return ""
+    if "前端" in position or "frontend" in position:
+        return "frontend"
+    if "后端" in position or "backend" in position:
+        return "backend"
+    return ""
+
+
+def _get_interview_kb_names_from_runtime(runtime: ToolRuntime | None) -> list[str]:
+    runtime_context = getattr(runtime, "context", None)
+    request_context = get_agent_request_context()
+    target_position = (
+        getattr(runtime_context, "target_position", "")
+        or str(request_context.get("target_position") or "")
+    )
+    position_tag = _normalize_interview_position_tag(target_position)
+    return INTERVIEW_POSITION_TO_KB_NAMES.get(position_tag, [])
+
+
+async def _resolve_candidate_kbs(kb_names: list[str]) -> list[dict[str, Any]]:
+    all_kbs = (await knowledge_base.get_databases()).get("databases", []) or []
+    if not all_kbs:
+        return []
+
+    exact_lookup = {str(kb.get("name") or "").strip().lower(): kb for kb in all_kbs if kb.get("name")}
+    resolved: list[dict[str, Any]] = []
+    seen_db_ids: set[str] = set()
+
+    for kb_name in kb_names:
+        normalized_name = kb_name.strip().lower()
+        if not normalized_name:
+            continue
+
+        matched_kbs: list[dict[str, Any]] = []
+        exact_match = exact_lookup.get(normalized_name)
+        if exact_match:
+            matched_kbs = [exact_match]
+        else:
+            matched_kbs = [
+                kb_info
+                for kb_info in all_kbs
+                if normalized_name in _build_kb_search_text(kb_info)
+                or _build_kb_search_text(kb_info) in normalized_name
+            ]
+            if not matched_kbs:
+                matched_kbs = _match_role_based_kbs(kb_name, all_kbs)
+
+        for kb_info in matched_kbs:
+            db_id = str(kb_info.get("db_id") or "").strip()
+            if not db_id or db_id in seen_db_ids:
+                continue
+            seen_db_ids.add(db_id)
+            resolved.append(kb_info)
+
+    return resolved
 
 
 async def _collect_technical_question_candidates(kb_names: list[str]) -> list[dict[str, str]]:
     if not kb_names:
         return []
 
-    retrievers = knowledge_base.get_retrievers()
-    kb_lookup = {info.get("name"): db_id for db_id, info in retrievers.items() if info.get("name")}
-
     seen_questions: set[str] = set()
     candidates: list[dict[str, str]] = []
 
-    for kb_name in kb_names:
-        db_id = kb_lookup.get(kb_name)
-        if not db_id:
+    resolved_kbs = await _resolve_candidate_kbs(kb_names)
+    for kb_info in resolved_kbs:
+        db_id = str(kb_info.get("db_id") or "")
+        kb_name = str(kb_info.get("name") or "")
+        db_info = await knowledge_base.get_database_info(db_id)
+        if not db_info:
             continue
 
-        db_info = await knowledge_base.get_database_info(db_id)
         files = db_info.get("files", {}) or {}
+        eligible_files = [
+            (file_id, file_info)
+            for file_id, file_info in files.items()
+            if not file_info.get("is_folder") and file_info.get("status") in INDEXED_FILE_STATUSES
+        ]
+        question_files = [
+            (file_id, file_info)
+            for file_id, file_info in eligible_files
+            if any(keyword in str(file_info.get("filename") or "").lower() for keyword in QUESTION_FILE_KEYWORDS)
+        ]
 
-        for file_id, file_info in files.items():
-            if file_info.get("is_folder"):
-                continue
-            if file_info.get("status") not in INDEXED_FILE_STATUSES:
-                continue
-
+        for file_id, file_info in question_files or eligible_files:
             file_content = await knowledge_base.get_file_content(db_id, file_id)
             for line in file_content.get("lines") or []:
                 question = _extract_question_from_chunk_content(line.get("content", ""))
@@ -297,7 +419,6 @@ async def _collect_technical_question_candidates(kb_names: list[str]) -> list[di
                 )
 
     return candidates
-
 
 async def _pick_random_technical_question(kb_names: list[str]) -> dict[str, str]:
     return await _pick_random_technical_question_with_excludes(kb_names, excluded_questions=None)
