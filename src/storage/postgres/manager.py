@@ -173,6 +173,13 @@ class PostgresManager(metaclass=SingletonMeta):
             "ALTER TABLE IF EXISTS skills ADD COLUMN IF NOT EXISTS skill_dependencies JSONB DEFAULT '[]'::jsonb",
             "ALTER TABLE IF EXISTS conversations ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE",
             "ALTER TABLE IF EXISTS mcp_servers ADD COLUMN IF NOT EXISTS env JSONB",
+            "ALTER TABLE IF EXISTS user_resume_items ADD COLUMN IF NOT EXISTS summary_json JSON",
+            "ALTER TABLE IF EXISTS user_resume_items ADD COLUMN IF NOT EXISTS summary_status VARCHAR(32) NOT NULL DEFAULT 'pending'",
+            "ALTER TABLE IF EXISTS user_resume_items ADD COLUMN IF NOT EXISTS summary_error TEXT",
+            "ALTER TABLE IF EXISTS user_resume_items ADD COLUMN IF NOT EXISTS target_job_id INTEGER",
+            "ALTER TABLE IF EXISTS user_resume_items ADD COLUMN IF NOT EXISTS detected_position VARCHAR(200)",
+            "ALTER TABLE IF EXISTS user_resume_items ADD COLUMN IF NOT EXISTS match_result JSON",
+            "ALTER TABLE IF EXISTS user_resume_items ADD COLUMN IF NOT EXISTS match_status VARCHAR(32) NOT NULL DEFAULT 'none'",
             """
             CREATE TABLE IF NOT EXISTS agent_runs (
                 id VARCHAR(64) PRIMARY KEY,

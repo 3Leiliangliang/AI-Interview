@@ -296,18 +296,84 @@ const normalizeDimensions = (value) => {
   return []
 }
 
+const normalizeDetailedScores = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+
+  const labels = {
+    technical_competence: '技术能力',
+    problem_solving: '问题解决',
+    problem_solving_innovation: '问题解决',
+    communication: '沟通表达',
+    communication_clarity: '沟通表达',
+    soft_skills: '综合素质',
+    soft_skills_team_fit: '综合素质'
+  }
+
+  return Object.entries(value)
+    .map(([name, score]) => {
+      const numeric = Number(score)
+      if (!Number.isFinite(numeric)) return null
+      const displayScore = numeric <= 10 ? Math.round(numeric * 10) : Math.round(numeric)
+      const normalizedScore = normalizeScoreValue(displayScore)
+      return normalizedScore !== null
+        ? { name: labels[name] || String(name).trim(), score: normalizedScore }
+        : null
+    })
+    .filter((item) => item?.name)
+}
+
+const extractScoreMapping = (value) => {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value
+  return {}
+}
+
 const normalizeScorecard = (value) => {
   if (!value || typeof value !== 'object') return null
 
+  const candidateInfo =
+    value.candidate_info && typeof value.candidate_info === 'object' ? value.candidate_info : {}
+  const assessmentSummary =
+    value.assessment_summary && typeof value.assessment_summary === 'object'
+      ? value.assessment_summary
+      : {}
+  const interviewOutcome =
+    value.interview_outcome && typeof value.interview_outcome === 'object'
+      ? value.interview_outcome
+      : {}
+  const fallbackDimensions = normalizeDetailedScores(
+    value.detailed_scores || extractScoreMapping(value.rating_scores)
+  )
+  const fallbackOverall =
+    fallbackDimensions.length > 0
+      ? Math.round(
+          fallbackDimensions.reduce((sum, item) => sum + item.score, 0) / fallbackDimensions.length
+        )
+      : null
+
   const normalized = {
-    overall: normalizeScoreValue(value.overall ?? value.total_score ?? value.total),
-    role: String(value.role || value.position || '').trim(),
-    round: String(value.round || '').trim(),
-    dimensions: normalizeDimensions(value.dimensions),
-    strengths: normalizeStringList(value.strengths),
-    risks: normalizeStringList(value.risks),
-    suggestions: normalizeStringList(value.suggestions),
-    summary: String(value.summary || '').trim()
+    overall: normalizeScoreValue(value.overall ?? value.total_score ?? value.total ?? fallbackOverall),
+    role: String(value.role || value.position || candidateInfo.target_position || '').trim(),
+    round: String(value.round || candidateInfo.interview_round || '').trim(),
+    dimensions: normalizeDimensions(value.dimensions).length
+      ? normalizeDimensions(value.dimensions)
+      : fallbackDimensions,
+    strengths: normalizeStringList(
+      value.strengths || assessmentSummary.strengths || assessmentSummary.key_strengths
+    ),
+    risks: normalizeStringList(
+      value.risks || assessmentSummary.concerns || assessmentSummary.key_concerns
+    ),
+    suggestions: normalizeStringList(
+      value.suggestions || value.next_steps || interviewOutcome.next_assessment_focus
+    ),
+    summary: String(
+      value.summary ||
+        assessmentSummary.overall_conclusion ||
+        interviewOutcome.recommendation ||
+        interviewOutcome.recommendation_reason ||
+        value.final_recommendation ||
+        ''
+    ).trim()
   }
 
   if (

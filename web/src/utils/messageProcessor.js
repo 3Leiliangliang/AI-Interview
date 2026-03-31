@@ -3,6 +3,10 @@
  */
 export class MessageProcessor {
   static isHiddenInterviewPromptMessage(message) {
+    if (message?.extra_metadata?.hidden_from_history) {
+      return true
+    }
+
     const content = typeof message?.content === 'string' ? message.content.trim() : ''
     if (!content) return false
 

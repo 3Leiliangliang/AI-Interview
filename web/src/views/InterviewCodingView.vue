@@ -8,6 +8,7 @@
       <div class="toolbar-actions">
         <a-button :loading="starting" @click="handleStartIfNeeded">刷新题目</a-button>
         <a-button @click="goBackToInterview">返回面试</a-button>
+        <a-button v-if="canOpenResult" @click="goToInterviewResult()">查看面试结果</a-button>
         <a-button :loading="runningSample" @click="handleRunSample">运行样例</a-button>
         <a-button type="primary" :loading="submitting" @click="handleSubmit">提交判题</a-button>
       </div>
@@ -234,6 +235,7 @@ const language = ref('javascript')
 const hintQuestion = ref('')
 const bottomTab = ref('cases')
 const saveStateText = ref('未保存')
+const latestSubmittedId = ref('')
 const languageLabelMap = {
   javascript: 'JavaScript',
   c: 'C',
@@ -259,6 +261,14 @@ const hintHistory = computed(() => session.value?.requested_hints || [])
 const sampleRunResult = computed(() => session.value?.sample_run || {})
 const submissionResult = computed(() => session.value?.judge_result || {})
 const problemExamples = computed(() => session.value?.problem?.examples || [])
+const currentJudgeStatus = computed(
+  () => String(session.value?.judge_status || submissionResult.value?.status || '').trim() || ''
+)
+const canOpenResult = computed(
+  () => Boolean(session.value?.submission_id) && !!currentJudgeStatus.value && !pendingJudgeStatuses.has(currentJudgeStatus.value)
+)
+const effectivePosition = computed(() => String(session.value?.target_position || selectedPosition.value || '后端工程师').trim())
+const effectiveRound = computed(() => String(route.query.round || selectedRound.value || '初试').trim() || '初试')
 
 const getStatusColor = (status) => {
   if (status === 'ACCEPTED') return 'green'
@@ -289,17 +299,24 @@ const statusLabelMap = {
 const getStatusLabel = (status, fallback = '就绪') => statusLabelMap[status] || status || fallback
 
 const returnRoute = computed(() => {
-  const explicit = String(route.query.returnTo || '').trim()
-  if (explicit) return explicit
   return {
     name: 'AgentInterviewComp',
     query: {
       threadId: activeThreadId.value || threadId.value,
-      position: selectedPosition.value,
-      round: selectedRound.value
+      position: effectivePosition.value,
+      round: effectiveRound.value
     }
   }
 })
+
+const resultRoute = computed(() => ({
+  name: 'InterviewResultPage',
+  query: {
+    threadId: activeThreadId.value || threadId.value,
+    position: effectivePosition.value,
+    round: effectiveRound.value
+  }
+}))
 
 const syncDraftFromSession = () => {
   language.value = session.value?.language || languageOptions.value[0]?.value || 'javascript'
@@ -347,15 +364,15 @@ const ensureThreadId = async () => {
   }
   activeThreadId.value = nextThreadId
 
-  await router.replace({
-    name: 'OJWorkbenchComp',
-    query: {
-      ...route.query,
-      threadId: nextThreadId,
-      position: selectedPosition.value,
-      round: selectedRound.value
-    }
-  })
+    await router.replace({
+      name: 'OJWorkbenchComp',
+      query: {
+        ...route.query,
+        threadId: nextThreadId,
+        position: effectivePosition.value,
+        round: effectiveRound.value
+      }
+    })
   return nextThreadId
 }
 
@@ -381,7 +398,7 @@ const handleStartIfNeeded = async () => {
   try {
     const currentThreadId = await ensureThreadId()
     const data = await interviewCodeApi.startCodingSession(currentThreadId, {
-      target_position: selectedPosition.value
+      target_position: effectivePosition.value
     })
     session.value = data?.coding_session || null
     syncDraftFromSession()
@@ -444,6 +461,11 @@ const startSubmissionPolling = () => {
       if (data.judge_status && !pendingJudgeStatuses.has(data.judge_status)) {
         clearInterval(pollTimer)
         pollTimer = null
+        if (latestSubmittedId.value && latestSubmittedId.value === session.value?.submission_id) {
+          latestSubmittedId.value = ''
+          message.success('代码考核已完成，正在为你打开面试结果页')
+          goToInterviewResult(true)
+        }
       }
     } catch (error) {
       clearInterval(pollTimer)
@@ -485,6 +507,7 @@ const handleSubmit = async () => {
       code: draftCode.value
     })
     session.value = data?.coding_session || session.value
+    latestSubmittedId.value = String(session.value?.submission_id || '').trim()
     bottomTab.value = 'submission'
     message.success('代码已提交')
     startSubmissionPolling()
@@ -544,6 +567,21 @@ const handleRequestHint = async () => {
   } finally {
     hintLoading.value = false
   }
+}
+
+const goToInterviewResult = (autoGenerate = false) => {
+  const target = {
+    ...resultRoute.value,
+    query: {
+      ...resultRoute.value.query,
+      ...(autoGenerate ? { autoGenerate: '1' } : {})
+    }
+  }
+  if (autoGenerate) {
+    router.replace(target)
+    return
+  }
+  router.push(target)
 }
 
 const goBackToInterview = () => {

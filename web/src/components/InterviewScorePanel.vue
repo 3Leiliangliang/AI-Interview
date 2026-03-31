@@ -17,7 +17,7 @@
 
     <div v-if="dimensions.length" class="score-grid">
       <div v-for="item in dimensions" :key="item.name" class="score-grid__item">
-        <span class="score-grid__label">{{ item.name }}</span>
+        <span class="score-grid__label">{{ getDimensionLabel(item.name) }}</span>
         <span class="score-grid__value">{{ item.score }}</span>
       </div>
     </div>
@@ -58,6 +58,18 @@ const props = defineProps({
 })
 
 const dimensions = computed(() => props.scorecard.dimensions || [])
+
+const dimensionLabels = {
+  technical_competence: '技术能力',
+  problem_solving: '问题解决',
+  problem_solving_innovation: '问题解决',
+  communication: '沟通表达',
+  communication_clarity: '沟通表达',
+  soft_skills: '综合素质',
+  soft_skills_team_fit: '综合素质'
+}
+
+const getDimensionLabel = (name) => dimensionLabels[name] || name
 </script>
 
 <style lang="less" scoped>
