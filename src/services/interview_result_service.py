@@ -89,7 +89,7 @@ def _normalize_detailed_scores(value: Any) -> list[dict[str, Any]]:
         normalized_score = _normalize_score_value(display_score)
         if normalized_score is None:
             continue
-        result.append({"name": DIMENSION_LABELS.get(str(key), str(key)), "score": normalized_score})
+        result.append({"name": _label_dimension_key(str(key)), "score": normalized_score})
     return result
 
 
@@ -97,6 +97,18 @@ def _extract_score_mapping(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return value
     return {}
+
+
+def _label_dimension_key(key: str) -> str:
+    fallback_labels = {
+        "technical_knowledge": "技术能力",
+        "practical_experience": "实战经验",
+        "problem_solving_innovation": "问题解决",
+        "communication_clarity": "沟通表达",
+        "soft_skills_team_fit": "综合素质",
+        "code_ability": "编码能力",
+    }
+    return fallback_labels.get(key, DIMENSION_LABELS.get(key, key))
 
 
 def _normalize_scorecard(value: Any) -> dict[str, Any] | None:
@@ -108,41 +120,57 @@ def _normalize_scorecard(value: Any) -> dict[str, Any] | None:
         value.get("assessment_summary") if isinstance(value.get("assessment_summary"), dict) else {}
     )
     detailed_scores = _extract_score_mapping(value.get("detailed_scores") or value.get("rating_scores"))
+    dimension_scores = _extract_score_mapping(value.get("dimension_scores"))
     interview_outcome = value.get("interview_outcome") if isinstance(value.get("interview_outcome"), dict) else {}
-    fallback_dimensions = _normalize_detailed_scores(detailed_scores)
+    match_assessment = value.get("match_assessment") if isinstance(value.get("match_assessment"), dict) else {}
+    fallback_dimensions = _normalize_detailed_scores(detailed_scores or dimension_scores)
     fallback_overall = None
     if fallback_dimensions:
         fallback_overall = round(sum(item["score"] for item in fallback_dimensions) / len(fallback_dimensions))
 
     normalized = {
         "overall": _normalize_score_value(
-            value.get("overall", value.get("total_score", value.get("total", fallback_overall)))
+            value.get(
+                "overall",
+                value.get("overall_score", value.get("total_score", value.get("total", fallback_overall))),
+            )
         ),
         "role": str(
-            value.get("role") or value.get("position") or candidate_info.get("target_position") or ""
+            value.get("role")
+            or value.get("position")
+            or value.get("target_position")
+            or candidate_info.get("target_position")
+            or ""
         ).strip(),
-        "round": str(value.get("round") or candidate_info.get("interview_round") or "").strip(),
+        "round": str(value.get("round") or value.get("interview_round") or candidate_info.get("interview_round") or "").strip(),
         "dimensions": _normalize_dimensions(value.get("dimensions")) or fallback_dimensions,
         "strengths": _normalize_string_list(
             value.get("strengths")
+            or value.get("highlights")
             or assessment_summary.get("strengths")
             or assessment_summary.get("key_strengths")
+            or match_assessment.get("strengths_for_position")
         ),
         "risks": _normalize_string_list(
             value.get("risks")
+            or value.get("improvement_areas")
             or assessment_summary.get("concerns")
             or assessment_summary.get("key_concerns")
+            or match_assessment.get("concerns_for_position")
         ),
         "suggestions": _normalize_string_list(
             value.get("suggestions")
             or value.get("next_steps")
             or interview_outcome.get("next_assessment_focus")
+            or match_assessment.get("next_assessment_focus")
         ),
         "summary": str(
             value.get("summary")
             or assessment_summary.get("overall_conclusion")
             or interview_outcome.get("recommendation")
             or interview_outcome.get("recommendation_reason")
+            or match_assessment.get("recommendation")
+            or match_assessment.get("recommendation_reason")
             or value.get("final_recommendation")
             or ""
         ).strip(),
