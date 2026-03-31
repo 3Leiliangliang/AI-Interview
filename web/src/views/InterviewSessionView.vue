@@ -14,6 +14,16 @@
       @thread-change="handleThreadChange"
     >
       <template #header-right>
+        <div
+          class="agent-nav-btn"
+          :class="{ 'is-active': isVideoMode, 'is-disabled': isInitializing }"
+          @click="toggleVideoMode"
+        >
+          <LoaderCircle v-if="isInitializing" :size="18" class="nav-btn-icon loading-icon" />
+          <Video v-else :size="18" class="nav-btn-icon" />
+          <span class="text">{{ isVideoMode ? '关闭分析' : '视频分析' }}</span>
+          <span v-if="isVideoMode" class="analyzing-dot"></span>
+        </div>
         <div class="agent-nav-btn" @click="backToSetup">
           <Settings :size="18" class="nav-btn-icon" />
           <span class="text">调整配置</span>
@@ -39,11 +49,12 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { BarChart3, FileText, Settings, Share2 } from 'lucide-vue-next'
+import { BarChart3, FileText, Settings, Share2, Video, LoaderCircle } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 
 import AgentChatComponent from '@/components/AgentChatComponent.vue'
 import { useAgentStore } from '@/stores/agent'
+import { useVideoEventStream } from '@/composables/useVideoEventStream'
 import { ChatExporter } from '@/utils/chatExporter'
 import { handleChatError } from '@/utils/errorHandler'
 
@@ -54,8 +65,11 @@ const route = useRoute()
 const router = useRouter()
 const agentStore = useAgentStore()
 const chatComponentRef = ref(null)
+const eventStream = useVideoEventStream()
 
 const { selectedAgentId, defaultAgentId } = storeToRefs(agentStore)
+
+const { isVideoMode, isInitializing } = eventStream
 
 const interviewAgentId = computed(() => selectedAgentId.value || defaultAgentId.value || '')
 const selectedPosition = computed(() => String(route.query.position || '').trim() || DEFAULT_POSITION)
@@ -105,6 +119,22 @@ const restoreInterviewThread = async () => {
   if (!threadId.value || !chatComponentRef.value) return
   await nextTick()
   await chatComponentRef.value.openThread?.(threadId.value)
+}
+
+async function toggleVideoMode() {
+  if (isVideoMode.value) {
+    eventStream.disableVideoMode()
+    return
+  }
+  const activeThreadId = chatComponentRef.value?.currentChatId
+  if (!activeThreadId) {
+    message.warning('面试会话未就绪，无法开启视频模式')
+    return
+  }
+  await eventStream.enableVideoMode(activeThreadId)
+  if (!isVideoMode.value && eventStream.error.value) {
+    message.error(eventStream.error.value)
+  }
 }
 
 const backToSetup = () => {
@@ -268,5 +298,41 @@ watch(
   width: 100%;
   height: 100%;
   overflow: hidden;
+}
+
+.agent-nav-btn {
+  &.is-disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  &.is-active {
+    color: var(--main-color);
+    background: var(--main-20);
+  }
+}
+
+.loading-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.analyzing-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #52c41a;
+  margin-left: 4px;
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
 }
 </style>

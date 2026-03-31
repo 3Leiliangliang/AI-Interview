@@ -1825,7 +1825,8 @@ const selectPreferredThread = async () => {
 defineExpose({
   getExportPayload: buildExportPayload,
   startInterviewSession,
-  openThread
+  openThread,
+  currentChatId
 })
 
 const toggleSidebar = () => {
