@@ -14,6 +14,7 @@ from src.agents.common.middlewares import (
     OpenVikingContextMiddleware,
     OpenVikingSummaryMiddleware,
     RuntimeConfigMiddleware,
+    VideoContextMiddleware,
     save_attachments_to_fs,
 )
 from src.agents.common.toolkits.interview.tools import start_code_assessment
@@ -98,6 +99,7 @@ class InterviewAgent(BaseAgent):
                 InterviewKnowledgeBaseMiddleware(),
                 RuntimeConfigMiddleware(),
                 OpenVikingContextMiddleware(agent_id=self.id),
+                VideoContextMiddleware(),
                 TodoListMiddleware(system_prompt=INTERVIEW_TODO_PROMPT),
                 PatchToolCallsMiddleware(),
                 OpenVikingSummaryMiddleware(

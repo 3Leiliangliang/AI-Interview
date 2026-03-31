@@ -5,6 +5,7 @@ from .openviking_context_middleware import OpenVikingContextMiddleware
 from .openviking_summary_middleware import OpenVikingSummaryMiddleware
 from .runtime_config_middleware import RuntimeConfigMiddleware
 from .summary_middleware import SummaryOffloadMiddleware, create_summary_offload_middleware
+from .video_context_middleware import VideoContextMiddleware
 
 __all__ = [
     "DynamicToolMiddleware",
@@ -12,6 +13,7 @@ __all__ = [
     "OpenVikingSummaryMiddleware",
     "RuntimeConfigMiddleware",
     "SummaryOffloadMiddleware",
+    "VideoContextMiddleware",
     "context_aware_prompt",
     "context_based_model",
     "create_summary_offload_middleware",
