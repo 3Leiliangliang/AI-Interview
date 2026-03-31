@@ -53,8 +53,19 @@ export function useVideoAnalysis() {
   const GAZE_CHANGE_THRESHOLD = 5 // 视线方向变化计数阈值（每分钟）
 
   const VISION_WASM_PATH = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.34/wasm'
-  const FACE_MODEL_PATH = '/models/face_landmarker.task'
-  const POSE_MODEL_PATH = '/models/pose_landmarker_heavy.task'
+
+  const MODEL_CONFIGS = {
+    face: {
+      localPath: '/models/face_landmarker.task',
+      remoteUrl:
+        'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task'
+    },
+    pose: {
+      localPath: '/models/pose_landmarker_heavy.task',
+      remoteUrl:
+        'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task'
+    }
+  }
 
   /**
    * 面部 blendshape 名称 → 简短别名 的映射表（Apple ARKit 52 个中的关键项）
@@ -81,6 +92,26 @@ export function useVideoAnalysis() {
     NOSE_WRINKLE_RIGHT: 'noseSneerRight'
   }
 
+  // ==================== 模型路径解析 ====================
+
+  /**
+   * 检测本地模型是否存在，不存在则 fallback 到 CDN URL
+   * @param {{ localPath: string, remoteUrl: string }} config
+   * @returns {Promise<string>} 可用的模型路径（本地或远程）
+   */
+  async function resolveModelPath(config) {
+    try {
+      const resp = await fetch(config.localPath, { method: 'HEAD' })
+      if (resp.ok && resp.headers.get('content-length') !== '0') {
+        return config.localPath
+      }
+    } catch {
+      // fetch 失败（如 file:// 协议），忽略
+    }
+    console.warn(`[useVideoAnalysis] 本地模型不存在，使用 CDN: ${config.remoteUrl}`)
+    return config.remoteUrl
+  }
+
   // ==================== 模型初始化 ====================
 
   /**
@@ -92,6 +123,12 @@ export function useVideoAnalysis() {
     modelLoadError.value = null
 
     try {
+      // 解析模型路径（本地优先，CDN fallback）
+      const [faceModelPath, poseModelPath] = await Promise.all([
+        resolveModelPath(MODEL_CONFIGS.face),
+        resolveModelPath(MODEL_CONFIGS.pose)
+      ])
+
       // 动态导入 @mediapipe/tasks-vision，避免在 SSR 或未安装时报错
       const { FaceLandmarker, PoseLandmarker, FilesetResolver } =
         await import('@mediapipe/tasks-vision')
@@ -101,13 +138,13 @@ export function useVideoAnalysis() {
       // 并行加载两个模型
       const [faceResult, poseResult] = await Promise.all([
         FaceLandmarker.createFromOptions(vision, {
-          baseOptions: { modelAssetPath: FACE_MODEL_PATH, delegate: 'GPU' },
+          baseOptions: { modelAssetPath: faceModelPath, delegate: 'GPU' },
           runningMode: 'VIDEO',
           outputFaceBlendshapes: true,
           numFaces: 1
         }),
         PoseLandmarker.createFromOptions(vision, {
-          baseOptions: { modelAssetPath: POSE_MODEL_PATH, delegate: 'GPU' },
+          baseOptions: { modelAssetPath: poseModelPath, delegate: 'GPU' },
           runningMode: 'VIDEO',
           numPoses: 1
         })
