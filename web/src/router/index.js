@@ -50,6 +50,12 @@ const router = createRouter({
           meta: { keepAlive: false, requiresAuth: true }
         },
         {
+          path: 'interview/result',
+          name: 'InterviewResultPage',
+          component: () => import('../views/InterviewResultView.vue'),
+          meta: { keepAlive: false, requiresAuth: true }
+        },
+        {
           path: ':agent_id',
           redirect: '/agent'
         }

@@ -238,6 +238,14 @@ import AgentPanel from '@/components/AgentPanel.vue'
 const props = defineProps({
   agentId: { type: String, default: '' },
   singleMode: { type: Boolean, default: true },
+  preferredThreadId: {
+    type: String,
+    default: ''
+  },
+  lockPreferredThread: {
+    type: Boolean,
+    default: false
+  },
   contextOverrides: {
     type: Object,
     default: () => ({})
@@ -259,7 +267,7 @@ const props = defineProps({
     default: '暂无对话历史'
   }
 })
-const emit = defineEmits(['open-config', 'open-agent-modal', 'agent-state-change'])
+const emit = defineEmits(['open-config', 'open-agent-modal', 'agent-state-change', 'thread-change'])
 
 // ==================== STORE MANAGEMENT ====================
 const agentStore = useAgentStore()
@@ -366,6 +374,11 @@ const currentThread = computed(() => {
 })
 
 // 检查当前智能体是否支持文件上传
+const normalizedPreferredThreadId = computed(() => String(props.preferredThreadId || '').trim())
+const lockedThreadId = computed(() =>
+  props.lockPreferredThread ? normalizedPreferredThreadId.value : ''
+)
+
 const supportsFileUpload = computed(() => {
   if (!currentAgent.value) return false
   const capabilities = currentAgent.value.capabilities || []
@@ -1410,6 +1423,11 @@ const createNewChat = async (title = '新的对话', forceCreate = false) => {
     return null
 
   // 如果第一个对话为空，直接切换到第一个对话而不是创建新对话
+  if (lockedThreadId.value) {
+    await selectPreferredThread()
+    return lockedThreadId.value ? { id: lockedThreadId.value } : null
+  }
+
   if (!forceCreate && (await switchToFirstChatIfEmpty())) {
     if (chatState.currentThreadId && title) {
       void updateThread(chatState.currentThreadId, title).catch(() => {})
@@ -1444,6 +1462,7 @@ const createNewChat = async (title = '新的对话', forceCreate = false) => {
 }
 
 const selectChat = async (chatId) => {
+  const targetChatId = lockedThreadId.value || chatId
   if (
     !AgentValidator.validateAgentIdWithError(
       currentAgentId.value,
@@ -1455,7 +1474,7 @@ const selectChat = async (chatId) => {
 
   // 中断之前线程的流式输出（如果存在）
   const previousThreadId = chatState.currentThreadId
-  if (previousThreadId && previousThreadId !== chatId) {
+  if (previousThreadId && previousThreadId !== targetChatId) {
     const previousThreadState = getThreadState(previousThreadId)
     if (previousThreadState?.isStreaming && previousThreadState.streamAbortController) {
       previousThreadState.streamAbortController.abort()
@@ -1466,10 +1485,10 @@ const selectChat = async (chatId) => {
     stopRunStreamSubscription(previousThreadId)
   }
 
-  chatState.currentThreadId = chatId
+  chatState.currentThreadId = targetChatId
   chatUIStore.isLoadingMessages = true
   try {
-    await fetchThreadMessages({ agentId: currentAgentId.value, threadId: chatId })
+    await fetchThreadMessages({ agentId: currentAgentId.value, threadId: targetChatId })
   } catch (error) {
     handleChatError(error, 'load')
   } finally {
@@ -1478,8 +1497,8 @@ const selectChat = async (chatId) => {
 
   await nextTick()
   scrollController.scrollToBottomStaticForce()
-  await fetchAgentState(currentAgentId.value, chatId)
-  await resumeActiveRunForThread(chatId)
+  await fetchAgentState(currentAgentId.value, targetChatId)
+  await resumeActiveRunForThread(targetChatId)
 }
 
 const deleteChat = async (chatId) => {
@@ -1789,6 +1808,20 @@ const openThread = async (threadId) => {
   await selectChat(threadId)
 }
 
+const selectPreferredThread = async () => {
+  const preferredThreadId = normalizedPreferredThreadId.value
+  if (!preferredThreadId || !currentAgentId.value) return false
+  if (chatState.currentThreadId === preferredThreadId) return true
+
+  try {
+    await selectChat(preferredThreadId)
+    return true
+  } catch (error) {
+    console.warn('Failed to select preferred thread:', preferredThreadId, error)
+    return false
+  }
+}
+
 defineExpose({
   getExportPayload: buildExportPayload,
   startInterviewSession,
@@ -1918,6 +1951,11 @@ const loadChatsList = async () => {
     await fetchThreads(agentId)
     if (currentAgentId.value !== agentId) return
 
+    if (normalizedPreferredThreadId.value) {
+      await selectPreferredThread()
+      return
+    }
+
     // 如果当前线程不在线程列表中，清空当前线程
     if (
       chatState.currentThreadId &&
@@ -1968,6 +2006,31 @@ watch(
     }
   },
   { immediate: true }
+)
+
+watch(
+  currentChatId,
+  (newThreadId, oldThreadId) => {
+    if (!newThreadId || newThreadId === oldThreadId) return
+    emit('thread-change', currentThread.value || { id: newThreadId })
+  }
+)
+
+watch(
+  normalizedPreferredThreadId,
+  async (newThreadId, oldThreadId) => {
+    if (!newThreadId || newThreadId === oldThreadId) return
+    await selectPreferredThread()
+  }
+)
+
+watch(
+  currentChatId,
+  async (newThreadId) => {
+    if (!lockedThreadId.value || !newThreadId) return
+    if (newThreadId === lockedThreadId.value) return
+    await selectPreferredThread()
+  }
 )
 
 watch(

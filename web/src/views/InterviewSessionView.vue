@@ -4,12 +4,14 @@
       ref="chatComponentRef"
       :agent-id="interviewAgentId"
       :single-mode="true"
+      :preferred-thread-id="threadId"
       :context-overrides="contextOverrides"
       sidebar-placement="left"
       sidebar-title="面试记录"
       sidebar-create-text="开始新面试"
       sidebar-empty-text="暂无面试记录"
       @agent-state-change="handleAgentStateChange"
+      @thread-change="handleThreadChange"
     >
       <template #header-right>
         <div class="agent-nav-btn" @click="backToSetup">
@@ -19,6 +21,10 @@
         <div class="agent-nav-btn" @click="openResumeCenter">
           <FileText :size="18" class="nav-btn-icon" />
           <span class="text">我的简历</span>
+        </div>
+        <div v-if="threadId" class="agent-nav-btn" @click="openInterviewResult">
+          <BarChart3 :size="18" class="nav-btn-icon" />
+          <span class="text">面试结果</span>
         </div>
         <div class="agent-nav-btn" @click="handleShareChat">
           <Share2 :size="18" class="nav-btn-icon" />
@@ -33,7 +39,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { FileText, Settings, Share2 } from 'lucide-vue-next'
+import { BarChart3, FileText, Settings, Share2 } from 'lucide-vue-next'
 import { storeToRefs } from 'pinia'
 
 import AgentChatComponent from '@/components/AgentChatComponent.vue'
@@ -79,6 +85,28 @@ const interviewOpeningPrompt = computed(() => {
 const getStartedStorageKey = (key) => `interview-session-started:${key}`
 const getSkipCodingRedirectKey = (key) => `interview-skip-coding-redirect:${key}`
 
+const parseThreadTitle = (title) => {
+  const normalizedTitle = String(title || '').trim()
+  if (!normalizedTitle || !normalizedTitle.includes('·')) {
+    return {
+      position: selectedPosition.value,
+      round: selectedRound.value
+    }
+  }
+
+  const [position, round] = normalizedTitle.split('·', 2)
+  return {
+    position: String(position || '').trim() || selectedPosition.value,
+    round: String(round || '').trim() || selectedRound.value
+  }
+}
+
+const restoreInterviewThread = async () => {
+  if (!threadId.value || !chatComponentRef.value) return
+  await nextTick()
+  await chatComponentRef.value.openThread?.(threadId.value)
+}
+
 const backToSetup = () => {
   router.push({
     name: 'AgentComp',
@@ -91,6 +119,18 @@ const backToSetup = () => {
 
 const openResumeCenter = () => {
   router.push('/resume')
+}
+
+const openInterviewResult = () => {
+  if (!threadId.value) return
+  router.push({
+    name: 'InterviewResultPage',
+    query: {
+      threadId: threadId.value,
+      position: selectedPosition.value,
+      round: selectedRound.value
+    }
+  })
 }
 
 const handleShareChat = async () => {
@@ -119,15 +159,9 @@ const handleShareChat = async () => {
   }
 }
 
-const maybeRestoreInterview = async () => {
-  if (!threadId.value || !interviewAgentId.value || !chatComponentRef.value) return
-  await nextTick()
-  await chatComponentRef.value.openThread?.(threadId.value)
-}
-
 const maybeStartInterview = async () => {
   if (threadId.value) {
-    await maybeRestoreInterview()
+    await restoreInterviewThread()
     return
   }
   if (!sessionKey.value || !interviewAgentId.value || !chatComponentRef.value) return
@@ -173,8 +207,24 @@ const handleAgentStateChange = (agentState) => {
     query: {
       threadId: threadId.value,
       position: selectedPosition.value,
-      round: selectedRound.value,
-      returnTo: route.fullPath
+      round: selectedRound.value
+    }
+  })
+}
+
+const handleThreadChange = (nextThread) => {
+  const normalizedThreadId = String(nextThread?.id || nextThread || '').trim()
+  if (!normalizedThreadId || normalizedThreadId === threadId.value) return
+
+  const { position, round } = parseThreadTitle(nextThread?.title)
+
+  router.replace({
+    name: 'AgentInterviewComp',
+    query: {
+      threadId: normalizedThreadId,
+      position,
+      round,
+      ...(sessionKey.value ? { session: sessionKey.value } : {})
     }
   })
 }
@@ -206,6 +256,9 @@ watch(
   () => [sessionKey.value, threadId.value, interviewAgentId.value],
   async () => {
     await maybeStartInterview()
+    if (threadId.value) {
+      await restoreInterviewThread()
+    }
   }
 )
 </script>
