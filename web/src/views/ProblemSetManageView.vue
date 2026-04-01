@@ -1,23 +1,26 @@
 <template>
   <div class="problemset-page layout-container">
-    <HeaderComponent title="题库管理" :description="headerDescription" :loading="loading" />
+    <HeaderComponent title="题库管理" :description="headerDescription" :loading="loading">
+      <template #actions>
+        <a-button :loading="loading" @click="loadProblemsets">
+          <template #icon>
+            <ReloadOutlined />
+          </template>
+          刷新
+        </a-button>
+      </template>
+    </HeaderComponent>
 
     <div class="summary-grid">
-      <div class="summary-card">
-        <div class="summary-label">已导入题包</div>
-        <div class="summary-value">{{ summary.imported_package_count }}</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-label">已导入题目</div>
-        <div class="summary-value">{{ summary.imported_problem_count }}</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-label">已追踪题包</div>
-        <div class="summary-value">{{ summary.tracked_package_count }}</div>
-      </div>
-      <div class="summary-card">
-        <div class="summary-label">已追踪题目</div>
-        <div class="summary-value">{{ summary.tracked_problem_count }}</div>
+      <div v-for="item in overviewCards" :key="item.key" class="summary-card">
+        <div class="summary-icon">
+          <component :is="item.icon" />
+        </div>
+        <div class="summary-content">
+          <div class="summary-label">{{ item.label }}</div>
+          <div class="summary-value">{{ item.value }}</div>
+          <div class="summary-hint">{{ item.hint }}</div>
+        </div>
       </div>
     </div>
 
@@ -27,77 +30,153 @@
 
     <div v-else-if="!problems.length" class="empty-state">
       <h3 class="empty-title">暂无已导入题目</h3>
-      <p class="empty-description">先使用 freeproblemset 导入脚本导入题目，这里会按岗位适配类型展示题库。</p>
+      <p class="empty-description">请先使用 freeproblemset 导入题包，导入完成后这里会自动生成题库概览。</p>
     </div>
 
-    <a-row v-else :gutter="[16, 16]" class="position-grid">
-      <a-col v-for="group in problemGroups" :key="group.key" :xs="24" :md="12" :xl="8">
-        <a-card class="position-card" :bordered="false">
-          <template #title>
-            <div class="card-title-row">
-              <div class="position-title">{{ group.title }}</div>
-              <a-tag :color="group.color">{{ group.items.length }} 题</a-tag>
+    <div v-else class="page-main">
+      <div class="toolbar-panel">
+        <div class="toolbar-main">
+          <a-input v-model:value="filters.keyword" allow-clear size="large" placeholder="搜索题目标题、题包路径或主题">
+            <template #prefix>
+              <SearchOutlined />
+            </template>
+          </a-input>
+
+          <div class="toolbar-inline-filters">
+            <div class="filter-chip-group">
+              <span class="filter-chip-label">题面</span>
+              <button
+                v-for="item in languageQuickFilters"
+                :key="`page-language-${item.value}`"
+                type="button"
+                class="filter-chip-button"
+                :class="{ active: filters.statementLanguage === item.value }"
+                @click="toggleStatementLanguage(item.value)"
+              >
+                {{ item.label }}
+              </button>
             </div>
-          </template>
-
-          <div class="position-description">{{ group.description }}</div>
-
-          <div class="position-stats">
-            <span>题目数 {{ group.items.length }}</span>
-            <span>题包数 {{ group.packageCount }}</span>
           </div>
 
-          <div v-if="group.languageStats.length" class="language-row">
+          <a-select v-model:value="filters.difficulty" :options="difficultyOptions" size="large" />
+
+          <a-button @click="resetFilters">重置</a-button>
+        </div>
+
+        <div class="toolbar-meta">
+          <span>当前显示 {{ filteredProblemCount }} 道题，覆盖 {{ filteredPackageCount }} 个题包。</span>
+          <span>{{ trackingSummaryText }}</span>
+          <span v-if="hasActiveFilters">筛选仅作为辅助收敛，分类判断仍以三张题库卡片为主。</span>
+          <span v-else>支持关键词、题面语言和难度轻筛选，不重复岗位分类。</span>
+        </div>
+      </div>
+
+      <div v-if="!filteredProblemCount" class="filter-empty-state">
+        <a-empty description="当前筛选条件下暂无题目">
+          <a-button type="primary" @click="resetFilters">清空筛选</a-button>
+        </a-empty>
+      </div>
+
+          <div v-else class="group-grid">
+        <div
+          v-for="group in problemGroups"
+          :key="group.key"
+          class="group-card"
+          :class="[`group-card--${group.key}`, { empty: !group.items.length }]"
+          @click="handleGroupClick(group)"
+        >
+          <div class="group-card-top">
+            <div class="group-icon">
+              <component :is="group.icon" />
+            </div>
+            <a-tag :color="group.color">{{ group.items.length }} 题</a-tag>
+          </div>
+
+          <div class="group-title-row">
+            <div>
+              <h3 class="group-title">{{ group.title }}</h3>
+              <p class="group-description">{{ group.description }}</p>
+            </div>
+            <span class="group-package-count">{{ group.packageCount }} 个题包</span>
+          </div>
+
+          <div class="group-metric-grid">
+            <div class="group-metric-card">
+              <span class="metric-label">题目数</span>
+              <strong>{{ group.items.length }}</strong>
+            </div>
+            <div class="group-metric-card">
+              <span class="metric-label">题包数</span>
+              <strong>{{ group.packageCount }}</strong>
+            </div>
+          </div>
+
+          <div class="group-section">
             <div class="section-label">题面语言</div>
-            <div class="topic-tags">
-              <a-tag v-for="item in group.languageStats" :key="`${group.key}-${item.key}`" :color="item.color">
+            <div class="chip-row">
+              <a-tag
+                v-for="item in group.languageStats"
+                :key="`${group.key}-language-${item.key}`"
+                :color="item.color"
+              >
                 {{ item.label }} · {{ item.count }}
               </a-tag>
             </div>
           </div>
 
-          <div v-if="group.difficultyStats.length" class="difficulty-row">
+          <div class="group-section">
             <div class="section-label">题目难度</div>
-            <div class="topic-tags">
-              <a-tag v-for="item in group.difficultyStats" :key="`${group.key}-${item.key}`" :color="item.color">
+            <div class="chip-row">
+              <a-tag
+                v-for="item in group.difficultyStats"
+                :key="`${group.key}-difficulty-${item.key}`"
+                :color="item.color"
+              >
                 {{ item.label }} · {{ item.count }}
               </a-tag>
             </div>
           </div>
 
-          <div v-if="group.topTopicTags.length" class="topic-row">
+          <div v-if="group.topTopicTags.length" class="group-section">
             <div class="section-label">高频主题</div>
-            <div class="topic-tags">
-              <a-tag v-for="tag in group.topTopicTags" :key="`${group.key}-${tag.tag}`">
+            <div class="chip-row">
+              <a-tag v-for="tag in group.topTopicTags" :key="`${group.key}-topic-${tag.tag}`">
                 {{ tag.tag }} · {{ tag.count }}
               </a-tag>
+              <a-tag v-if="group.hiddenTopicCount > 0">+{{ group.hiddenTopicCount }}</a-tag>
             </div>
           </div>
 
-          <div v-if="group.previewTitles.length" class="preview-row">
-            <div class="section-label">题目预览</div>
+          <div v-if="group.previewTitles.length" class="group-section group-preview">
+            <div class="section-label">浏览题目</div>
             <div class="preview-list">
-              <div v-for="title in group.previewTitles" :key="`${group.key}-${title}`" class="preview-item">
-                {{ decodeHtml(title) }}
+              <div v-for="title in group.previewTitles" :key="`${group.key}-preview-${title}`" class="preview-item">
+                <span class="preview-dot" />
+                <span class="preview-text">{{ title }}</span>
               </div>
             </div>
           </div>
 
-          <div class="card-actions">
-            <a-button type="primary" ghost @click="openGroupDetail(group)">查看题目</a-button>
+          <div class="group-footer">
+            <span class="group-footer-text">进入分类详情，浏览题目列表与题面内容</span>
+            <a-button type="primary" ghost :disabled="!group.items.length" @click.stop="openGroupDetail(group)">
+              查看题目
+            </a-button>
           </div>
-        </a-card>
-      </a-col>
-    </a-row>
+        </div>
+      </div>
+    </div>
 
     <a-drawer
       :open="detailVisible"
-      width="min(1200px, 92vw)"
+      :title="activeGroup ? `${activeGroup.title} 题目详情` : '题目详情'"
+      width="min(1280px, 94vw)"
       placement="right"
-      title="题目详情"
+      class="problemset-drawer"
+      :body-style="{ padding: '0' }"
       @close="closeDetail"
     >
-      <div v-if="detailLoading && !detailProblems.length" class="drawer-state">
+      <div v-if="detailGroupLoading && !detailProblems.length" class="drawer-state">
         <a-spin size="large" />
       </div>
 
@@ -108,22 +187,70 @@
       <div v-else class="detail-layout">
         <aside class="problem-list-panel">
           <div class="problem-list-header">
-            <div class="drawer-group-title">{{ activeGroup?.title }}</div>
-            <div class="drawer-group-meta">{{ detailProblems.length }} 题</div>
+            <div>
+              <div class="drawer-group-title">{{ activeGroup?.title }}</div>
+              <div class="drawer-group-meta">
+                {{ detailFilteredProblems.length }}
+                <template v-if="hasDetailFilters"> / {{ detailProblems.length }}</template>
+                题
+              </div>
+            </div>
+            <span class="drawer-group-caption">面试题浏览器</span>
           </div>
-          <div class="problem-list">
+
+          <div class="drawer-filter-stack">
+            <a-input v-model:value="detailFilters.keyword" allow-clear placeholder="搜索题目标题或题包">
+              <template #prefix>
+                <SearchOutlined />
+              </template>
+            </a-input>
+
+            <div class="drawer-filter-grid">
+              <div class="drawer-filter-field">
+                <span class="drawer-field-label">题面语言</span>
+                <div class="filter-chip-group compact">
+                  <button
+                    v-for="item in languageQuickFilters"
+                    :key="`detail-language-${item.value}`"
+                    type="button"
+                    class="filter-chip-button"
+                    :class="{ active: detailFilters.statementLanguage === item.value }"
+                    @click="toggleStatementLanguage(item.value, 'detail')"
+                  >
+                    {{ item.label }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="drawer-filter-field">
+                <span class="drawer-field-label">题目难度</span>
+                <a-select v-model:value="detailFilters.difficulty" :options="difficultyOptions" />
+              </div>
+            </div>
+
+            <div class="drawer-filter-tip">
+              左侧列表会按关键词、题面语言和难度即时过滤。
+              <a-button v-if="hasDetailFilters" type="link" class="drawer-reset-btn" @click="resetDetailFilters">
+                清空
+              </a-button>
+            </div>
+          </div>
+
+          <div v-if="detailFilteredProblems.length" class="problem-list" @scroll="handleProblemListScroll">
             <button
-              v-for="problem in detailProblems"
+              v-for="problem in displayedDetailProblems"
               :key="problemKey(problem)"
               type="button"
               class="problem-list-item"
               :class="{ active: activeProblemKey === problemKey(problem) }"
               @click="selectProblem(problem)"
             >
-              <span class="problem-index">#{{ problem.problem_index }}</span>
-              <span class="problem-name">{{ decodeHtml(problem.title) }}</span>
-              <span class="problem-meta-row">
-                <span class="problem-package">{{ fileName(problem.package_path) }}</span>
+              <div class="problem-list-item-top">
+                <span class="problem-index">#{{ problem.problem_index }}</span>
+                <span class="problem-name">{{ problem.displayTitle }}</span>
+              </div>
+              <div class="problem-meta-row">
+                <span class="problem-package">{{ problem.packageName }}</span>
                 <span class="meta-tag-group">
                   <a-tag size="small" :color="statementLanguageColorMap[problem.statement_language] || 'default'">
                     {{ statementLanguageLabelMap[problem.statement_language] || '未知' }}
@@ -132,85 +259,183 @@
                     {{ difficultyLabelMap[problem.difficulty_tag] || '中等' }}
                   </a-tag>
                 </span>
-              </span>
+              </div>
             </button>
+          </div>
+
+          <div v-else class="drawer-state drawer-state--inner">
+            <a-empty description="筛选后暂无匹配题目">
+              <a-button @click="resetDetailFilters">清空筛选</a-button>
+            </a-empty>
           </div>
         </aside>
 
         <section class="problem-detail-panel">
-          <template v-if="activeProblem">
-            <div class="detail-header">
-              <div>
-                <h2 class="detail-title">{{ decodeHtml(activeProblem.title) }}</h2>
-                <div class="detail-meta">
-                  <span>来源：{{ decodeHtml(activeProblem.source || '未知') }}</span>
-                  <span>题包：{{ activeProblem.package_path }}</span>
-                  <span v-if="activeProblem.oj_display_ids?.length">
-                    OJ：{{ activeProblem.oj_display_ids.join(', ') }}
-                  </span>
+          <div v-if="detailLoading" class="detail-loading-mask">
+            <a-spin size="large" />
+          </div>
+
+          <div v-if="activeProblem" class="detail-content">
+            <div class="detail-body">
+              <div class="detail-hero">
+                <div class="detail-heading">
+                  <div class="detail-eyebrow">题号 #{{ activeProblem.problem_index }}</div>
+                  <h2 class="detail-title">{{ activeProblem.displayTitle }}</h2>
+                  <p v-if="activeProblem.displaySummary" class="detail-summary">{{ activeProblem.displaySummary }}</p>
+                </div>
+
+                <div class="detail-info-grid">
+                  <div class="detail-info-item detail-info-item--wide">
+                    <span class="detail-info-label">来源</span>
+                    <strong class="detail-info-value">{{ activeProblem.displaySource }}</strong>
+                  </div>
+                  <div class="detail-info-item">
+                    <span class="detail-info-label">题包文件</span>
+                    <strong class="detail-info-value">{{ activeProblem.packageName }}</strong>
+                  </div>
+                  <div class="detail-info-item">
+                    <span class="detail-info-label">OJ 标识</span>
+                    <strong class="detail-info-value">
+                      {{ activeProblem.oj_display_ids?.length ? activeProblem.oj_display_ids.join(', ') : '未标注' }}
+                    </strong>
+                  </div>
+                  <div class="detail-info-item detail-info-item--wide">
+                    <span class="detail-info-label">题包路径</span>
+                    <strong class="detail-info-value">{{ activeProblem.package_path }}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div class="detail-tag-row">
+                <a-tag
+                  v-for="tag in activeProblem.position_tags || []"
+                  :key="`position-${tag}`"
+                  :color="tag === 'frontend' ? 'geekblue' : tag === 'backend' ? 'green' : 'gold'"
+                >
+                  {{ positionLabelMap[tag] || tag }}
+                </a-tag>
+                <a-tag :color="statementLanguageColorMap[activeProblem.statement_language] || 'default'">
+                  {{ statementLanguageLabelMap[activeProblem.statement_language] || '未知' }}
+                </a-tag>
+                <a-tag :color="difficultyColorMap[activeProblem.difficulty_tag] || 'default'">
+                  {{ difficultyLabelMap[activeProblem.difficulty_tag] || '中等' }}
+                </a-tag>
+                <a-tag v-for="tag in visibleDetailExtraTags" :key="tag.id" :color="tag.color">
+                  {{ tag.label }}
+                </a-tag>
+                <button
+                  v-if="hiddenDetailExtraTagCount > 0"
+                  type="button"
+                  class="detail-tag-toggle"
+                  @click="showAllDetailTags = true"
+                >
+                  +{{ hiddenDetailExtraTagCount }} 更多
+                </button>
+                <button
+                  v-else-if="showAllDetailTags && detailExtraTags.length > DETAIL_EXTRA_TAG_PREVIEW_COUNT"
+                  type="button"
+                  class="detail-tag-toggle"
+                  @click="showAllDetailTags = false"
+                >
+                  收起标签
+                </button>
+              </div>
+
+              <div class="detail-section">
+                <div class="detail-section-header">
+                  <h3>题目描述</h3>
+                  <a-button
+                    v-if="canToggleText(activeProblem.displayDescription)"
+                    type="link"
+                    class="section-toggle-btn"
+                    @click="toggleExpanded('description')"
+                  >
+                    {{ expandedSections.description ? '收起' : '展开' }}
+                  </a-button>
+                </div>
+                <p
+                  class="detail-paragraph"
+                  :class="{ collapsed: canToggleText(activeProblem.displayDescription) && !expandedSections.description }"
+                >
+                  {{ activeProblem.displayDescription }}
+                </p>
+              </div>
+
+              <div v-if="activeProblem.input_description" class="detail-section">
+                <div class="detail-section-header">
+                  <h3>输入说明</h3>
+                  <a-button
+                    v-if="canToggleText(activeProblem.displayInputDescription)"
+                    type="link"
+                    class="section-toggle-btn"
+                    @click="toggleExpanded('input')"
+                  >
+                    {{ expandedSections.input ? '收起' : '展开' }}
+                  </a-button>
+                </div>
+                <p
+                  class="detail-paragraph"
+                  :class="{ collapsed: canToggleText(activeProblem.displayInputDescription) && !expandedSections.input }"
+                >
+                  {{ activeProblem.displayInputDescription }}
+                </p>
+              </div>
+
+              <div v-if="activeProblem.output_description" class="detail-section">
+                <div class="detail-section-header">
+                  <h3>输出说明</h3>
+                  <a-button
+                    v-if="canToggleText(activeProblem.displayOutputDescription)"
+                    type="link"
+                    class="section-toggle-btn"
+                    @click="toggleExpanded('output')"
+                  >
+                    {{ expandedSections.output ? '收起' : '展开' }}
+                  </a-button>
+                </div>
+                <p
+                  class="detail-paragraph"
+                  :class="{ collapsed: canToggleText(activeProblem.displayOutputDescription) && !expandedSections.output }"
+                >
+                  {{ activeProblem.displayOutputDescription }}
+                </p>
+              </div>
+
+              <div v-if="activeProblem.examples?.length" class="detail-section">
+                <div class="detail-section-header">
+                  <h3>示例</h3>
+                </div>
+                <div class="example-grid">
+                <div v-for="(example, index) in activeProblem.examples" :key="index" class="example-card">
+                  <div>
+                    <strong>输入</strong>
+                    <pre>{{ example.displayInput }}</pre>
+                  </div>
+                  <div>
+                    <strong>输出</strong>
+                    <pre>{{ example.displayOutput }}</pre>
+                  </div>
+                </div>
+              </div>
+              </div>
+
+              <div v-if="starterCodeEntries.length" class="detail-section">
+                <div class="detail-section-header">
+                  <h3>模板代码</h3>
+                </div>
+                <div class="starter-grid">
+                  <div v-for="entry in starterCodeEntries" :key="entry.language" class="starter-card">
+                    <div class="starter-header">{{ languageLabelMap[entry.language] || entry.language }}</div>
+                    <pre>{{ entry.code }}</pre>
+                  </div>
                 </div>
               </div>
             </div>
+          </div>
 
-            <div class="detail-tag-row">
-              <a-tag
-                v-for="tag in activeProblem.position_tags || []"
-                :key="`position-${tag}`"
-                :color="tag === 'frontend' ? 'geekblue' : tag === 'backend' ? 'green' : 'gold'"
-              >
-                {{ positionLabelMap[tag] || tag }}
-              </a-tag>
-              <a-tag :color="statementLanguageColorMap[activeProblem.statement_language] || 'default'">
-                {{ statementLanguageLabelMap[activeProblem.statement_language] || '未知' }}
-              </a-tag>
-              <a-tag :color="difficultyColorMap[activeProblem.difficulty_tag] || 'default'">
-                {{ difficultyLabelMap[activeProblem.difficulty_tag] || '中等' }}
-              </a-tag>
-              <a-tag v-for="tag in activeProblem.topic_tags || []" :key="`topic-${tag}`">{{ tag }}</a-tag>
-              <a-tag v-for="lang in activeProblem.allowed_languages || []" :key="`lang-${lang}`" color="purple">
-                {{ languageLabelMap[lang] || lang }}
-              </a-tag>
-            </div>
-
-            <div v-if="activeProblem.summary" class="summary-box">{{ decodeHtml(activeProblem.summary) }}</div>
-
-            <div class="detail-section">
-              <h3>题目描述</h3>
-              <p>{{ decodeHtml(activeProblem.description || '暂无描述') }}</p>
-            </div>
-
-            <div v-if="activeProblem.input_description" class="detail-section">
-              <h3>输入说明</h3>
-              <p>{{ decodeHtml(activeProblem.input_description) }}</p>
-            </div>
-
-            <div v-if="activeProblem.output_description" class="detail-section">
-              <h3>输出说明</h3>
-              <p>{{ decodeHtml(activeProblem.output_description) }}</p>
-            </div>
-
-            <div v-if="activeProblem.examples?.length" class="detail-section">
-              <h3>示例</h3>
-              <div v-for="(example, index) in activeProblem.examples" :key="index" class="example-card">
-                <div>
-                  <strong>输入</strong>
-                  <pre>{{ decodeHtml(example.input || '(空)') }}</pre>
-                </div>
-                <div>
-                  <strong>输出</strong>
-                  <pre>{{ decodeHtml(example.output || '(空)') }}</pre>
-                </div>
-              </div>
-            </div>
-
-            <div v-if="starterCodeEntries.length" class="detail-section">
-              <h3>模板代码</h3>
-              <div v-for="entry in starterCodeEntries" :key="entry.language" class="starter-card">
-                <div class="starter-header">{{ languageLabelMap[entry.language] || entry.language }}</div>
-                <pre>{{ entry.code }}</pre>
-              </div>
-            </div>
-          </template>
+          <div v-else class="detail-empty">
+            <a-empty description="请选择左侧题目查看详情" />
+          </div>
         </section>
       </div>
     </a-drawer>
@@ -218,8 +443,17 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
+import {
+  ApiOutlined,
+  AppstoreOutlined,
+  BookOutlined,
+  DesktopOutlined,
+  InboxOutlined,
+  ReloadOutlined,
+  SearchOutlined
+} from '@ant-design/icons-vue'
 
 import HeaderComponent from '@/components/HeaderComponent.vue'
 import { problemsetApi } from '@/apis/problemset_api'
@@ -227,6 +461,7 @@ import { problemsetApi } from '@/apis/problemset_api'
 const loading = ref(false)
 const detailLoading = ref(false)
 const detailVisible = ref(false)
+const detailGroupLoading = ref(false)
 const problems = ref([])
 const summary = ref({
   imported_package_count: 0,
@@ -240,6 +475,28 @@ const detailProblems = ref([])
 const activeProblem = ref(null)
 const activeProblemKey = ref('')
 const packageDetailCache = new Map()
+const DETAIL_LIST_PAGE_SIZE = 120
+const detailListRenderCount = ref(DETAIL_LIST_PAGE_SIZE)
+
+const filters = reactive({
+  keyword: '',
+  statementLanguage: '',
+  difficulty: 'all'
+})
+
+const detailFilters = reactive({
+  keyword: '',
+  statementLanguage: '',
+  difficulty: 'all'
+})
+
+const expandedSections = reactive({
+  description: false,
+  input: false,
+  output: false
+})
+const showAllDetailTags = ref(false)
+const DETAIL_EXTRA_TAG_PREVIEW_COUNT = 6
 
 const languageLabelMap = {
   javascript: 'JavaScript',
@@ -259,7 +516,7 @@ const statementLanguageLabelMap = {
 const statementLanguageColorMap = {
   zh: 'blue',
   en: 'green',
-  mixed: 'purple',
+  mixed: 'cyan',
   unknown: 'default'
 }
 
@@ -282,84 +539,324 @@ const positionLabelMap = {
 }
 
 const positionGroupDefs = [
-  { key: 'frontend', title: '前端', color: 'geekblue', description: '优先适配前端岗位的题目。' },
-  { key: 'backend', title: '后端', color: 'green', description: '优先适配后端岗位的题目。' },
-  { key: 'algorithm_general', title: '通用', color: 'gold', description: '算法与通用编程能力题目。' }
+  {
+    key: 'frontend',
+    title: '前端',
+    color: 'geekblue',
+    icon: DesktopOutlined,
+    description: '优先适配前端岗位的题目，适合页面交互、工程化与浏览器能力考察。'
+  },
+  {
+    key: 'backend',
+    title: '后端',
+    color: 'green',
+    icon: ApiOutlined,
+    description: '优先适配后端岗位的题目，便于快速抽查数据结构、系统设计与服务能力。'
+  },
+  {
+    key: 'algorithm_general',
+    title: '通用',
+    color: 'gold',
+    icon: AppstoreOutlined,
+    description: '算法与通用编程能力题目，适合公共题池和基础能力面试场景。'
+  }
 ]
+
+const languageQuickFilters = [
+  { label: '中文题面', value: 'zh' },
+  { label: '英文题面', value: 'en' }
+]
+
+const difficultyOptions = [
+  { label: '全部难度', value: 'all' },
+  { label: '简单', value: 'easy' },
+  { label: '中等', value: 'medium' },
+  { label: '困难', value: 'hard' }
+]
+
+const htmlDecoder =
+  typeof window !== 'undefined' && typeof document !== 'undefined' ? document.createElement('textarea') : null
 
 const decodeHtml = (value) => {
   const text = String(value || '')
   if (!text) return ''
-  if (typeof window === 'undefined') return text
-  const textarea = document.createElement('textarea')
-  textarea.innerHTML = text
-  return textarea.value
+  if (!htmlDecoder) return text
+  htmlDecoder.innerHTML = text
+  return htmlDecoder.value
 }
-
-const headerDescription = computed(() => {
-  if (!summary.value.imported_problem_count) {
-    return '按前端 / 后端 / 通用分类查看已导入到 OJ 与面试题池的题目。'
-  }
-  return `当前已导入 ${summary.value.imported_problem_count} 道题，点击卡片查看对应题目列表。`
-})
-
-const starterCodeEntries = computed(() => {
-  const starterCode = activeProblem.value?.starter_code || {}
-  return Object.entries(starterCode).map(([language, code]) => ({ language, code }))
-})
-
-const problemGroups = computed(() =>
-  positionGroupDefs.map((group) => {
-    const items = problems.value.filter((item) => item.primary_position_tag === group.key)
-    const topicCounter = {}
-    const packageSet = new Set()
-    items.forEach((item) => {
-      packageSet.add(item.package_path)
-      ;(item.topic_tags || []).forEach((tag) => {
-        topicCounter[tag] = (topicCounter[tag] || 0) + 1
-      })
-    })
-    return {
-      ...group,
-      items,
-      packageCount: packageSet.size,
-      languageStats: ['zh', 'en', 'mixed', 'unknown']
-        .map((key) => ({
-          key,
-          label: statementLanguageLabelMap[key],
-          color: statementLanguageColorMap[key],
-          count: items.filter((item) => (item.statement_language || 'unknown') === key).length
-        }))
-        .filter((item) => item.count > 0),
-      difficultyStats: ['easy', 'medium', 'hard']
-        .map((key) => ({
-          key,
-          label: difficultyLabelMap[key],
-          color: difficultyColorMap[key],
-          count: items.filter((item) => (item.difficulty_tag || 'medium') === key).length
-        }))
-        .filter((item) => item.count > 0),
-      topTopicTags: Object.entries(topicCounter)
-        .sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])))
-        .slice(0, 5)
-        .map(([tag, count]) => ({ tag, count })),
-      previewTitles: items.slice(0, 3).map((item) => item.title)
-    }
-  })
-)
 
 const fileName = (packagePath) => {
   const normalized = String(packagePath || '').replace(/\\/g, '/')
   return normalized.split('/').pop() || normalized
 }
 
+const normalizeText = (value) => String(value || '').trim().toLowerCase()
+
+const normalizeProblemItem = (item) => {
+  const packagePath = String(item?.package_path || '')
+  const packageName = fileName(packagePath)
+  const displayTitle = decodeHtml(item?.title)
+  const displaySource = decodeHtml(item?.source || '未知')
+  const displaySummary = decodeHtml(item?.summary || '')
+  const displayDescription = decodeHtml(item?.description || '暂无描述')
+  const displayInputDescription = decodeHtml(item?.input_description || '')
+  const displayOutputDescription = decodeHtml(item?.output_description || '')
+  const examples = (item?.examples || []).map((example) => ({
+    ...example,
+    displayInput: decodeHtml(example?.input || '(空)'),
+    displayOutput: decodeHtml(example?.output || '(空)')
+  }))
+  const starterCode = Object.fromEntries(
+    Object.entries(item?.starter_code || {}).map(([language, code]) => [language, decodeHtml(code)])
+  )
+
+  return {
+    ...item,
+    package_path: packagePath,
+    packageName,
+    displayTitle,
+    displaySource,
+    displaySummary,
+    displayDescription,
+    displayInputDescription,
+    displayOutputDescription,
+    examples,
+    starter_code: starterCode,
+    searchableText: [
+      displayTitle,
+      packagePath,
+      displaySource,
+      packageName,
+      ...((item?.topic_tags || []).map((tag) => String(tag || '')))
+    ]
+      .map((part) => normalizeText(part))
+      .join(' ')
+  }
+}
+
+const matchesFilters = (item, currentFilters) => {
+  const keyword = normalizeText(currentFilters.keyword)
+  if (currentFilters.statementLanguage && (item.statement_language || 'unknown') !== currentFilters.statementLanguage) {
+    return false
+  }
+  if (currentFilters.difficulty !== 'all' && (item.difficulty_tag || 'medium') !== currentFilters.difficulty) {
+    return false
+  }
+  if (!keyword) {
+    return true
+  }
+
+  return String(item.searchableText || '').includes(keyword)
+}
+
+const sortProblems = (items) =>
+  [...items].sort((a, b) => {
+    const packageCompare = String(a.package_path || '').localeCompare(String(b.package_path || ''))
+    if (packageCompare !== 0) {
+      return packageCompare
+    }
+    return Number(a.problem_index || 0) - Number(b.problem_index || 0)
+  })
+
+const buildProblemGroups = (items) =>
+  positionGroupDefs.map((group) => {
+    const groupItems = sortProblems(items.filter((item) => item.primary_position_tag === group.key))
+    const packageSet = new Set()
+    const topicCounter = {}
+
+    groupItems.forEach((item) => {
+      packageSet.add(item.package_path)
+      ;(item.topic_tags || []).forEach((tag) => {
+        topicCounter[tag] = (topicCounter[tag] || 0) + 1
+      })
+    })
+
+    const languageStats = ['zh', 'en']
+      .map((key) => ({
+        key,
+        label: statementLanguageLabelMap[key],
+        color: statementLanguageColorMap[key],
+        count: groupItems.filter((item) => (item.statement_language || 'unknown') === key).length
+      }))
+      .filter((item) => item.count > 0)
+
+    const difficultyStats = ['easy', 'medium', 'hard']
+      .map((key) => ({
+        key,
+        label: difficultyLabelMap[key],
+        color: difficultyColorMap[key],
+        count: groupItems.filter((item) => (item.difficulty_tag || 'medium') === key).length
+      }))
+      .filter((item) => item.count > 0)
+
+    const sortedTopics = Object.entries(topicCounter)
+      .sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])))
+      .map(([tag, count]) => ({ tag, count }))
+
+    return {
+      ...group,
+      items: groupItems,
+      packageCount: packageSet.size,
+      languageStats,
+      difficultyStats,
+      topTopicTags: sortedTopics.slice(0, 2),
+      hiddenTopicCount: Math.max(sortedTopics.length - 2, 0),
+      previewTitles: groupItems.slice(0, 2).map((item) => item.displayTitle)
+    }
+  })
+
+const uniquePackageCount = (items) => new Set(items.map((item) => item.package_path).filter(Boolean)).size
+
+const allProblemGroups = computed(() => buildProblemGroups(problems.value))
+const filteredProblems = computed(() => problems.value.filter((item) => matchesFilters(item, filters)))
+const filteredProblemCount = computed(() => filteredProblems.value.length)
+const filteredPackageCount = computed(() => uniquePackageCount(filteredProblems.value))
+const problemGroups = computed(() => buildProblemGroups(filteredProblems.value))
+
+const hasActiveFilters = computed(
+  () => Boolean(filters.keyword) || Boolean(filters.statementLanguage) || filters.difficulty !== 'all'
+)
+
+const hasDetailFilters = computed(
+  () => Boolean(detailFilters.keyword) || Boolean(detailFilters.statementLanguage) || detailFilters.difficulty !== 'all'
+)
+
+const headerDescription = computed(() => {
+  const total = summary.value.imported_problem_count || problems.value.length
+  if (!total) {
+    return '按前端 / 后端 / 通用分类查看已导入到 OJ 与面试题池的题目。'
+  }
+  return `当前已导入 ${total} 道题，可按岗位方向快速浏览并查看题目详情。`
+})
+
+const trackingSummaryText = computed(
+  () => `已追踪 ${summary.value.tracked_problem_count || 0} 道题 / ${summary.value.tracked_package_count || 0} 个题包`
+)
+
+const overviewCards = computed(() => [
+  {
+    key: 'problem-count',
+    label: '总题量',
+    value: summary.value.imported_problem_count || problems.value.length,
+    hint: hasActiveFilters.value ? `当前筛选命中 ${filteredProblemCount.value} 道题` : '按岗位方向快速浏览',
+    icon: BookOutlined
+  },
+  {
+    key: 'package-count',
+    label: '题包数',
+    value: summary.value.imported_package_count || uniquePackageCount(problems.value),
+    hint: hasActiveFilters.value ? `当前筛选覆盖 ${filteredPackageCount.value} 个题包` : trackingSummaryText.value,
+    icon: InboxOutlined
+  },
+  {
+    key: 'category-count',
+    label: '分类数',
+    value: allProblemGroups.value.filter((group) => group.items.length > 0).length,
+    hint: hasActiveFilters.value ? '首页卡片会同步响应筛选' : '前端、后端、通用三类题库',
+    icon: AppstoreOutlined
+  }
+])
+
+const detailFilteredProblems = computed(() => detailProblems.value.filter((item) => matchesFilters(item, detailFilters)))
+const displayedDetailProblems = computed(() => detailFilteredProblems.value.slice(0, detailListRenderCount.value))
+
+const detailExtraTags = computed(() => {
+  if (!activeProblem.value) {
+    return []
+  }
+
+  return [
+    ...(activeProblem.value.topic_tags || []).map((tag) => ({
+      id: `topic-${tag}`,
+      label: tag,
+      color: undefined
+    })),
+    ...(activeProblem.value.allowed_languages || []).map((language) => ({
+      id: `lang-${language}`,
+      label: languageLabelMap[language] || language,
+      color: 'cyan'
+    }))
+  ]
+})
+
+const visibleDetailExtraTags = computed(() =>
+  showAllDetailTags.value ? detailExtraTags.value : detailExtraTags.value.slice(0, DETAIL_EXTRA_TAG_PREVIEW_COUNT)
+)
+
+const hiddenDetailExtraTagCount = computed(() =>
+  Math.max(detailExtraTags.value.length - visibleDetailExtraTags.value.length, 0)
+)
+
+const starterCodeEntries = computed(() => {
+  const starterCode = activeProblem.value?.starter_code || {}
+  return Object.entries(starterCode).map(([language, code]) => ({ language, code }))
+})
+
 const problemKey = (item) => `${item.package_path}::${item.problem_index}`
+
+const resetFilters = () => {
+  filters.keyword = ''
+  filters.statementLanguage = ''
+  filters.difficulty = 'all'
+}
+
+const resetDetailFilters = () => {
+  detailFilters.keyword = ''
+  detailFilters.statementLanguage = ''
+  detailFilters.difficulty = 'all'
+}
+
+const resetDetailListRenderCount = () => {
+  detailListRenderCount.value = DETAIL_LIST_PAGE_SIZE
+}
+
+const loadMoreDetailProblems = () => {
+  if (detailListRenderCount.value >= detailFilteredProblems.value.length) {
+    return
+  }
+  detailListRenderCount.value = Math.min(
+    detailListRenderCount.value + DETAIL_LIST_PAGE_SIZE,
+    detailFilteredProblems.value.length
+  )
+}
+
+const handleProblemListScroll = (event) => {
+  const element = event?.target
+  if (!element) {
+    return
+  }
+
+  const remaining = element.scrollHeight - element.scrollTop - element.clientHeight
+  if (remaining < 140) {
+    loadMoreDetailProblems()
+  }
+}
+
+const toggleStatementLanguage = (value, scope = 'page') => {
+  const targetFilters = scope === 'detail' ? detailFilters : filters
+  targetFilters.statementLanguage = targetFilters.statementLanguage === value ? '' : value
+}
+
+const resetExpandedSections = () => {
+  expandedSections.description = false
+  expandedSections.input = false
+  expandedSections.output = false
+}
+
+const canToggleText = (value) => {
+  const text = String(value || '')
+  return text.length > 220 || text.split('\n').length > 6
+}
+
+const toggleExpanded = (key) => {
+  expandedSections[key] = !expandedSections[key]
+}
 
 const loadProblemsets = async () => {
   loading.value = true
   try {
     const data = await problemsetApi.getImportedProblemsets()
-    problems.value = data?.problems || []
+    problems.value = (data?.problems || []).map((item) => normalizeProblemItem(item))
     summary.value = {
       ...summary.value,
       ...(data?.summary || {})
@@ -374,18 +871,24 @@ const loadProblemsets = async () => {
 const loadProblemDetail = async (item) => {
   if (!packageDetailCache.has(item.package_path)) {
     const data = await problemsetApi.getProblemsetDetail(item.package_path)
-    packageDetailCache.set(item.package_path, data?.problems || [])
+    packageDetailCache.set(
+      item.package_path,
+      (data?.problems || []).map((problem) => normalizeProblemItem({ ...problem, package_path: item.package_path }))
+    )
   }
   const packageProblems = packageDetailCache.get(item.package_path) || []
   return packageProblems.find((problem) => Number(problem.problem_index) === Number(item.problem_index)) || null
 }
 
 const selectProblem = async (problemSummary) => {
+  activeProblemKey.value = problemKey(problemSummary)
   detailLoading.value = true
+  showAllDetailTags.value = false
+  resetExpandedSections()
+
   try {
     const detail = await loadProblemDetail(problemSummary)
     activeProblem.value = detail ? { ...problemSummary, ...detail } : { ...problemSummary }
-    activeProblemKey.value = problemKey(problemSummary)
   } catch (error) {
     message.error(error.message || '加载题目详情失败')
   } finally {
@@ -396,21 +899,71 @@ const selectProblem = async (problemSummary) => {
 const openGroupDetail = async (group) => {
   detailVisible.value = true
   activeGroup.value = group
-  detailProblems.value = [...group.items]
+  detailGroupLoading.value = true
+  detailProblems.value = []
   activeProblem.value = null
   activeProblemKey.value = ''
-  if (detailProblems.value.length) {
-    await selectProblem(detailProblems.value[0])
+  resetDetailFilters()
+  resetDetailListRenderCount()
+  resetExpandedSections()
+
+  await nextTick()
+  requestAnimationFrame(() => {
+    if (!detailVisible.value) {
+      return
+    }
+    detailProblems.value = [...group.items]
+    detailGroupLoading.value = false
+  })
+}
+
+const handleGroupClick = (group) => {
+  if (!group.items.length) {
+    return
   }
+  openGroupDetail(group)
 }
 
 const closeDetail = () => {
   detailVisible.value = false
+  detailGroupLoading.value = false
   activeGroup.value = null
   detailProblems.value = []
   activeProblem.value = null
   activeProblemKey.value = ''
+  showAllDetailTags.value = false
+  resetDetailFilters()
+  resetDetailListRenderCount()
+  resetExpandedSections()
 }
+
+watch(
+  [
+    () => detailVisible.value,
+    () => detailProblems.value,
+    () => detailFilters.keyword,
+    () => detailFilters.statementLanguage,
+    () => detailFilters.difficulty
+  ],
+  () => {
+    if (!detailVisible.value) {
+      return
+    }
+
+    resetDetailListRenderCount()
+
+    if (!detailFilteredProblems.value.length) {
+      activeProblem.value = null
+      activeProblemKey.value = ''
+      return
+    }
+
+    const hasActiveItem = detailFilteredProblems.value.some((item) => problemKey(item) === activeProblemKey.value)
+    if (!hasActiveItem) {
+      selectProblem(detailFilteredProblems.value[0])
+    }
+  }
+)
 
 onMounted(() => {
   loadProblemsets()
@@ -419,20 +972,33 @@ onMounted(() => {
 
 <style scoped lang="less">
 .problemset-page {
-  min-height: 100%;
+  height: 100vh;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--gray-50);
 }
 
+.summary-grid,
+.toolbar-panel,
+.group-grid {
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
 .summary-grid {
-  padding: 20px;
+  padding-top: 14px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .summary-card,
+.toolbar-panel,
 .state-panel,
 .empty-state,
+.filter-empty-state,
 .problem-list-panel,
 .problem-detail-panel {
   background: var(--color-bg-container);
@@ -440,304 +1006,774 @@ onMounted(() => {
   border-radius: 16px;
 }
 
-.summary-card {
-  padding: 18px 20px;
+.page-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.summary-label {
+.summary-card {
+  padding: 14px 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.summary-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: var(--main-50);
+  color: var(--main-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.summary-content {
+  min-width: 0;
+}
+
+.summary-label,
+.secondary-label,
+.section-label,
+.group-footer-text,
+.drawer-group-meta,
+.drawer-group-caption,
+.problem-package,
+.toolbar-meta,
+.detail-path-label {
   font-size: 13px;
   color: var(--gray-600);
 }
 
 .summary-value {
-  margin-top: 8px;
-  font-size: 28px;
+  margin-top: 4px;
+  font-size: 24px;
+  line-height: 1.2;
   font-weight: 700;
   color: var(--gray-1000);
 }
 
-.position-grid {
-  padding: 0 20px 20px;
+.summary-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--gray-700);
 }
 
-:deep(.position-card) {
-  height: 100%;
-  border-radius: 16px;
+.toolbar-panel {
+  margin: 12px 20px 12px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.toolbar-main {
+  display: grid;
+  grid-template-columns: minmax(260px, 2fr) minmax(260px, 1.4fr) minmax(160px, 1fr) auto;
+  gap: 12px;
+}
+
+.toolbar-inline-filters,
+.filter-chip-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.filter-chip-group.compact {
+  gap: 8px;
+}
+
+.filter-chip-label {
+  font-size: 12px;
+  color: var(--gray-600);
+  white-space: nowrap;
+}
+
+.filter-chip-button {
+  padding: 7px 12px;
   border: 1px solid var(--gray-200);
-  box-shadow: none;
+  border-radius: 999px;
+  background: var(--gray-25);
+  color: var(--gray-700);
+  font-size: 13px;
+  line-height: 1.2;
+  cursor: pointer;
+  font: inherit;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
 
-:deep(.position-card .ant-card-body) {
+.filter-chip-button:hover {
+  border-color: var(--main-300);
+  color: var(--main-color);
+}
+
+.filter-chip-button.active {
+  border-color: var(--main-400);
+  background: var(--main-20);
+  color: var(--main-color);
+}
+
+.toolbar-meta {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  line-height: 1.6;
+}
+
+.state-panel,
+.empty-state,
+.filter-empty-state {
+  margin: 0 20px 20px;
+  min-height: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.empty-state {
+  flex-direction: column;
+  text-align: center;
+  gap: 8px;
+}
+
+.empty-title {
+  margin: 0;
+  font-size: 20px;
+  color: var(--gray-1000);
+}
+
+.empty-description {
+  max-width: 560px;
+  margin: 0;
+  line-height: 1.7;
+  color: var(--gray-600);
+}
+
+.group-grid {
+  flex: 1;
+  min-height: 0;
+  padding-bottom: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  overflow: hidden;
+}
+
+.group-card {
+  min-height: 0;
+  height: 100%;
+  padding: 14px;
+  border: 1px solid var(--gray-200);
+  border-radius: 16px;
+  background: var(--color-bg-container);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
 }
 
-.card-title-row,
-.position-stats,
-.problem-list-header,
-.detail-header,
-.detail-meta {
+.group-card:hover {
+  border-color: var(--main-300);
+  background: var(--main-5);
+}
+
+.group-card.empty {
+  cursor: default;
+  opacity: 0.82;
+}
+
+.group-card.empty:hover {
+  border-color: var(--gray-200);
+  background: var(--color-bg-container);
+}
+
+.group-card-top,
+.group-title-row,
+.group-footer,
+.problem-meta-row,
+.detail-section-header {
   display: flex;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
 }
 
-.position-title {
+.group-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 18px;
-  font-weight: 600;
+}
+
+.group-card--frontend .group-icon {
+  color: var(--main-color);
+  background: var(--main-50);
+}
+
+.group-card--backend .group-icon {
+  color: var(--color-success-700);
+  background: #f2fbeb;
+}
+
+.group-card--algorithm_general .group-icon {
+  color: var(--color-warning-700);
+  background: #fff8e6;
+}
+
+.group-title {
+  margin: 0;
+  font-size: 17px;
   color: var(--gray-1000);
 }
 
-.position-description,
-.position-stats,
-.section-label,
-.drawer-group-meta,
-.detail-meta,
-.problem-package,
-.empty-description {
-  font-size: 13px;
+.group-description {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--gray-700);
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.group-package-count {
+  font-size: 12px;
+  color: var(--gray-700);
+}
+
+.group-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.group-metric-card {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--gray-25);
+  border: 1px solid var(--gray-200);
+}
+
+.metric-label {
+  display: block;
+  font-size: 12px;
   color: var(--gray-600);
 }
 
-.problem-meta-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex-wrap: wrap;
+.group-metric-card strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 18px;
+  color: var(--gray-1000);
 }
 
-.meta-tag-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.topic-row,
-.language-row,
-.difficulty-row,
-.preview-row {
+.group-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
-.topic-tags,
-.detail-tag-row {
+.chip-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
+}
+
+.group-preview {
+  min-height: 0;
 }
 
 .preview-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .preview-item {
-  padding: 10px 12px;
-  border-radius: 10px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 7px 10px;
+  border-radius: 12px;
   background: var(--gray-25);
+  border: 1px solid var(--gray-150);
+}
+
+.preview-dot {
+  width: 5px;
+  height: 5px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: var(--gray-500);
+}
+
+.preview-text {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.5;
   color: var(--gray-800);
-  line-height: 1.6;
-  word-break: break-word;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
 }
 
-.card-actions {
+.group-footer {
   margin-top: auto;
-  display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  padding-top: 2px;
 }
 
-.state-panel,
-.empty-state,
+.problemset-drawer :deep(.ant-drawer-header) {
+  border-bottom: 1px solid var(--gray-150);
+}
+
 .drawer-state {
-  margin: 0 20px 20px;
-  min-height: 260px;
+  min-height: 300px;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-direction: column;
-  text-align: center;
   padding: 24px;
 }
 
-.drawer-state {
-  margin: 0;
-}
-
-.empty-title {
-  margin: 0 0 10px;
-  font-size: 20px;
-  color: var(--gray-900);
-}
-
-:deep(.ant-drawer-body) {
-  padding: 24px;
-  overflow: hidden;
+.drawer-state--inner {
+  min-height: 180px;
 }
 
 .detail-layout {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
-  gap: 16px;
-  height: calc(100vh - 180px);
-  min-height: 0;
-  overflow: hidden;
-}
-
-.problem-list-panel,
-.problem-detail-panel {
-  min-height: 0;
-  height: 100%;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  grid-template-columns: 360px minmax(0, 1fr);
+  min-height: calc(100vh - 108px);
 }
 
 .problem-list-panel {
-  padding: 12px;
+  border-radius: 0;
+  border-width: 0 1px 0 0;
+  background: var(--gray-25);
+  padding: 20px 16px;
   display: flex;
   flex-direction: column;
+  gap: 16px;
 }
 
 .problem-list-header {
-  padding: 8px 8px 14px;
-  border-bottom: 1px solid var(--gray-150);
-  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
 }
 
 .drawer-group-title {
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 600;
   color: var(--gray-1000);
 }
 
-.problem-list {
-  flex: 1;
-  min-height: 0;
+.drawer-group-caption {
+  white-space: nowrap;
+}
+
+.drawer-filter-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.drawer-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(120px, 0.7fr);
+  gap: 14px;
+  align-items: end;
+}
+
+.drawer-filter-field {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
+}
+
+.drawer-field-label {
+  font-size: 12px;
+  color: var(--gray-600);
+}
+
+.drawer-filter-field :deep(.ant-select) {
+  width: 100%;
+}
+
+.drawer-filter-tip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--gray-600);
+}
+
+.drawer-reset-btn,
+.section-toggle-btn {
+  padding: 0;
+  height: auto;
+}
+
+.problem-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .problem-list-item {
   width: 100%;
   text-align: left;
   padding: 12px;
-  border: 1px solid var(--gray-150);
-  border-radius: 12px;
-  background: var(--gray-0);
+  border-radius: 14px;
+  border: 1px solid var(--gray-200);
+  background: var(--color-bg-container);
   cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  content-visibility: auto;
+  contain-intrinsic-size: 84px;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.problem-list-item:hover {
+  border-color: var(--main-300);
+  background: var(--main-5);
 }
 
 .problem-list-item.active {
-  border-color: var(--main-200);
+  border-color: var(--main-400);
   background: var(--main-20);
 }
 
+.problem-list-item-top {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
 .problem-index {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--main-50);
+  color: var(--main-color);
   font-size: 12px;
-  color: var(--gray-600);
+  line-height: 1.5;
 }
 
 .problem-name {
   font-size: 14px;
   font-weight: 600;
-  color: var(--gray-900);
-}
-
-.problem-detail-panel {
-  padding: 20px;
-}
-
-.detail-title {
-  margin: 0 0 8px;
-  font-size: 22px;
+  line-height: 1.6;
   color: var(--gray-1000);
 }
 
-.summary-box,
-.example-card,
-.starter-card {
-  border-radius: 12px;
-  border: 1px solid var(--gray-150);
-  background: var(--gray-25);
+.meta-tag-group,
+.detail-tag-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
-.summary-box {
-  padding: 14px;
-  margin-bottom: 18px;
-  line-height: 1.7;
-  color: var(--gray-800);
+.problem-detail-panel {
+  position: relative;
+  border: none;
+  border-radius: 0;
+  padding: 24px;
+  overflow: auto;
 }
 
-.detail-section {
-  margin-bottom: 18px;
+.detail-loading-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.detail-content {
+  position: relative;
+  z-index: 0;
+}
+
+.detail-body {
+  width: min(100%, 940px);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-hero {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--gray-150);
+}
+
+.detail-heading {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.detail-section h3,
-.starter-header {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--gray-900);
+.detail-eyebrow {
+  font-size: 12px;
+  color: var(--main-color);
 }
 
-.detail-section p,
-.detail-section pre,
-.starter-card pre {
+.detail-title {
   margin: 0;
+  font-size: 24px;
+  line-height: 1.45;
+  color: var(--gray-1000);
+}
+
+.detail-summary {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--gray-700);
+}
+
+.detail-info-grid {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.detail-info-item {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--gray-200);
+  background: var(--gray-10);
+}
+
+.detail-info-item--wide {
+  grid-column: 1 / -1;
+}
+
+.detail-info-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--gray-600);
+}
+
+.detail-info-value {
+  display: block;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--gray-900);
+  word-break: break-word;
+}
+
+.detail-tag-row {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--gray-150);
+}
+
+.detail-tag-toggle {
+  padding: 0 10px;
+  height: 28px;
+  border: 1px dashed var(--gray-300);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--gray-600);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.detail-tag-toggle:hover {
+  border-color: var(--main-300);
+  color: var(--main-color);
+  background: var(--main-5);
+}
+
+.detail-section {
+  margin-top: 20px;
+  padding: 20px;
+  border-radius: 16px;
+  border: 1px solid var(--gray-200);
+  background: var(--gray-25);
+}
+
+.detail-section-header {
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.detail-section-header h3,
+.starter-header {
+  margin: 0;
+  font-size: 16px;
+  color: var(--gray-1000);
+}
+
+.detail-paragraph {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--gray-800);
   white-space: pre-wrap;
   word-break: break-word;
-  line-height: 1.7;
-  color: var(--gray-800);
+}
+
+.detail-paragraph.collapsed {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+}
+
+.example-grid,
+.starter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
 }
 
 .example-card,
 .starter-card {
   padding: 14px;
-  margin-top: 8px;
+  border-radius: 14px;
+  border: 1px solid var(--gray-200);
+  background: var(--color-bg-container);
 }
 
 .example-card {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
+.example-card strong,
 .starter-header {
-  margin-bottom: 10px;
-}
-
-.starter-card pre {
-  font-family: Consolas, 'Courier New', monospace;
+  display: block;
+  margin-bottom: 8px;
   font-size: 13px;
+  color: var(--gray-900);
 }
 
-@media (max-width: 1080px) {
-  .summary-grid {
+.example-card pre,
+.starter-card pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--gray-900);
+}
+
+.detail-empty {
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 1280px) {
+  .group-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .toolbar-main {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 960px) {
+  .summary-grid,
+  .group-grid,
+  .detail-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .page-main {
+    overflow: auto;
   }
 
   .detail-layout {
     grid-template-columns: 1fr;
   }
+
+  .problem-list-panel {
+    border-right: none;
+    border-bottom: 1px solid var(--gray-200);
+  }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
   .summary-grid,
-  .example-card {
+  .toolbar-panel,
+  .group-grid {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .summary-grid {
+    padding-top: 12px;
+  }
+
+  .toolbar-panel,
+  .state-panel,
+  .empty-state,
+  .filter-empty-state {
+    margin-left: 12px;
+    margin-right: 12px;
+  }
+
+  .group-grid {
+    overflow: visible;
+  }
+
+  .toolbar-main,
+  .drawer-filter-grid,
+  .group-metric-grid {
     grid-template-columns: 1fr;
+  }
+
+  .filter-chip-group {
+    align-items: flex-start;
+  }
+
+  .problem-detail-panel {
+    padding: 16px;
   }
 }
 </style>
