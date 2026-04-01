@@ -348,6 +348,44 @@ services:
       oj-backend:
         condition: service_healthy
 
+  oj-freeproblemset-import:
+    image: bole-api:0.5.dev
+    container_name: oj-freeproblemset-import
+    working_dir: /app
+    volumes:
+      - ./scripts:/app/scripts
+      - ./src:/app/src
+      - ./.env:/app/.env
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./uv.lock:/app/uv.lock
+      - ./saves/oj:/app/saves/oj
+      - freeproblemset-repo:/app/.codex_tmp/freeproblemset
+    networks:
+      - app-network
+    env_file:
+      - .env
+    environment:
+      - OJ_ADMIN_BASE_URL=http://oj-backend.local:8000
+      - OJ_USERNAME=${OJ_USERNAME:-root}
+      - OJ_PASSWORD=${OJ_PASSWORD:-rootroot}
+      - FREEPROBLEMSET_CLASSIFIER=${FREEPROBLEMSET_CLASSIFIER:-rule}
+      - FREEPROBLEMSET_IMPORT_TIMEOUT=${FREEPROBLEMSET_IMPORT_TIMEOUT:-600}
+      - FREEPROBLEMSET_IMPORT_CHUNK_SIZE=${FREEPROBLEMSET_IMPORT_CHUNK_SIZE:-200}
+      - FREEPROBLEMSET_AUTO_SYNC=${FREEPROBLEMSET_AUTO_SYNC:-true}
+      - FREEPROBLEMSET_AUTO_CLASSIFY=${FREEPROBLEMSET_AUTO_CLASSIFY:-true}
+      - FREEPROBLEMSET_AUTO_IMPORT=${FREEPROBLEMSET_AUTO_IMPORT:-true}
+    command: >
+      sh -lc "until curl -sf http://oj-backend.local:8000/api/profile >/dev/null; do sleep 2; done;
+      uv run python /app/scripts/import_freeproblemset.py"
+    restart: "no"
+    depends_on:
+      api:
+        condition: service_started
+      oj-backend:
+        condition: service_healthy
+      oj-problem-seed:
+        condition: service_completed_successfully
+
 
   # lastest version: wget https://gcore.jsdelivr.net/gh/opendatalab/MinerU@master/docker/compose.yaml
   mineru-vllm-server:
@@ -446,3 +484,6 @@ services:
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  freeproblemset-repo:
