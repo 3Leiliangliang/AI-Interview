@@ -71,6 +71,23 @@ def run_git(args: list[str], cwd: Path | None = None) -> None:
     subprocess.run(args, cwd=str(cwd) if cwd else None, check=True)
 
 
+def clear_directory(dir_path: Path) -> None:
+    """Clear directory contents without removing the directory itself.
+
+    This is useful for Docker volume mount points which cannot be removed.
+    """
+    if not dir_path.exists():
+        return
+    for item in dir_path.iterdir():
+        if item.is_dir():
+            shutil.rmtree(item, ignore_errors=True)
+        else:
+            try:
+                item.unlink()
+            except OSError:
+                pass
+
+
 def sync_repository(repo_dir: Path) -> None:
     repo_dir.parent.mkdir(parents=True, exist_ok=True)
     if (repo_dir / ".git").exists():
@@ -80,9 +97,9 @@ def sync_repository(repo_dir: Path) -> None:
             print(f"Updated freeproblemset mirror: {repo_dir}")
             return
         except subprocess.CalledProcessError:
-            shutil.rmtree(repo_dir)
+            clear_directory(repo_dir)
     if repo_dir.exists():
-        shutil.rmtree(repo_dir)
+        clear_directory(repo_dir)
     clone_commands = [
         ["git", "-c", "http.version=HTTP/1.1", "clone", "--depth", "1", REPO_URL, str(repo_dir)],
         ["git", "clone", "--depth", "1", REPO_URL, str(repo_dir)],
@@ -96,7 +113,7 @@ def sync_repository(repo_dir: Path) -> None:
         except subprocess.CalledProcessError as exc:
             last_error = exc
             if repo_dir.exists():
-                shutil.rmtree(repo_dir)
+                clear_directory(repo_dir)
     raise last_error or RuntimeError(f"Failed to clone repository: {REPO_URL}")
 
 
