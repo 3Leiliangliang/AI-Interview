@@ -68,3 +68,4 @@ docs/vibe
 .playwright-cli/
 
 /models
+web/public/models/*.task

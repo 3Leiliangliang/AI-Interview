@@ -15,6 +15,7 @@ from server.routers.skill_router import skills
 from server.routers.system_router import system
 from server.routers.task_router import tasks
 from server.routers.tool_router import tools
+from server.routers.video_router import video
 
 router = APIRouter()
 
@@ -33,3 +34,4 @@ router.include_router(tasks)
 router.include_router(mcp)
 router.include_router(skills)
 router.include_router(tools)
+router.include_router(video)

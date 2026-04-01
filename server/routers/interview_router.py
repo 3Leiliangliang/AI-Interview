@@ -18,6 +18,7 @@ from src.services.interview_coding_service import (
     submit_coding_session,
     update_coding_draft,
 )
+from src.services.interview_result_service import finalize_interview_result, get_interview_result
 
 interview = APIRouter(prefix="/interview", tags=["interview"])
 
@@ -41,6 +42,12 @@ class SubmitCodingSessionRequest(BaseModel):
 class CodingHintRequest(BaseModel):
     question: str
     draft_code: str = ""
+
+
+class FinalizeInterviewResultRequest(BaseModel):
+    target_position: str | None = None
+    interview_round: str | None = None
+    force: bool = False
 
 
 @interview.get("/problemsets")
@@ -185,4 +192,34 @@ async def request_thread_coding_hint(
         current_user_id=str(current_user.id),
         question=payload.question,
         draft_code=payload.draft_code,
+    )
+
+
+@interview.get("/{thread_id}/result")
+async def get_thread_interview_result(
+    thread_id: str,
+    current_user: User = Depends(get_required_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_interview_result(
+        db,
+        thread_id=thread_id,
+        current_user_id=str(current_user.id),
+    )
+
+
+@interview.post("/{thread_id}/result/finalize")
+async def finalize_thread_interview_result(
+    thread_id: str,
+    payload: FinalizeInterviewResultRequest = Body(default_factory=FinalizeInterviewResultRequest),
+    current_user: User = Depends(get_required_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await finalize_interview_result(
+        db,
+        thread_id=thread_id,
+        current_user=current_user,
+        target_position=payload.target_position,
+        interview_round=payload.interview_round,
+        force=payload.force,
     )
