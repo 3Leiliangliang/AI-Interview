@@ -25,7 +25,7 @@
 ### 1. 获取代码与初始化配置
 
 ```bash
-git clone https://github.com/xerrors/Bole.git
+https://gitcode.com/HEUwings/AI-Interview.git
 cd Bole
 
 # Linux / macOS 下执行：
