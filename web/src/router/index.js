@@ -44,6 +44,12 @@ const router = createRouter({
           meta: { keepAlive: false, requiresAuth: true }
         },
         {
+          path: 'interview/voice',
+          name: 'AgentVoiceInterviewComp',
+          component: () => import('../views/VoiceInterviewView.vue'),
+          meta: { keepAlive: false, requiresAuth: true }
+        },
+        {
           path: 'interview/code',
           name: 'InterviewCodingWorkbench',
           component: () => import('../views/InterviewCodingView.vue'),

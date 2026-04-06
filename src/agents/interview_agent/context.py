@@ -5,6 +5,7 @@ from src.agents.common.context import BaseContext
 
 DEFAULT_TARGET_POSITION = "后端工程师"
 DEFAULT_INTERVIEW_ROUND = "初试"
+DEFAULT_DELIVERY_MODE = "chat"
 
 INTERVIEW_SYSTEM_PROMPT = """你是一名专业、克制、友好的中文技术面试官，负责围绕候选人的简历与目标岗位发起一场完整的模拟面试。
 
@@ -60,6 +61,10 @@ class InterviewContext(BaseContext):
     interview_round: str = field(
         default=DEFAULT_INTERVIEW_ROUND,
         metadata={"name": "面试轮次", "description": "如初试、复试、终面"},
+    )
+    delivery_mode: str = field(
+        default=DEFAULT_DELIVERY_MODE,
+        metadata={"name": "输出模式", "description": "chat 或 voice_direct", "configurable": False},
     )
 
     @staticmethod

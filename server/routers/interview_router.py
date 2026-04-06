@@ -1,10 +1,15 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, Query, WebSocket
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.utils.auth_middleware import get_db, get_required_user
+from src.services.voice_interview_service import (
+    VoiceSessionStartPayload,
+    start_voice_interview_session,
+    voice_interview_websocket_endpoint,
+)
 from src.storage.postgres.models_business import User
 from src.services.interview_coding_service import (
     find_coding_session,
@@ -48,6 +53,15 @@ class FinalizeInterviewResultRequest(BaseModel):
     target_position: str | None = None
     interview_round: str | None = None
     force: bool = False
+
+
+@interview.post("/voice/session/start")
+async def start_voice_session(
+    payload: VoiceSessionStartPayload,
+    current_user: User = Depends(get_required_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await start_voice_interview_session(payload=payload, current_user=current_user, db=db)
 
 
 @interview.get("/problemsets")
@@ -222,4 +236,17 @@ async def finalize_thread_interview_result(
         target_position=payload.target_position,
         interview_round=payload.interview_round,
         force=payload.force,
+    )
+
+
+@interview.websocket("/voice/ws")
+async def voice_interview_ws(
+    websocket: WebSocket,
+    voice_session_id: str = Query(...),
+    token: str = Query(...),
+):
+    await voice_interview_websocket_endpoint(
+        websocket=websocket,
+        voice_session_id=voice_session_id,
+        token=token,
     )

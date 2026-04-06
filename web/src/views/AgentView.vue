@@ -13,6 +13,22 @@
         </p>
 
         <div class="setup-section">
+          <div class="section-title">面试形式</div>
+          <div class="option-grid mode-grid">
+            <button
+              v-for="item in interviewModeOptions"
+              :key="item.value"
+              type="button"
+              class="option-card"
+              :class="{ active: selectedInterviewMode === item.value }"
+              @click="selectedInterviewMode = item.value"
+            >
+              {{ item.label }}
+            </button>
+          </div>
+        </div>
+
+        <div class="setup-section">
           <div class="section-title">选择岗位</div>
           <div class="option-grid">
             <button
@@ -47,6 +63,7 @@
         <div class="setup-summary">
           <span class="summary-label">当前配置</span>
           <div class="summary-tags">
+            <span class="summary-tag">{{ selectedInterviewModeLabel }}</span>
             <span class="summary-tag">{{ selectedPosition }}</span>
             <span class="summary-tag">{{ selectedRound }}</span>
           </div>
@@ -90,7 +107,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Sparkles, Clock, ChevronRight, LoaderCircle } from 'lucide-vue-next'
 import { useAgentStore } from '@/stores/agent'
@@ -106,19 +123,31 @@ const positionOptions = [
   { label: '后端', value: '后端工程师' }
 ]
 
+const interviewModeOptions = [
+  { label: '文本面试', value: 'text' },
+  { label: '语音对话面试', value: 'voice' }
+]
+
 const roundOptions = [
   { label: '初试', value: '初试' },
   { label: '复试', value: '复试' },
   { label: 'HR', value: 'HR' }
 ]
 
+const selectedInterviewMode = ref(String(route.query.mode || 'text'))
 const selectedPosition = ref(String(route.query.position || '后端工程师'))
 const selectedRound = ref(String(route.query.round || '初试'))
 
+const selectedInterviewModeLabel = computed(() => {
+  return interviewModeOptions.find((item) => item.value === selectedInterviewMode.value)?.label || '文本面试'
+})
+
 const startInterview = () => {
+  const targetRouteName = selectedInterviewMode.value === 'voice' ? 'AgentVoiceInterviewComp' : 'AgentInterviewComp'
   router.push({
-    name: 'AgentInterviewComp',
+    name: targetRouteName,
     query: {
+      mode: selectedInterviewMode.value,
       position: selectedPosition.value,
       round: selectedRound.value,
       session: `${Date.now()}`
@@ -161,10 +190,12 @@ onMounted(async () => {
 
 const continueInterview = (thread) => {
   const [pos, rnd] = (thread.title || '').split(' · ')
+  const isVoiceThread = thread?.metadata?.interview_mode === 'voice'
 
   router.push({
-    name: 'AgentInterviewComp',
+    name: isVoiceThread ? 'AgentVoiceInterviewComp' : 'AgentInterviewComp',
     query: {
+      mode: isVoiceThread ? 'voice' : 'text',
       position: pos ? pos.trim() : '后端工程师',
       round: rnd ? rnd.trim() : '初试',
       threadId: thread.id
@@ -247,6 +278,10 @@ const continueInterview = (thread) => {
 
 .round-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.mode-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .option-card {

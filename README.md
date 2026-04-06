@@ -60,6 +60,29 @@ docker compose up -d --build
 docker compose up -d --build
 ```
 
+### 4. 语音面试配置
+
+语音面试功能依赖豆包双向流式 TTS。启动前请在项目根目录 `.env` 中至少配置以下变量：
+
+```env
+DOUBAO_VOICE_APP_ID=your_app_id
+DOUBAO_VOICE_API_KEY=your_api_key
+```
+
+当前仓库中的语音面试后端已固定使用以下豆包音色组合：
+
+```env
+speaker=zh_male_m191_uranus_bigtts
+resource_id=seed-tts-2.0
+```
+
+注意事项：
+
+- 这组 `speaker` / `resource_id` 需要保持匹配，否则语音面试 WebSocket 可以建立，但不会返回可播放的音频分片。
+- 前端浏览器需要先经过用户点击触发音频上下文恢复，因此需要在页面中点击“开启语音面试”后才会开始播放语音。
+- 修改 `.env` 后，需重新构建或重启后端容器以确保配置生效。
+
+
 ## 👨‍💻 开发与调试指南
 
 本项目极力推崇**保持专注**与**拒绝过度设计**。所有的开发和调试均可以在 `docker compose up` 运行的容器环境热重载中完成，确保了不同设备间的高度一致性。

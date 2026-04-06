@@ -157,6 +157,7 @@ async def create_thread_view(
         "user_id": conversation.user_id,
         "agent_id": conversation.agent_id,
         "title": conversation.title,
+        "metadata": conversation.extra_metadata or {},
         "created_at": conversation.created_at.isoformat(),
         "updated_at": conversation.updated_at.isoformat(),
     }
@@ -188,6 +189,7 @@ async def list_threads_view(
             "user_id": conv.user_id,
             "agent_id": conv.agent_id,
             "title": conv.title,
+            "metadata": conv.extra_metadata or {},
             "is_pinned": bool(conv.is_pinned),
             "created_at": conv.created_at.isoformat(),
             "updated_at": conv.updated_at.isoformat(),
@@ -228,6 +230,7 @@ async def update_thread_view(
         "user_id": updated_conv.user_id,
         "agent_id": updated_conv.agent_id,
         "title": updated_conv.title,
+        "metadata": updated_conv.extra_metadata or {},
         "is_pinned": bool(updated_conv.is_pinned),
         "created_at": updated_conv.created_at.isoformat(),
         "updated_at": updated_conv.updated_at.isoformat(),

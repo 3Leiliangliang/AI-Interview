@@ -703,6 +703,7 @@ class ThreadResponse(BaseModel):
     user_id: str
     agent_id: str
     title: str | None = None
+    metadata: dict | None = None
     is_pinned: bool = False
     created_at: str
     updated_at: str

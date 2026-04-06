@@ -14,6 +14,7 @@ export * from './resume_api'
 export * from './skill_api'
 export * from './tool_api'
 export * from './problemset_api'
+export * from './interview_voice'
 
 export {
   apiGet,
