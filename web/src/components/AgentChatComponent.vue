@@ -1,6 +1,7 @@
 <template>
   <div class="chat-container" :class="{ 'sidebar-right': props.sidebarPlacement === 'right' }">
     <ChatSidebarComponent
+      v-if="props.showSidebar"
       :current-chat-id="currentChatId"
       :chats-list="chatsList"
       :is-sidebar-open="chatUIStore.isSidebarOpen"
@@ -31,7 +32,7 @@
           <div
             type="button"
             class="agent-nav-btn"
-            v-if="!chatUIStore.isSidebarOpen"
+            v-if="props.showSidebar && !chatUIStore.isSidebarOpen"
             @click="toggleSidebar"
           >
             <component :is="sidebarOpenIcon" class="nav-btn-icon" size="18" />
@@ -39,7 +40,7 @@
           <div
             type="button"
             class="agent-nav-btn"
-            v-if="!chatUIStore.isSidebarOpen"
+            v-if="props.showSidebar && !chatUIStore.isSidebarOpen"
             :class="{ 'is-disabled': chatUIStore.creatingNewChat }"
             @click="createNewChat"
           >
@@ -265,6 +266,10 @@ const props = defineProps({
   sidebarEmptyText: {
     type: String,
     default: '暂无对话历史'
+  },
+  showSidebar: {
+    type: Boolean,
+    default: true
   }
 })
 const emit = defineEmits(['open-config', 'open-agent-modal', 'agent-state-change', 'thread-change'])
@@ -744,12 +749,12 @@ const loadMoreChats = async () => {
 }
 
 // 创建新线程
-const createThread = async (agentId, title = '新的对话') => {
+const createThread = async (agentId, title = '新的对话', metadata = null) => {
   if (!agentId) return null
 
   chatState.isCreatingThread = true
   try {
-    const thread = await threadApi.createThread(agentId, title)
+    const thread = await threadApi.createThread(agentId, title, metadata || undefined)
     if (thread) {
       threads.value.unshift(thread)
       threadMessages.value[thread.id] = []
@@ -1415,7 +1420,7 @@ const switchToFirstChatIfEmpty = async () => {
   return false
 }
 
-const createNewChat = async (title = '新的对话', forceCreate = false) => {
+const createNewChat = async (title = '新的对话', forceCreate = false, metadata = null) => {
   if (
     !AgentValidator.validateAgentId(currentAgentId.value, '创建对话') ||
     chatUIStore.creatingNewChat
@@ -1437,7 +1442,7 @@ const createNewChat = async (title = '新的对话', forceCreate = false) => {
 
   chatUIStore.creatingNewChat = true
   try {
-    const newThread = await createThread(currentAgentId.value, title)
+    const newThread = await createThread(currentAgentId.value, title, metadata)
     if (newThread) {
       // 中断之前线程的流式输出（如果存在）
       const previousThreadId = chatState.currentThreadId
@@ -1766,6 +1771,7 @@ const buildExportPayload = () => {
 const startInterviewSession = async ({
   openingPrompt = '',
   threadTitle = '新的面试',
+  threadMetadata = null,
   forceNewThread = true
 } = {}) => {
   const prompt = String(openingPrompt || '').trim()
@@ -1779,7 +1785,7 @@ const startInterviewSession = async ({
 
   let threadId = currentChatId.value
   if (forceNewThread || !threadId) {
-    const createdThread = await createNewChat(threadTitle, forceNewThread)
+    const createdThread = await createNewChat(threadTitle, forceNewThread, threadMetadata)
     threadId = createdThread?.id || null
   } else if (threadTitle) {
     void updateThread(threadId, threadTitle).catch(() => {})

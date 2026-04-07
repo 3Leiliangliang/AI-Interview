@@ -7,13 +7,15 @@ import os
 import re
 import struct
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import timedelta
 from enum import IntEnum
 from typing import Any
 
-import aiohttp
+import dashscope
 import websockets
+from dashscope.audio.asr import Recognition, RecognitionCallback, RecognitionResult
 from fastapi import HTTPException, WebSocket
 from langchain.messages import AIMessageChunk, HumanMessage
 from pydantic import BaseModel
@@ -46,6 +48,10 @@ DOUBAO_SAMPLE_RATE = 24000
 DOUBAO_CHAR_DELAY_SECONDS = 0.005
 VOICE_SESSION_TOKEN_TTL_SECONDS = 60 * 60 * 4
 VOICE_DELIVERY_MODE = "voice_direct"
+DASHSCOPE_ASR_WS_URL = "wss://dashscope.aliyuncs.com/api-ws/v1/inference"
+DASHSCOPE_ASR_MODEL = "fun-asr-realtime"
+DASHSCOPE_ASR_SAMPLE_RATE = 16000
+DASHSCOPE_ASR_MAX_SENTENCE_SILENCE_MS = 3000
 
 PROTOCOL_VERSION = 0b0001
 FULL_CLIENT_REQUEST = 0b0001
@@ -171,7 +177,7 @@ class DoubaoMessage:
     payload: bytes = b""
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> "DoubaoMessage":
+    def from_bytes(cls, data: bytes) -> DoubaoMessage:
         type_and_flag = data[1]
         msg_type = DoubaoMsgType(type_and_flag >> 4)
         flag = DoubaoMsgTypeFlagBits(type_and_flag & 0b00001111)
@@ -353,7 +359,13 @@ def _parse_tts_response(raw: bytes | str) -> dict[str, Any]:
             cursor += 4
 
         event = result.get("event")
-        if event not in {EVENT_START_CONNECTION, EVENT_FINISH_CONNECTION, EVENT_CONNECTION_STARTED, EVENT_CONNECTION_FAILED, EVENT_CONNECTION_FINISHED}:
+        if event not in {
+            EVENT_START_CONNECTION,
+            EVENT_FINISH_CONNECTION,
+            EVENT_CONNECTION_STARTED,
+            EVENT_CONNECTION_FAILED,
+            EVENT_CONNECTION_FINISHED,
+        }:
             field_size = int.from_bytes(payload[cursor : cursor + 4], "big", signed=False)
             cursor += 4
             result["session_id"] = payload[cursor : cursor + field_size].decode("utf-8", errors="ignore")
@@ -421,18 +433,20 @@ def _format_tts_error_message(payload: Any) -> str:
         message = str(payload.get("message") or payload.get("error") or "").strip()
         status_code = str(payload.get("status_code") or "").strip()
         normalized_message = message.replace(" ", "")
+        normalized_message_lower = normalized_message.lower()
+        normalized_payload = json.dumps(payload, ensure_ascii=False).replace(" ", "").lower()
         if (
             "resourceIDismismatchedwithspeakerrelatedresource" in normalized_message
             or "resourceIDismismatchedwithspeakerrelatedresource" in message
             or "resourceIDismismatchedwithspeakerrelatedresource" in json.dumps(payload, ensure_ascii=False)
-            or "resourceidisismatchedwithspeakerrelatedresource" in normalized_message.lower()
-            or "resourceidismismatchedwithspeakerrelatedresource" in normalized_message.lower()
-            or "resourceidis" in normalized_message.lower() and "speakerrelatedresource" in normalized_message.lower()
-            or "resourceidis" in json.dumps(payload, ensure_ascii=False).replace(" ", "").lower()
-            or "resourceidismismatchedwithspeakerrelatedresource" in json.dumps(payload, ensure_ascii=False).replace(" ", "").lower()
-            or "resourceidisismatchedwithspeakerrelatedresource" in json.dumps(payload, ensure_ascii=False).replace(" ", "").lower()
+            or "resourceidisismatchedwithspeakerrelatedresource" in normalized_message_lower
+            or "resourceidismismatchedwithspeakerrelatedresource" in normalized_message_lower
+            or "resourceidis" in normalized_message_lower and "speakerrelatedresource" in normalized_message_lower
+            or "resourceidis" in normalized_payload
+            or "resourceidismismatchedwithspeakerrelatedresource" in normalized_payload
+            or "resourceidisismatchedwithspeakerrelatedresource" in normalized_payload
             or "resourceidismismatchedwithspeakerrelatedresource" in message.replace(" ", "").lower()
-            or "mismatchedwithspeakerrelatedresource" in normalized_message.lower()
+            or "mismatchedwithspeakerrelatedresource" in normalized_message_lower
         ):
             return "当前豆包资源与所选音色不匹配，请检查 resource_id 和 speaker 配置"
         if status_code and message:
@@ -692,7 +706,14 @@ async def start_voice_interview_session(
     }
 
 
-async def _persist_user_message(*, thread_id: str, content: str, db, hidden_from_history: bool = False) -> None:
+async def _persist_user_message(
+    *,
+    thread_id: str,
+    content: str,
+    db,
+    hidden_from_history: bool = False,
+    voice_input_mode: str = "text",
+) -> None:
     conv_repo = ConversationRepository(db)
     await conv_repo.add_message_by_thread_id(
         thread_id=thread_id,
@@ -700,18 +721,127 @@ async def _persist_user_message(*, thread_id: str, content: str, db, hidden_from
         content=content,
         message_type="text",
         extra_metadata={
-            "voice_input_mode": "text",
+            "voice_input_mode": voice_input_mode,
             "hidden_from_history": hidden_from_history,
         },
     )
 
 
+class DashScopeRealtimeASRCallback(RecognitionCallback):
+    def __init__(self, owner: DashScopeRealtimeASRClient, loop: asyncio.AbstractEventLoop) -> None:
+        self.owner = owner
+        self.loop = loop
+
+    def _submit(self, coro: Awaitable[Any]) -> None:
+        future = asyncio.run_coroutine_threadsafe(coro, self.loop)
+        future.add_done_callback(self._consume_future)
+
+    @staticmethod
+    def _consume_future(future) -> None:
+        try:
+            future.result()
+        except Exception as exc:
+            logger.error("DashScope ASR callback dispatch failed: %s", exc, exc_info=True)
+
+    def on_open(self) -> None:
+        logger.info("DashScope realtime ASR connected")
+
+    def on_event(self, result: RecognitionResult) -> None:
+        sentence = result.get_sentence() or {}
+        self._submit(self.owner.handle_sentence(sentence))
+
+    def on_complete(self) -> None:
+        self._submit(self.owner.handle_complete())
+
+    def on_error(self, result: RecognitionResult) -> None:
+        self._submit(self.owner.handle_error(getattr(result, "message", "") or "语音识别失败"))
+
+    def on_close(self) -> None:
+        logger.info("DashScope realtime ASR closed")
+
+
+class DashScopeRealtimeASRClient:
+    def __init__(
+        self,
+        *,
+        loop: asyncio.AbstractEventLoop,
+        on_partial: Callable[[str], Awaitable[None]],
+        on_final: Callable[[str], Awaitable[None]],
+        on_complete: Callable[[], Awaitable[None]],
+        on_error: Callable[[str], Awaitable[None]],
+    ) -> None:
+        self.loop = loop
+        self.on_partial = on_partial
+        self.on_final = on_final
+        self.on_complete = on_complete
+        self.on_error = on_error
+        self.recognition: Recognition | None = None
+        self._stopped = False
+        self._final_emitted = False
+
+    async def start(self) -> None:
+        api_key = os.getenv("DASHSCOPE_API_KEY", "").strip()
+        if not api_key:
+            raise RuntimeError("缺少 DASHSCOPE_API_KEY，无法启用候选人语音识别")
+
+        dashscope.api_key = api_key
+        dashscope.base_websocket_api_url = DASHSCOPE_ASR_WS_URL
+        callback = DashScopeRealtimeASRCallback(self, self.loop)
+        self.recognition = Recognition(
+            model=DASHSCOPE_ASR_MODEL,
+            format="pcm",
+            sample_rate=DASHSCOPE_ASR_SAMPLE_RATE,
+            semantic_punctuation_enabled=False,
+            multi_threshold_mode_enabled=True,
+            max_sentence_silence=DASHSCOPE_ASR_MAX_SENTENCE_SILENCE_MS,
+            callback=callback,
+        )
+        self.recognition.start()
+
+    def send_audio_frame(self, buffer: bytes) -> None:
+        if self.recognition is None or self._stopped:
+            return
+        self.recognition.send_audio_frame(buffer)
+
+    async def stop(self) -> None:
+        if self.recognition is None or self._stopped:
+            return
+        self._stopped = True
+        await asyncio.to_thread(self.recognition.stop)
+
+    async def handle_sentence(self, sentence: dict[str, Any]) -> None:
+        text = str(sentence.get("text") or "").strip()
+        if not text:
+            return
+
+        await self.on_partial(text)
+        if RecognitionResult.is_sentence_end(sentence) and not self._final_emitted:
+            self._final_emitted = True
+            await self.on_final(text)
+            await self.stop()
+
+    async def handle_complete(self) -> None:
+        await self.on_complete()
+
+    async def handle_error(self, message: str) -> None:
+        await self.on_error(message or "语音识别失败")
+
+
 class VoiceInterviewBridge:
-    def __init__(self, *, websocket: WebSocket, claims: VoiceSessionClaims, user: User) -> None:
+    def __init__(
+        self,
+        *,
+        websocket: WebSocket,
+        claims: VoiceSessionClaims,
+        user: User,
+        doubao_client: DoubaoBidirectionalTTSClient | None = None,
+        asr_client_factory: Callable[..., DashScopeRealtimeASRClient] | None = None,
+    ) -> None:
         self.websocket = websocket
         self.claims = claims
         self.user = user
-        self.doubao = DoubaoBidirectionalTTSClient()
+        self.doubao = doubao_client or DoubaoBidirectionalTTSClient()
+        self.asr_client_factory = asr_client_factory or DashScopeRealtimeASRClient
         self._client_send_lock = asyncio.Lock()
         self._turn_lock = asyncio.Lock()
         self._turn_task: asyncio.Task | None = None
@@ -719,6 +849,10 @@ class VoiceInterviewBridge:
         self._tts_started_future: asyncio.Future | None = None
         self._tts_finished_future: asyncio.Future | None = None
         self._session_watchdog_task: asyncio.Task | None = None
+        self._candidate_asr: DashScopeRealtimeASRClient | None = None
+        self._candidate_capture_state = "idle"
+        self._candidate_partial_transcript = ""
+        self._candidate_final_transcript = ""
 
     async def run(self) -> None:
         await self.websocket.accept()
@@ -731,6 +865,7 @@ class VoiceInterviewBridge:
             round=self.claims.round_name,
         )
         await self._send_initial_history()
+        await self._send_candidate_capture_state()
 
         client_task = asyncio.create_task(self._client_loop())
         doubao_task = asyncio.create_task(self._doubao_loop())
@@ -742,6 +877,7 @@ class VoiceInterviewBridge:
 
     async def close(self) -> None:
         await self._interrupt_current_turn(notify=False)
+        await self._stop_candidate_capture(send_stop=True, reset_transcript=True)
         if self._session_watchdog_task and not self._session_watchdog_task.done():
             self._session_watchdog_task.cancel()
         await self.doubao.close()
@@ -753,6 +889,26 @@ class VoiceInterviewBridge:
     async def _send_event(self, event_type: str, **payload: Any) -> None:
         async with self._client_send_lock:
             await self.websocket.send_text(json.dumps({"type": event_type, **payload}, ensure_ascii=False))
+
+    async def _send_candidate_capture_state(self) -> None:
+        await self._send_event("candidate_capture_state", state=self._candidate_capture_state)
+
+    async def _set_candidate_capture_state(
+        self,
+        state: str,
+        *,
+        reset_partial: bool = False,
+        reset_final: bool = False,
+    ) -> None:
+        self._candidate_capture_state = state
+        if reset_partial:
+            self._candidate_partial_transcript = ""
+        if reset_final:
+            self._candidate_final_transcript = ""
+        await self._send_candidate_capture_state()
+
+    def _assistant_is_busy(self) -> bool:
+        return bool((self._turn_task and not self._turn_task.done()) or self._active_session_id)
 
     async def _send_initial_history(self) -> None:
         async with pg_manager.get_async_session_context() as db:
@@ -786,7 +942,19 @@ class VoiceInterviewBridge:
 
     async def _client_loop(self) -> None:
         while True:
-            raw = await self.websocket.receive_text()
+            message = await self.websocket.receive()
+            message_kind = message.get("type")
+            if message_kind == "websocket.disconnect":
+                break
+
+            if message.get("bytes") is not None:
+                await self._handle_candidate_audio_chunk(message["bytes"])
+                continue
+
+            raw = message.get("text")
+            if raw is None:
+                continue
+
             try:
                 payload = json.loads(raw)
             except json.JSONDecodeError:
@@ -795,26 +963,119 @@ class VoiceInterviewBridge:
 
             message_type = str(payload.get("type") or "").strip()
             if message_type == "start_interview":
-                await self._start_turn(_build_opening_prompt(self.claims.position, self.claims.round_name), is_opening=True)
+                await self._start_turn(
+                    _build_opening_prompt(self.claims.position, self.claims.round_name),
+                    is_opening=True,
+                )
             elif message_type == "user_text":
                 content = str(payload.get("content") or "").strip()
                 if content:
                     await self._start_turn(content, is_opening=False)
+            elif message_type == "candidate_audio_start":
+                await self._start_candidate_capture()
+            elif message_type == "candidate_audio_stop":
+                await self._stop_candidate_capture(send_stop=True)
             elif message_type == "interrupt":
                 await self._interrupt_current_turn(notify=True)
             elif message_type == "finish":
                 break
 
-    async def _start_turn(self, query: str, *, is_opening: bool) -> None:
+    async def _start_candidate_capture(self) -> None:
+        if self._assistant_is_busy():
+            await self._set_candidate_capture_state("disabled")
+            await self._send_event("error", message="请等待当前面试官回复结束")
+            return
+        if self._candidate_asr is not None:
+            return
+
+        await self._set_candidate_capture_state("listening", reset_partial=True, reset_final=True)
+        asr_client = self.asr_client_factory(
+            loop=asyncio.get_running_loop(),
+            on_partial=self._handle_candidate_transcript_partial,
+            on_final=self._handle_candidate_transcript_final,
+            on_complete=self._handle_candidate_capture_complete,
+            on_error=self._handle_candidate_capture_error,
+        )
+        self._candidate_asr = asr_client
+        try:
+            await asr_client.start()
+        except Exception as exc:
+            self._candidate_asr = None
+            await self._set_candidate_capture_state("idle")
+            await self._send_event("error", message=str(exc) or "语音识别启动失败")
+
+    async def _stop_candidate_capture(self, *, send_stop: bool, reset_transcript: bool = False) -> None:
+        asr_client = self._candidate_asr
+        if asr_client is None:
+            if reset_transcript:
+                await self._set_candidate_capture_state("idle", reset_partial=True, reset_final=True)
+            return
+
+        if not self._assistant_is_busy():
+            await self._set_candidate_capture_state("processing")
+        if send_stop:
+            try:
+                await asr_client.stop()
+            except Exception as exc:
+                await self._send_event("error", message=str(exc) or "语音识别停止失败")
+        self._candidate_asr = None
+        if self._assistant_is_busy():
+            await self._set_candidate_capture_state(
+                "disabled",
+                reset_partial=reset_transcript,
+                reset_final=reset_transcript,
+            )
+        else:
+            await self._set_candidate_capture_state(
+                "idle",
+                reset_partial=reset_transcript,
+                reset_final=reset_transcript,
+            )
+
+    async def _handle_candidate_audio_chunk(self, data: bytes) -> None:
+        if self._candidate_asr is None or self._candidate_capture_state != "listening":
+            return
+        self._candidate_asr.send_audio_frame(data)
+
+    async def _handle_candidate_transcript_partial(self, text: str) -> None:
+        self._candidate_partial_transcript = text
+        await self._send_event("candidate_transcript_partial", content=text)
+
+    async def _handle_candidate_transcript_final(self, text: str) -> None:
+        final_text = str(text or "").strip()
+        if not final_text:
+            return
+        self._candidate_partial_transcript = final_text
+        self._candidate_final_transcript = final_text
+        await self._send_event("candidate_transcript_final", content=final_text)
+        await self._set_candidate_capture_state("processing")
+        await self._start_turn(final_text, is_opening=False, voice_input_mode="speech")
+
+    async def _handle_candidate_capture_complete(self) -> None:
+        self._candidate_asr = None
+        if self._assistant_is_busy():
+            await self._set_candidate_capture_state("disabled")
+            return
+        await self._set_candidate_capture_state("idle")
+
+    async def _handle_candidate_capture_error(self, message: str) -> None:
+        self._candidate_asr = None
+        await self._set_candidate_capture_state("idle")
+        await self._send_event("error", message=message or "语音识别失败")
+
+    async def _start_turn(self, query: str, *, is_opening: bool, voice_input_mode: str = "text") -> None:
         async with self._turn_lock:
-            if (self._turn_task and not self._turn_task.done()) or self._active_session_id:
+            if self._assistant_is_busy():
                 await self._send_event("error", message="请等待当前面试官回复结束")
                 return
-            self._turn_task = asyncio.create_task(self._run_turn_wrapper(query=query, is_opening=is_opening))
+            await self._set_candidate_capture_state("disabled")
+            self._turn_task = asyncio.create_task(
+                self._run_turn_wrapper(query=query, is_opening=is_opening, voice_input_mode=voice_input_mode)
+            )
 
-    async def _run_turn_wrapper(self, *, query: str, is_opening: bool) -> None:
+    async def _run_turn_wrapper(self, *, query: str, is_opening: bool, voice_input_mode: str) -> None:
         try:
-            await self._run_agent_turn(query=query, is_opening=is_opening)
+            await self._run_agent_turn(query=query, is_opening=is_opening, voice_input_mode=voice_input_mode)
         except asyncio.CancelledError:
             pass
         except Exception as exc:
@@ -822,8 +1083,10 @@ class VoiceInterviewBridge:
             await self._send_event("error", message=str(exc) or exc.__class__.__name__)
         finally:
             self._turn_task = None
+            if self._candidate_asr is None:
+                await self._set_candidate_capture_state("idle")
 
-    async def _run_agent_turn(self, *, query: str, is_opening: bool) -> None:
+    async def _run_agent_turn(self, *, query: str, is_opening: bool, voice_input_mode: str = "text") -> None:
         agent = agent_manager.get_agent(self.claims.agent_id)
         if not agent:
             raise HTTPException(status_code=404, detail=f"智能体 {self.claims.agent_id} 不存在")
@@ -869,6 +1132,7 @@ class VoiceInterviewBridge:
                 content=query,
                 db=db,
                 hidden_from_history=is_opening,
+                voice_input_mode=voice_input_mode,
             )
             if not is_opening:
                 await self._send_event("user_message", content=query)
@@ -881,7 +1145,7 @@ class VoiceInterviewBridge:
                 await self.doubao.start_session(session_id, user_id=str(self.user.id))
                 try:
                     await asyncio.wait_for(self._tts_started_future, timeout=10)
-                except asyncio.TimeoutError as exc:
+                except TimeoutError as exc:
                     self._active_session_id = ""
                     raise RuntimeError("豆包 TTS 会话启动超时") from exc
 
@@ -890,12 +1154,15 @@ class VoiceInterviewBridge:
                 self._arm_session_watchdog(session_id)
                 try:
                     await asyncio.wait_for(self._tts_finished_future, timeout=30)
-                except asyncio.TimeoutError as exc:
+                except TimeoutError as exc:
                     raise RuntimeError("豆包 TTS 会话结束超时") from exc
 
             accumulated_content: list[str] = []
             tts_buffer = ""
-            async for msg, _metadata in agent.stream_messages([HumanMessage(content=query)], input_context=input_context):
+            async for msg, _metadata in agent.stream_messages(
+                [HumanMessage(content=query)],
+                input_context=input_context,
+            ):
                 if isinstance(msg, AIMessageChunk):
                     delta = _normalize_text_content(msg.content)
                     if delta:
@@ -965,6 +1232,7 @@ class VoiceInterviewBridge:
         async with self._turn_lock:
             turn_task = self._turn_task
             session_id = self._active_session_id
+            await self._stop_candidate_capture(send_stop=True, reset_transcript=True)
             if session_id:
                 try:
                     await self.doubao.cancel_session(session_id)

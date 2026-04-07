@@ -1,5 +1,6 @@
 """PostgreSQL 业务数据模型 - 用户、部门、对话等相关表"""
 
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy import (
@@ -76,6 +77,9 @@ class User(Base):
     # 关联部门
     department = relationship("Department", back_populates="users")
 
+    MAX_LOGIN_FAILED_ATTEMPTS = 5
+    LOGIN_LOCK_DURATION_SECONDS = 15 * 60
+
     def to_dict(self, include_password: bool = False) -> dict[str, Any]:
         result = {
             "id": self.id,
@@ -115,6 +119,15 @@ class User(Base):
         self.login_failed_count = 0
         self.last_failed_login = None
         self.login_locked_until = None
+
+    def increment_failed_login(self):
+        """增加登录失败次数，并在超过阈值时锁定账户"""
+        self.login_failed_count = int(self.login_failed_count or 0) + 1
+        self.last_failed_login = utc_now_naive()
+        if self.login_failed_count >= self.MAX_LOGIN_FAILED_ATTEMPTS:
+            self.login_locked_until = self.last_failed_login + timedelta(
+                seconds=self.LOGIN_LOCK_DURATION_SECONDS
+            )
 
 
 class UserResume(Base):

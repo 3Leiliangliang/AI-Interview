@@ -4,12 +4,9 @@
       ref="chatComponentRef"
       :agent-id="interviewAgentId"
       :single-mode="true"
+      :show-sidebar="false"
       :preferred-thread-id="threadId"
       :context-overrides="contextOverrides"
-      sidebar-placement="left"
-      sidebar-title="面试记录"
-      sidebar-create-text="开始新面试"
-      sidebar-empty-text="暂无面试记录"
       @agent-state-change="handleAgentStateChange"
       @thread-change="handleThreadChange"
     >
@@ -201,6 +198,11 @@ const maybeStartInterview = async () => {
   const startedThreadId = await chatComponentRef.value.startInterviewSession({
     openingPrompt: interviewOpeningPrompt.value,
     threadTitle: threadTitle.value,
+    threadMetadata: {
+      interview_mode: 'text',
+      target_position: selectedPosition.value,
+      interview_round: selectedRound.value
+    },
     forceNewThread: true
   })
 

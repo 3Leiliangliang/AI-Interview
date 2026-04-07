@@ -7,7 +7,8 @@ import {
   BarChart3,
   CircleCheck,
   Blocks,
-  FileText
+  FileText,
+  History
 } from 'lucide-vue-next'
 
 import { useConfigStore } from '@/stores/config'
@@ -119,24 +120,41 @@ const mainList = computed(() => {
     {
       name: '模拟面试',
       path: '/agent',
+      matchNames: [
+        'AgentComp',
+        'AgentInterviewComp',
+        'AgentVoiceInterviewComp',
+        'InterviewCodingWorkbench',
+        'InterviewResultPage'
+      ],
       icon: Bot,
       activeIcon: Bot
     },
     {
+      name: '面试记录',
+      path: '/agent/records',
+      matchNames: ['InterviewRecordsPage'],
+      icon: History,
+      activeIcon: History
+    },
+    {
       name: '我的简历',
       path: '/resume',
+      matchNames: ['ResumeListComp', 'ResumeDetailComp'],
       icon: FileText,
       activeIcon: FileText
     },
     {
       name: '知识库',
       path: '/database',
+      matchNames: ['DatabaseComp', 'DatabaseInfoComp'],
       icon: LibraryBig,
       activeIcon: LibraryBig
     },
     {
       name: '题库管理',
       path: '/problemsets',
+      matchNames: ['ProblemSetManageComp'],
       icon: Blocks,
       activeIcon: Blocks
     }
@@ -145,12 +163,17 @@ const mainList = computed(() => {
   items.push({
     name: 'Dashboard',
     path: '/dashboard',
+    matchNames: ['DashboardComp'],
     icon: BarChart3,
     activeIcon: BarChart3
   })
 
   return items
 })
+
+const isNavItemActive = (item) => {
+  return Array.isArray(item.matchNames) ? item.matchNames.includes(route.name) : route.path === item.path
+}
 
 // Provide settings modal methods to child components
 provide('settingsModal', {
@@ -185,13 +208,13 @@ provide('settingsModal', {
           :to="item.path"
           v-show="!item.hidden"
           class="nav-item"
-          active-class="active"
+          :class="{ active: isNavItemActive(item) }"
         >
           <a-tooltip placement="right" :title="null">
             <span class="nav-item-inner">
               <component
                 class="icon"
-                :is="route.path.startsWith(item.path) ? item.activeIcon : item.icon"
+                :is="isNavItemActive(item) ? item.activeIcon : item.icon"
                 size="22"
               />
               <span class="text">{{ item.name }}</span>

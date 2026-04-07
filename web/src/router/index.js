@@ -62,6 +62,12 @@ const router = createRouter({
           meta: { keepAlive: false, requiresAuth: true }
         },
         {
+          path: 'records',
+          name: 'InterviewRecordsPage',
+          component: () => import('../views/InterviewRecordsView.vue'),
+          meta: { keepAlive: false, requiresAuth: true }
+        },
+        {
           path: ':agent_id',
           redirect: '/agent'
         }

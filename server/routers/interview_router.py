@@ -24,6 +24,7 @@ from src.services.interview_coding_service import (
     update_coding_draft,
 )
 from src.services.interview_result_service import finalize_interview_result, get_interview_result
+from src.services.interview_result_service import get_interview_history
 
 interview = APIRouter(prefix="/interview", tags=["interview"])
 
@@ -219,6 +220,19 @@ async def get_thread_interview_result(
         db,
         thread_id=thread_id,
         current_user_id=str(current_user.id),
+    )
+
+
+@interview.get("/history")
+async def get_user_interview_history(
+    user_id: int | None = Query(default=None),
+    current_user: User = Depends(get_required_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_interview_history(
+        db,
+        current_user=current_user,
+        user_id=user_id,
     )
 
 

@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import HTTPException
 from langchain.messages import HumanMessage
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.agents import agent_manager
@@ -16,11 +17,12 @@ from src.services.chat_stream_service import (
     save_messages_from_langgraph_state,
 )
 from src.services.interview_coding_service import get_coding_session_from_metadata
-from src.storage.postgres.models_business import User
+from src.storage.postgres.models_business import Department, User
 from src.utils.datetime_utils import format_utc_datetime
 from src.utils.logging_config import logger
 
 INTERVIEW_RESULT_METADATA_KEY = "interview_result"
+INTERVIEW_AGENT_ID = "InterviewAgent"
 INTERVIEW_SCORECARD_PATTERN = re.compile(
     r"```interview_scorecard\s*(\{[\s\S]*?\})\s*```",
     re.IGNORECASE,
@@ -34,6 +36,14 @@ DIMENSION_LABELS = {
     "communication_clarity": "沟通表达",
     "soft_skills": "综合素质",
     "soft_skills_team_fit": "综合素质",
+}
+REVERSE_DIMENSION_LABELS = {
+    "技术能力": "technical_competence",
+    "实战经验": "technical_competence",
+    "问题解决": "problem_solving",
+    "沟通表达": "communication",
+    "综合素质": "soft_skills",
+    "编码能力": "technical_competence",
 }
 
 
@@ -109,6 +119,13 @@ def _label_dimension_key(key: str) -> str:
         "code_ability": "编码能力",
     }
     return fallback_labels.get(key, DIMENSION_LABELS.get(key, key))
+
+
+def _normalize_dimension_key(key: str) -> str:
+    normalized = str(key or "").strip()
+    if not normalized:
+        return ""
+    return REVERSE_DIMENSION_LABELS.get(normalized, normalized)
 
 
 def _normalize_scorecard(value: Any) -> dict[str, Any] | None:
@@ -272,6 +289,204 @@ def _normalize_result_payload(value: Any, *, conversation, coding_session: dict[
     return None
 
 
+def _resolve_interview_result_payload(
+    conversation,
+    *,
+    stored_result: dict[str, Any] | None,
+    coding_session: dict[str, Any] | None,
+    messages: list[Any] | None = None,
+) -> dict[str, Any] | None:
+    if _is_result_complete_enough(stored_result):
+        return stored_result
+
+    for message in reversed(messages or []):
+        if getattr(message, "role", "") != "assistant":
+            continue
+        derived = _build_result_from_message(message, conversation, coding_session)
+        if derived:
+            return derived
+
+    return stored_result
+
+
+def _extract_dimension_scores(scorecard: dict[str, Any] | None) -> dict[str, int | None]:
+    values = {
+        "technical_competence": None,
+        "problem_solving": None,
+        "communication": None,
+        "soft_skills": None,
+    }
+    if not isinstance(scorecard, dict):
+        return values
+
+    for item in scorecard.get("dimensions") or []:
+        if not isinstance(item, dict):
+            continue
+        normalized_key = _normalize_dimension_key(item.get("name"))
+        if normalized_key not in values:
+            continue
+        score = _normalize_score_value(item.get("score"))
+        if score is not None:
+            values[normalized_key] = score
+    return values
+
+
+async def _resolve_target_user(
+    db: AsyncSession,
+    *,
+    current_user: User,
+    target_user_id: int | None,
+) -> User:
+    if target_user_id is None or target_user_id == current_user.id:
+        return current_user
+
+    result = await db.execute(select(User).where(User.id == target_user_id, User.is_deleted == 0))
+    target_user = result.scalar_one_or_none()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    if current_user.role == "superadmin":
+        return target_user
+
+    if current_user.role == "admin":
+        if not current_user.department_id or target_user.department_id != current_user.department_id:
+            raise HTTPException(status_code=403, detail="无权查看该用户的面试记录")
+        return target_user
+
+    raise HTTPException(status_code=403, detail="无权查看其他用户的面试记录")
+
+
+async def _get_department_name(db: AsyncSession, department_id: int | None) -> str:
+    if not department_id:
+        return ""
+    result = await db.execute(select(Department.name).where(Department.id == department_id))
+    return str(result.scalar_one_or_none() or "").strip()
+
+
+def _build_history_record(*, conversation, result_payload: dict[str, Any] | None) -> dict[str, Any]:
+    metadata = dict(conversation.extra_metadata or {})
+    coding_session = get_coding_session_from_metadata(metadata)
+    title_position, title_round = _parse_thread_context(conversation.title)
+    scorecard = result_payload.get("scorecard") if isinstance(result_payload, dict) else None
+    dimension_scores = _extract_dimension_scores(scorecard)
+    interview_mode = str(metadata.get("interview_mode") or "").strip() or "text"
+    position = str(
+        metadata.get("target_position")
+        or (coding_session or {}).get("target_position")
+        or (scorecard or {}).get("role")
+        or title_position
+        or ""
+    ).strip()
+    round_name = str(
+        metadata.get("interview_round")
+        or (scorecard or {}).get("round")
+        or title_round
+        or ""
+    ).strip()
+
+    result_status = str((result_payload or {}).get("status") or "").strip()
+    if result_status == "completed" and (scorecard or {}).get("overall") is not None:
+        status = "completed"
+    elif result_status in {"generating", "failed"}:
+        status = result_status
+    else:
+        status = "in_progress"
+
+    dimension_items = [
+        {
+            "key": "technical_competence",
+            "label": "技术能力",
+            "score": dimension_scores["technical_competence"],
+        },
+        {
+            "key": "problem_solving",
+            "label": "问题解决",
+            "score": dimension_scores["problem_solving"],
+        },
+        {
+            "key": "communication",
+            "label": "沟通表达",
+            "score": dimension_scores["communication"],
+        },
+        {
+            "key": "soft_skills",
+            "label": "综合素质",
+            "score": dimension_scores["soft_skills"],
+        },
+    ]
+
+    return {
+        "thread_id": conversation.thread_id,
+        "title": conversation.title or "未命名面试",
+        "created_at": format_utc_datetime(conversation.created_at),
+        "updated_at": format_utc_datetime(conversation.updated_at),
+        "interview_mode": interview_mode,
+        "position": position or "后端工程师",
+        "round": round_name or "初试",
+        "status": status,
+        "overall_score": (scorecard or {}).get("overall"),
+        "dimensions": dimension_items,
+        "has_result": status == "completed" and isinstance(scorecard, dict),
+        "result_generated_at": str((result_payload or {}).get("generated_at") or "").strip(),
+    }
+
+
+def _build_history_chart(records: list[dict[str, Any]]) -> dict[str, Any]:
+    completed_records = sorted(
+        [
+            item
+            for item in records
+            if item.get("has_result") and item.get("status") == "completed"
+        ],
+        key=lambda item: (str(item.get("created_at") or ""), str(item.get("thread_id") or "")),
+    )
+
+    categories = [item["created_at"] for item in completed_records]
+    dimension_key_map = {
+        "technical_competence": "technical_competence",
+        "problem_solving": "problem_solving",
+        "communication": "communication",
+        "soft_skills": "soft_skills",
+    }
+
+    series = [
+        {
+            "key": "overall",
+            "label": "总分",
+            "data": [item.get("overall_score") for item in completed_records],
+        }
+    ]
+
+    for key, label in (
+        ("technical_competence", "技术能力"),
+        ("problem_solving", "问题解决"),
+        ("communication", "沟通表达"),
+        ("soft_skills", "综合素质"),
+    ):
+        series.append(
+            {
+                "key": key,
+                "label": label,
+                "data": [
+                    next(
+                        (
+                            dimension.get("score")
+                            for dimension in item.get("dimensions", [])
+                            if dimension.get("key") == dimension_key_map[key]
+                        ),
+                        None,
+                    )
+                    for item in completed_records
+                ],
+            }
+        )
+
+    return {
+        "categories": categories,
+        "series": series,
+    }
+
+
 def _is_result_complete_enough(result_payload: dict[str, Any] | None) -> bool:
     if not isinstance(result_payload, dict):
         return False
@@ -305,7 +520,7 @@ async def _require_interview_conversation(
     conversation = await conv_repo.get_conversation_by_thread_id(thread_id)
     if not conversation or conversation.user_id != str(current_user_id) or conversation.status == "deleted":
         raise HTTPException(status_code=404, detail="对话线程不存在")
-    if conversation.agent_id != "InterviewAgent":
+    if conversation.agent_id != INTERVIEW_AGENT_ID:
         raise HTTPException(status_code=400, detail="当前线程不是模拟面试线程")
     return conv_repo, conversation
 
@@ -376,6 +591,69 @@ async def get_interview_result(
         "agent_id": conversation.agent_id,
         "result": stored_result,
         "coding_session": coding_session,
+    }
+
+
+async def get_interview_history(
+    db: AsyncSession,
+    *,
+    current_user: User,
+    user_id: int | None = None,
+) -> dict[str, Any]:
+    target_user = await _resolve_target_user(
+        db,
+        current_user=current_user,
+        target_user_id=user_id,
+    )
+    department_name = await _get_department_name(db, target_user.department_id)
+
+    conv_repo = ConversationRepository(db)
+    conversations = await conv_repo.list_conversations(
+        user_id=str(target_user.id),
+        agent_id=INTERVIEW_AGENT_ID,
+        status="active",
+        limit=None,
+        offset=0,
+    )
+
+    records: list[dict[str, Any]] = []
+    for conversation in conversations:
+        metadata = dict(conversation.extra_metadata or {})
+        coding_session = get_coding_session_from_metadata(metadata)
+        stored_result = _normalize_result_payload(
+            metadata.get(INTERVIEW_RESULT_METADATA_KEY),
+            conversation=conversation,
+            coding_session=coding_session,
+        )
+
+        messages: list[Any] | None = None
+        if not _is_result_complete_enough(stored_result):
+            messages = await conv_repo.get_messages_by_thread_id(conversation.thread_id)
+
+        result_payload = _resolve_interview_result_payload(
+            conversation,
+            stored_result=stored_result,
+            coding_session=coding_session,
+            messages=messages,
+        )
+        records.append(_build_history_record(conversation=conversation, result_payload=result_payload))
+
+    records.sort(
+        key=lambda item: (str(item.get("updated_at") or ""), str(item.get("thread_id") or "")),
+        reverse=True,
+    )
+
+    return {
+        "target_user": {
+            "id": target_user.id,
+            "user_id": target_user.user_id,
+            "username": target_user.username,
+            "role": target_user.role,
+            "department_id": target_user.department_id,
+            "department_name": department_name,
+        },
+        "chart": _build_history_chart(records),
+        "records": records,
     }
 
 

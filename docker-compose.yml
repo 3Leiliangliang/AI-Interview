@@ -129,8 +129,11 @@ services:
     image: bole-web:0.5.dev
     container_name: web-dev
     volumes:
+      - ./web/package.json:/app/package.json
+      - ./web/pnpm-lock.yaml:/app/pnpm-lock.yaml
       - ./web/src:/app/src
       - ./web/public:/app/public
+      - ./web/scripts:/app/scripts
       - ./web/index.html:/app/index.html
       - ./web/vite.config.js:/app/vite.config.js
     ports:
@@ -143,7 +146,7 @@ services:
       - NODE_ENV=development
       - VITE_API_URL=http://api:5050
       - VITE_USE_RUNS_API=${VITE_USE_RUNS_API:-false}
-    command: pnpm run server
+    command: sh -lc "pnpm install --frozen-lockfile --registry=https://registry.npmmirror.com && pnpm run server"
     restart: unless-stopped
 
 

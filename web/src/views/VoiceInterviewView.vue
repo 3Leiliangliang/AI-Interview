@@ -3,12 +3,13 @@
     <div class="voice-toolbar">
       <div>
         <div class="toolbar-title">语音模拟面试</div>
-        <div class="toolbar-subtitle">豆包实时语音出话，原面试 Agent 负责后台编排</div>
+        <div class="toolbar-subtitle">豆包负责语音播报，候选人语音由阿里云实时转文字后接回原面试 Agent 链路</div>
       </div>
 
       <div class="toolbar-actions">
         <span class="status-badge">{{ connectionStatusLabel }}</span>
         <span class="status-badge">{{ playbackStatusLabel }}</span>
+        <span class="status-badge">{{ captureStatusLabel }}</span>
         <a-button @click="backToSetup">调整配置</a-button>
         <a-button @click="openResumeCenter">我的简历</a-button>
         <a-button :disabled="!currentThreadId" @click="openInterviewResult">面试结果</a-button>
@@ -18,12 +19,12 @@
     <div class="voice-stage">
       <section class="role-card interviewer-card">
         <div class="role-label">面试官</div>
-        <div class="role-placeholder">占位</div>
+        <div class="role-placeholder">豆包实时语音播报</div>
       </section>
 
       <section class="role-card candidate-card">
         <div class="role-label">面试者</div>
-        <div class="role-placeholder">占位</div>
+        <div class="role-placeholder">浏览器麦克风实时转写</div>
       </section>
     </div>
 
@@ -31,7 +32,7 @@
       <div class="panel-header">
         <div>
           <div class="panel-title">文本记录</div>
-          <div class="panel-subtitle">用于跟进当前线程的上下文与语音播报内容</div>
+          <div class="panel-subtitle">用于跟进当前线程的上下文、语音播报内容与候选人最终提交文本</div>
         </div>
         <div class="panel-actions">
           <a-button type="primary" :loading="startingVoice" @click="handleStartVoiceInterview">
@@ -64,17 +65,43 @@
       </div>
 
       <div class="input-panel">
-        <a-textarea
-          v-model:value="userInput"
-          :rows="3"
-          :disabled="!sessionReady"
-          placeholder="当前版本先使用文本输入，豆包会直接语音回复。"
-        />
+        <div class="capture-panel">
+          <div class="capture-status">
+            <div class="capture-title">候选人语音输入</div>
+            <div class="capture-subtitle">{{ captureHintLabel }}</div>
+          </div>
+          <div class="capture-actions">
+            <a-button
+              type="primary"
+              :disabled="!canStartCapture"
+              :loading="startingCapture"
+              @click="handleStartCapture"
+            >
+              开始回答
+            </a-button>
+            <a-button :disabled="!isCapturing" @click="handleStopCapture">停止回答</a-button>
+          </div>
+        </div>
+
+        <div class="transcript-shell">
+          <div class="transcript-card">
+            <div class="transcript-label">实时转写</div>
+            <div class="transcript-content" :class="{ placeholder: !partialTranscript }">
+              {{ partialTranscript || '开始回答后，这里会实时显示当前识别中的文本。' }}
+            </div>
+          </div>
+          <div class="transcript-card">
+            <div class="transcript-label">最终修正文本</div>
+            <div class="transcript-content" :class="{ placeholder: !finalTranscript }">
+              {{ finalTranscript || '句子结束后，这里会显示提交给面试 Agent 的最终文本。' }}
+            </div>
+          </div>
+        </div>
+
         <div class="input-actions">
-          <span class="input-hint">当前线程：{{ currentThreadId || '未创建' }}</span>
-          <a-button type="primary" :disabled="!sessionReady || !trimmedInput" @click="handleSend">
-            发送
-          </a-button>
+          <span class="input-hint">
+            当前线程：{{ currentThreadId || '未创建' }} · 麦克风权限：{{ micPermissionLabel }}
+          </span>
         </div>
       </div>
     </div>
@@ -101,11 +128,10 @@ const agentStore = useAgentStore()
 const userStore = useUserStore()
 
 const messagesPanelRef = ref(null)
-const userInput = ref('')
 const startingVoice = ref(false)
+const startingCapture = ref(false)
 const preloadingVoice = ref(false)
 const preloadedSession = ref(null)
-const needsOpeningTurn = ref(!Boolean(route.query.threadId))
 const hasStartedOpeningTurn = ref(false)
 
 let preloadPromise = null
@@ -120,16 +146,23 @@ const interviewAgentId = computed(() => selectedAgentId.value || defaultAgentId.
 
 const {
   agentState,
+  candidateCaptureState,
   connect,
   connectionState,
   ensureAudioContext,
+  ensureMicrophoneReady,
   error,
+  finalTranscript,
   interrupt,
+  isCapturing,
   messages,
+  micPermissionState,
+  partialTranscript,
   playbackState,
-  sendUserText,
   sessionReady,
+  startCandidateCapture,
   startInterview,
+  stopCandidateCapture,
   threadId
 } = useVoiceInterviewSession({
   onCodingRedirect: ({ thread_id: nextThreadId, position, round }) => {
@@ -146,9 +179,12 @@ const {
 
 const currentThreadId = computed(() => threadId.value || routeThreadId.value)
 const visibleMessages = computed(() => messages.value)
-const trimmedInput = computed(() => userInput.value.trim())
+const lastVisibleMessageRole = computed(() => visibleMessages.value[visibleMessages.value.length - 1]?.role || '')
 const canStartOpeningTurn = computed(() => {
   return connectionState.value === 'connected' && visibleMessages.value.length === 0 && !hasStartedOpeningTurn.value
+})
+const canStartCapture = computed(() => {
+  return sessionReady.value && candidateCaptureState.value === 'idle' && !isCapturing.value
 })
 const connectionStatusLabel = computed(() => {
   if (connectionState.value === 'connected') return '连接已建立'
@@ -159,6 +195,23 @@ const connectionStatusLabel = computed(() => {
 const playbackStatusLabel = computed(() => {
   if (playbackState.value === 'playing') return '正在播报'
   return '待机'
+})
+const captureStatusLabel = computed(() => {
+  if (candidateCaptureState.value === 'listening') return '正在收音'
+  if (candidateCaptureState.value === 'processing') return '识别处理中'
+  if (candidateCaptureState.value === 'disabled') return '等待面试官'
+  return '可开始回答'
+})
+const micPermissionLabel = computed(() => {
+  if (micPermissionState.value === 'granted') return '已授权'
+  if (micPermissionState.value === 'denied') return '已拒绝'
+  return '待授权'
+})
+const captureHintLabel = computed(() => {
+  if (candidateCaptureState.value === 'disabled') return '面试官播报期间会自动暂停收音，避免回声串入识别。'
+  if (candidateCaptureState.value === 'processing') return '正在等待阿里云返回当前句子的最终修正文案。'
+  if (isCapturing.value) return '你正在回答，系统会实时转写，并在句子结束后自动提交给面试 Agent。'
+  return '面试官播报结束后可开始回答，系统也会在合适时机自动进入收音。'
 })
 const startButtonLabel = computed(() => {
   if (preloadingVoice.value && connectionState.value !== 'connected') return '预加载中'
@@ -279,12 +332,12 @@ const handleStartVoiceInterview = async () => {
   try {
     await preloadVoiceSession()
     await ensureAudioContext()
+    await ensureMicrophoneReady()
     await waitForSessionReady()
 
     if (canStartOpeningTurn.value) {
       hasStartedOpeningTurn.value = true
       startInterview()
-      needsOpeningTurn.value = false
       return
     }
 
@@ -296,10 +349,35 @@ const handleStartVoiceInterview = async () => {
   }
 }
 
-const handleSend = () => {
-  if (!trimmedInput.value) return
-  sendUserText(trimmedInput.value)
-  userInput.value = ''
+const handleStartCapture = async () => {
+  startingCapture.value = true
+  try {
+    await ensureMicrophoneReady()
+    await startCandidateCapture()
+  } catch (err) {
+    message.error(err?.message || '开始收音失败')
+  } finally {
+    startingCapture.value = false
+  }
+}
+
+const handleStopCapture = () => {
+  stopCandidateCapture()
+}
+
+const maybeAutoStartCapture = async () => {
+  if (!sessionReady.value) return
+  if (playbackState.value !== 'idle') return
+  if (candidateCaptureState.value !== 'idle') return
+  if (isCapturing.value) return
+  if (lastVisibleMessageRole.value !== 'assistant') return
+
+  try {
+    await ensureMicrophoneReady()
+    await startCandidateCapture()
+  } catch (err) {
+    console.warn('auto start candidate capture failed:', err)
+  }
 }
 
 onMounted(async () => {
@@ -342,6 +420,20 @@ watch(
         round: selectedRound.value
       }
     })
+  }
+)
+
+watch(
+  () =>
+    [
+      candidateCaptureState.value,
+      playbackState.value,
+      sessionReady.value,
+      lastVisibleMessageRole.value,
+      isCapturing.value
+    ].join('|'),
+  async () => {
+    await maybeAutoStartCapture()
   }
 )
 </script>
@@ -447,7 +539,9 @@ watch(
 }
 
 .panel-header,
-.input-actions {
+.input-actions,
+.capture-panel,
+.transcript-shell {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -466,7 +560,8 @@ watch(
   color: var(--gray-500);
 }
 
-.panel-actions {
+.panel-actions,
+.capture-actions {
   display: flex;
   gap: 10px;
 }
@@ -564,18 +659,67 @@ watch(
   border: 1px solid var(--gray-100);
   background: var(--gray-0);
   padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.capture-status,
+.transcript-card {
+  flex: 1;
+}
+
+.capture-title,
+.transcript-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gray-800);
+}
+
+.capture-subtitle {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--gray-500);
+}
+
+.transcript-card {
+  border-radius: 14px;
+  border: 1px solid var(--gray-100);
+  background: var(--gray-25);
+  padding: 14px;
+}
+
+.transcript-content {
+  margin-top: 8px;
+  min-height: 72px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--gray-800);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.transcript-content.placeholder {
+  color: var(--gray-400);
 }
 
 @media (max-width: 960px) {
   .voice-toolbar,
   .panel-header,
-  .input-actions {
+  .input-actions,
+  .capture-panel,
+  .transcript-shell {
     flex-direction: column;
     align-items: flex-start;
   }
 
   .toolbar-actions {
     justify-content: flex-start;
+  }
+
+  .capture-actions {
+    width: 100%;
   }
 
   .voice-stage {

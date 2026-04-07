@@ -62,11 +62,12 @@ docker compose up -d --build
 
 ### 4. 语音面试配置
 
-语音面试功能依赖豆包双向流式 TTS。启动前请在项目根目录 `.env` 中至少配置以下变量：
+语音面试功能依赖豆包双向流式 TTS，以及阿里云 DashScope Fun-ASR 实时语音识别。启动前请在项目根目录 `.env` 中至少配置以下变量：
 
 ```env
 DOUBAO_VOICE_APP_ID=your_app_id
 DOUBAO_VOICE_API_KEY=your_api_key
+DASHSCOPE_API_KEY=your_dashscope_api_key
 ```
 
 当前仓库中的语音面试后端已固定使用以下豆包音色组合：
@@ -79,7 +80,9 @@ resource_id=seed-tts-2.0
 注意事项：
 
 - 这组 `speaker` / `resource_id` 需要保持匹配，否则语音面试 WebSocket 可以建立，但不会返回可播放的音频分片。
-- 前端浏览器需要先经过用户点击触发音频上下文恢复，因此需要在页面中点击“开启语音面试”后才会开始播放语音。
+- 前端浏览器需要先经过用户点击触发音频上下文恢复与麦克风授权，因此需要在页面中点击“开启语音面试”后才会开始播放并准备候选人语音输入。
+- 候选人语音会通过浏览器麦克风实时转写，句子结束后的最终修正文案会自动提交给原面试 Agent 继续追问。
+- 当前默认使用阿里云 Fun-ASR 的 VAD 断句，候选人回答时连续约 3 秒无声音，才会将该句最终修正文案提交给面试 Agent，避免短暂停顿被过早发送。
 - 修改 `.env` 后，需重新构建或重启后端容器以确保配置生效。
 
 
@@ -94,7 +97,7 @@ resource_id=seed-tts-2.0
 docker compose ps
 
 # 跟进后端实时日志
-docker compose logs api-dev -f --tail 100
+docker compose logs -f api
 
 # 在容器内直接执行特定脚本 (如使用 uv run test)
 docker compose exec api uv run python test/your_script.py
