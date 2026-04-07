@@ -24,7 +24,7 @@
     </div>
 
     <div class="voice-stage">
-      <section class="role-card interviewer-card">
+      <section class="role-card interviewer-card" :class="`state-${interviewerVisualState}`">
         <div class="role-header">
           <div class="role-label">面试官</div>
           <div class="role-actions">
@@ -34,7 +34,22 @@
             <a-button :disabled="playbackState !== 'playing'" @click="interrupt">停止播放</a-button>
           </div>
         </div>
-        <div class="role-placeholder">豆包实时语音播报</div>
+        <div class="interviewer-stage-content">
+          <div class="interviewer-visual" :class="`is-${interviewerVisualState}`">
+            <div class="interviewer-ring"></div>
+            <div class="interviewer-core">
+              <div v-if="interviewerVisualState === 'speaking'" class="wave-bars" aria-hidden="true">
+                <span v-for="bar in 5" :key="`wave-${bar}`" class="wave-bar"></span>
+              </div>
+              <div v-else-if="interviewerVisualState === 'waiting'" class="waiting-dots" aria-hidden="true">
+                <span v-for="dot in 3" :key="`waiting-${dot}`" class="waiting-dot"></span>
+              </div>
+              <div v-else class="interviewer-idle-icon" aria-hidden="true"></div>
+            </div>
+          </div>
+          <div class="interviewer-stage-title">{{ interviewerStageTitle }}</div>
+          <div class="interviewer-stage-text">{{ interviewerStageDescription }}</div>
+        </div>
       </section>
 
       <section class="role-card candidate-card">
@@ -224,6 +239,7 @@ const {
 
 const currentThreadId = computed(() => threadId.value || routeThreadId.value)
 const visibleMessages = computed(() => messages.value)
+const lastVisibleMessage = computed(() => visibleMessages.value[visibleMessages.value.length - 1] || null)
 const hasAgentStateContent = computed(() => {
   const todos = Array.isArray(agentState.value?.todos) ? agentState.value.todos.length : 0
   const files = agentState.value?.files
@@ -235,7 +251,7 @@ const hasAgentStateContent = computed(() => {
   }
   return todos > 0
 })
-const lastVisibleMessageRole = computed(() => visibleMessages.value[visibleMessages.value.length - 1]?.role || '')
+const lastVisibleMessageRole = computed(() => lastVisibleMessage.value?.role || '')
 const canStartOpeningTurn = computed(() => {
   return connectionState.value === 'connected' && visibleMessages.value.length === 0 && !hasStartedOpeningTurn.value
 })
@@ -251,6 +267,29 @@ const connectionStatusLabel = computed(() => {
 const playbackStatusLabel = computed(() => {
   if (playbackState.value === 'playing') return '正在播报'
   return '待机'
+})
+const isInterviewerSpeaking = computed(() => playbackState.value === 'playing')
+const isInterviewerWaiting = computed(() => {
+  if (isInterviewerSpeaking.value || !sessionReady.value) return false
+  if (candidateCaptureState.value === 'processing') return true
+  if (hasStartedOpeningTurn.value && visibleMessages.value.length === 0) return true
+  if (lastVisibleMessage.value?.role === 'assistant' && lastVisibleMessage.value.streaming) return true
+  return lastVisibleMessage.value?.role === 'user' && !isCapturing.value
+})
+const interviewerVisualState = computed(() => {
+  if (isInterviewerSpeaking.value) return 'speaking'
+  if (isInterviewerWaiting.value) return 'waiting'
+  return 'idle'
+})
+const interviewerStageTitle = computed(() => {
+  if (interviewerVisualState.value === 'speaking') return '在面试'
+  if (interviewerVisualState.value === 'waiting') return '在思考'
+  return '豆包实时语音播报'
+})
+const interviewerStageDescription = computed(() => {
+  if (interviewerVisualState.value === 'speaking') return '输出语音时会实时展示波形反馈。'
+  if (interviewerVisualState.value === 'waiting') return '收到你的回答后，面试官会短暂组织下一轮提问。'
+  return '开始后面试官会主动提问，追问时也会在这里切换状态。'
 })
 const captureStatusLabel = computed(() => {
   if (candidateCaptureState.value === 'listening') return '正在收音'
@@ -605,6 +644,14 @@ watch(
   justify-content: space-between;
 }
 
+.interviewer-card {
+  overflow: hidden;
+}
+
+.interviewer-card.state-speaking {
+  border-color: var(--main-100);
+}
+
 .role-label {
   font-size: 16px;
   font-weight: 700;
@@ -634,6 +681,189 @@ watch(
   align-items: center;
   justify-content: center;
   font-size: 14px;
+}
+
+.interviewer-stage-content {
+  flex: 1;
+  margin-top: 18px;
+  border-radius: 16px;
+  border: 1px dashed var(--gray-200);
+  background: var(--gray-25);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  text-align: center;
+}
+
+.interviewer-card.state-speaking .interviewer-stage-content {
+  border-color: var(--main-100);
+  background: var(--main-20);
+}
+
+.interviewer-visual {
+  position: relative;
+  width: 128px;
+  height: 128px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.interviewer-ring,
+.interviewer-core {
+  position: absolute;
+  border-radius: 50%;
+}
+
+.interviewer-ring {
+  inset: 10px;
+  border: 1px solid var(--gray-200);
+  background: var(--gray-0);
+}
+
+.interviewer-core {
+  inset: 30px;
+  border: 1px solid var(--gray-100);
+  background: var(--gray-0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.interviewer-visual.is-speaking .interviewer-ring {
+  border-color: var(--main-100);
+  background: var(--main-20);
+  animation: interviewer-ring-pulse 1.8s ease-in-out infinite;
+}
+
+.interviewer-visual.is-waiting .interviewer-ring {
+  animation: interviewer-ring-breathe 1.8s ease-in-out infinite;
+}
+
+.wave-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 30px;
+}
+
+.wave-bar {
+  width: 6px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--main-color);
+  transform-origin: center bottom;
+  animation: wave-bar-bounce 1s ease-in-out infinite;
+}
+
+.wave-bar:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+.wave-bar:nth-child(3) {
+  animation-delay: 0.24s;
+}
+
+.wave-bar:nth-child(4) {
+  animation-delay: 0.36s;
+}
+
+.wave-bar:nth-child(5) {
+  animation-delay: 0.48s;
+}
+
+.waiting-dots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.waiting-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--gray-400);
+  animation: waiting-dot-fade 1.2s ease-in-out infinite;
+}
+
+.waiting-dot:nth-child(2) {
+  animation-delay: 0.18s;
+}
+
+.waiting-dot:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+.interviewer-idle-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--main-100) 0 34%, transparent 38%);
+  border: 1px solid var(--gray-200);
+}
+
+.interviewer-stage-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gray-800);
+}
+
+.interviewer-stage-text {
+  max-width: 320px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--gray-500);
+}
+
+@keyframes wave-bar-bounce {
+  0%,
+  100% {
+    transform: scaleY(0.45);
+    opacity: 0.52;
+  }
+  50% {
+    transform: scaleY(1.25);
+    opacity: 1;
+  }
+}
+
+@keyframes waiting-dot-fade {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+@keyframes interviewer-ring-pulse {
+  0%,
+  100% {
+    transform: scale(0.96);
+    opacity: 0.72;
+  }
+  50% {
+    transform: scale(1.02);
+    opacity: 1;
+  }
+}
+
+@keyframes interviewer-ring-breathe {
+  0%,
+  100% {
+    transform: scale(0.98);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 0.82;
+  }
 }
 
 .voice-shell {
