@@ -10,6 +10,13 @@
         <span class="status-badge">{{ connectionStatusLabel }}</span>
         <span class="status-badge">{{ playbackStatusLabel }}</span>
         <span class="status-badge">{{ captureStatusLabel }}</span>
+        <a-button
+          :type="isAgentPanelOpen ? 'primary' : 'default'"
+          :disabled="!hasAgentStateContent"
+          @click="toggleAgentPanel"
+        >
+          {{ isAgentPanelOpen ? '收起状态工作台' : '展开状态工作台' }}
+        </a-button>
         <a-button @click="backToSetup">调整配置</a-button>
         <a-button @click="openResumeCenter">我的简历</a-button>
         <a-button :disabled="!currentThreadId" @click="openInterviewResult">面试结果</a-button>
@@ -18,59 +25,22 @@
 
     <div class="voice-stage">
       <section class="role-card interviewer-card">
-        <div class="role-label">面试官</div>
+        <div class="role-header">
+          <div class="role-label">面试官</div>
+          <div class="role-actions">
+            <a-button type="primary" :loading="startingVoice" @click="handleStartVoiceInterview">
+              {{ startButtonLabel }}
+            </a-button>
+            <a-button :disabled="playbackState !== 'playing'" @click="interrupt">停止播放</a-button>
+          </div>
+        </div>
         <div class="role-placeholder">豆包实时语音播报</div>
       </section>
 
       <section class="role-card candidate-card">
-        <div class="role-label">面试者</div>
-        <div class="role-placeholder">浏览器麦克风实时转写</div>
-      </section>
-    </div>
-
-    <div class="voice-shell">
-      <div class="panel-header">
-        <div>
-          <div class="panel-title">文本记录</div>
-          <div class="panel-subtitle">用于跟进当前线程的上下文、语音播报内容与候选人最终提交文本</div>
-        </div>
-        <div class="panel-actions">
-          <a-button type="primary" :loading="startingVoice" @click="handleStartVoiceInterview">
-            {{ startButtonLabel }}
-          </a-button>
-          <a-button :disabled="playbackState !== 'playing'" @click="interrupt">停止播放</a-button>
-        </div>
-      </div>
-
-      <div class="messages-panel" ref="messagesPanelRef">
-        <div v-if="error" class="error-banner">{{ error }}</div>
-
-        <div v-if="visibleMessages.length === 0" class="empty-state">
-          <div class="empty-title">语音会话尚未开始</div>
-          <div class="empty-text">点击“开启语音面试”后，面试官会直接以语音形式发起第一问。</div>
-        </div>
-
-        <div
-          v-for="item in visibleMessages"
-          :key="item.id"
-          class="message-row"
-          :class="item.role === 'assistant' ? 'assistant' : 'user'"
-        >
-          <div class="message-role">{{ item.role === 'assistant' ? '面试官' : '你' }}</div>
-          <div class="message-bubble">
-            {{ item.content }}
-            <span v-if="item.streaming" class="streaming-dot"></span>
-          </div>
-        </div>
-      </div>
-
-      <div class="input-panel">
-        <div class="capture-panel">
-          <div class="capture-status">
-            <div class="capture-title">候选人语音输入</div>
-            <div class="capture-subtitle">{{ captureHintLabel }}</div>
-          </div>
-          <div class="capture-actions">
+        <div class="role-header">
+          <div class="role-label">面试者</div>
+          <div class="role-actions">
             <a-button
               type="primary"
               :disabled="!canStartCapture"
@@ -82,27 +52,93 @@
             <a-button :disabled="!isCapturing" @click="handleStopCapture">停止回答</a-button>
           </div>
         </div>
+        <div class="role-placeholder">浏览器麦克风实时转写</div>
+      </section>
+    </div>
 
-        <div class="transcript-shell">
-          <div class="transcript-card">
-            <div class="transcript-label">实时转写</div>
-            <div class="transcript-content" :class="{ placeholder: !partialTranscript }">
-              {{ partialTranscript || '开始回答后，这里会实时显示当前识别中的文本。' }}
-            </div>
+    <div class="voice-content-container">
+      <div class="voice-shell">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">文本记录</div>
+            <div class="panel-subtitle">用于跟进当前线程的上下文、语音播报内容与候选人最终提交文本</div>
           </div>
-          <div class="transcript-card">
-            <div class="transcript-label">最终修正文本</div>
-            <div class="transcript-content" :class="{ placeholder: !finalTranscript }">
-              {{ finalTranscript || '句子结束后，这里会显示提交给面试 Agent 的最终文本。' }}
+        </div>
+
+        <div class="messages-panel" ref="messagesPanelRef">
+          <div v-if="error" class="error-banner">{{ error }}</div>
+
+          <div v-if="visibleMessages.length === 0" class="empty-state">
+            <div class="empty-title">语音会话尚未开始</div>
+            <div class="empty-text">点击“开启语音面试”后，面试官会直接以语音形式发起第一问。</div>
+          </div>
+
+          <div
+            v-for="item in visibleMessages"
+            :key="item.id"
+            class="message-row"
+            :class="item.role === 'assistant' ? 'assistant' : 'user'"
+          >
+            <div class="message-role">{{ item.role === 'assistant' ? '面试官' : '你' }}</div>
+            <div class="message-bubble">
+              {{ item.content }}
+              <span v-if="item.streaming" class="streaming-dot"></span>
             </div>
           </div>
         </div>
 
-        <div class="input-actions">
-          <span class="input-hint">
-            当前线程：{{ currentThreadId || '未创建' }} · 麦克风权限：{{ micPermissionLabel }}
-          </span>
+        <div class="input-panel">
+          <div class="capture-panel">
+            <div class="capture-status">
+              <div class="capture-title">候选人语音输入</div>
+              <div class="capture-subtitle">{{ captureHintLabel }}</div>
+            </div>
+          </div>
+
+          <div class="transcript-shell">
+            <div class="transcript-card">
+              <div class="transcript-label">实时转写</div>
+              <div class="transcript-content" :class="{ placeholder: !partialTranscript }">
+                {{ partialTranscript || '开始回答后，这里会实时显示当前识别中的文本。' }}
+              </div>
+            </div>
+            <div class="transcript-card">
+              <div class="transcript-label">最终修正文本</div>
+              <div class="transcript-content" :class="{ placeholder: !finalTranscript }">
+                {{ finalTranscript || '句子结束后，这里会显示提交给面试 Agent 的最终文本。' }}
+              </div>
+            </div>
+          </div>
+
+          <div class="input-actions">
+            <span class="input-hint">
+              当前线程：{{ currentThreadId || '未创建' }} · 麦克风权限：{{ micPermissionLabel }}
+            </span>
+          </div>
         </div>
+      </div>
+
+      <div
+        class="agent-panel-wrapper"
+        ref="panelWrapperRef"
+        :class="{
+          'is-visible': isAgentPanelOpen && hasAgentStateContent,
+          'no-transition': isResizing
+        }"
+        :style="{
+          flexBasis: isAgentPanelOpen && hasAgentStateContent ? `${panelRatio * 100}%` : '0px'
+        }"
+      >
+        <AgentPanel
+          v-if="isAgentPanelOpen && hasAgentStateContent"
+          :agent-state="agentState"
+          :thread-id="currentThreadId"
+          :panel-ratio="panelRatio"
+          @refresh="handleAgentStateRefresh"
+          @close="toggleAgentPanel"
+          @resize="handlePanelResize"
+          @resizing="handleResizingChange"
+        />
       </div>
     </div>
   </div>
@@ -115,6 +151,7 @@ import { message } from 'ant-design-vue'
 import { storeToRefs } from 'pinia'
 
 import { interviewVoiceApi } from '@/apis/interview_voice'
+import AgentPanel from '@/components/AgentPanel.vue'
 import { useVoiceInterviewSession } from '@/composables/useVoiceInterviewSession'
 import { useAgentStore } from '@/stores/agent'
 import { useUserStore } from '@/stores/user'
@@ -133,8 +170,16 @@ const startingCapture = ref(false)
 const preloadingVoice = ref(false)
 const preloadedSession = ref(null)
 const hasStartedOpeningTurn = ref(false)
+const isAgentPanelOpen = ref(false)
+const isResizing = ref(false)
+const panelRatio = ref(0.36)
+const panelWrapperRef = ref(null)
 
 let preloadPromise = null
+let panelContainerWidth = 0
+
+const minPanelRatio = 0.28
+const maxPanelRatio = 0.5
 
 const { selectedAgentId, defaultAgentId } = storeToRefs(agentStore)
 
@@ -179,6 +224,17 @@ const {
 
 const currentThreadId = computed(() => threadId.value || routeThreadId.value)
 const visibleMessages = computed(() => messages.value)
+const hasAgentStateContent = computed(() => {
+  const todos = Array.isArray(agentState.value?.todos) ? agentState.value.todos.length : 0
+  const files = agentState.value?.files
+  if (Array.isArray(files)) {
+    return todos > 0 || files.length > 0
+  }
+  if (files && typeof files === 'object') {
+    return todos > 0 || Object.keys(files).length > 0
+  }
+  return todos > 0
+})
 const lastVisibleMessageRole = computed(() => visibleMessages.value[visibleMessages.value.length - 1]?.role || '')
 const canStartOpeningTurn = computed(() => {
   return connectionState.value === 'connected' && visibleMessages.value.length === 0 && !hasStartedOpeningTurn.value
@@ -253,6 +309,38 @@ const openInterviewResult = () => {
       round: selectedRound.value
     }
   })
+}
+
+const toggleAgentPanel = () => {
+  if (!hasAgentStateContent.value) return
+  isAgentPanelOpen.value = !isAgentPanelOpen.value
+}
+
+const handleAgentStateRefresh = async () => {}
+
+const handlePanelResize = (deltaX) => {
+  if (!panelWrapperRef.value) return
+
+  if (!panelContainerWidth) {
+    const container = document.querySelector('.voice-content-container')
+    panelContainerWidth = container ? container.clientWidth : window.innerWidth
+  }
+
+  const currentWidth = panelWrapperRef.value.offsetWidth
+  const nextWidth = currentWidth - deltaX
+  const nextRatio = nextWidth / panelContainerWidth
+
+  if (nextRatio >= minPanelRatio && nextRatio <= maxPanelRatio) {
+    panelWrapperRef.value.style.setProperty('flex', `0 0 ${nextWidth}px`, 'important')
+  }
+}
+
+const handleResizingChange = (value) => {
+  isResizing.value = value
+  if (!value && panelWrapperRef.value && panelContainerWidth) {
+    panelRatio.value = panelWrapperRef.value.offsetWidth / panelContainerWidth
+    panelContainerWidth = 0
+  }
 }
 
 const ensureAgentReady = async () => {
@@ -408,6 +496,12 @@ watch(
   }
 )
 
+watch(hasAgentStateContent, (value, oldValue) => {
+  if (value && !oldValue) {
+    isAgentPanelOpen.value = true
+  }
+})
+
 watch(
   () => agentState.value?.coding_session?.status,
   (status) => {
@@ -517,6 +611,18 @@ watch(
   color: var(--gray-800);
 }
 
+.role-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.role-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .role-placeholder {
   flex: 1;
   margin-top: 18px;
@@ -535,6 +641,15 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 18px;
+  min-height: 520px;
+  min-width: 0;
+  flex: 1;
+}
+
+.voice-content-container {
+  display: flex;
+  gap: 20px;
+  align-items: stretch;
   min-height: 520px;
 }
 
@@ -560,11 +675,7 @@ watch(
   color: var(--gray-500);
 }
 
-.panel-actions,
-.capture-actions {
-  display: flex;
-  gap: 10px;
-}
+
 
 .messages-panel {
   flex: 1;
@@ -669,6 +780,38 @@ watch(
   flex: 1;
 }
 
+.agent-panel-wrapper {
+  flex: 0 0 0;
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  transition: flex-basis 0.24s ease, width 0.24s ease;
+}
+
+.agent-panel-wrapper.is-visible {
+  min-width: 320px;
+}
+
+.agent-panel-wrapper.no-transition {
+  transition: none;
+}
+
+.agent-panel-wrapper :deep(.agent-panel) {
+  height: 100%;
+}
+
+@media (max-width: 1200px) {
+  .voice-content-container {
+    flex-direction: column;
+  }
+
+  .agent-panel-wrapper,
+  .agent-panel-wrapper.is-visible {
+    width: 100%;
+    min-width: 100%;
+  }
+}
+
 .capture-title,
 .transcript-label {
   font-size: 14px;
@@ -709,7 +852,8 @@ watch(
   .panel-header,
   .input-actions,
   .capture-panel,
-  .transcript-shell {
+  .transcript-shell,
+  .role-header {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -718,8 +862,9 @@ watch(
     justify-content: flex-start;
   }
 
-  .capture-actions {
+  .role-actions {
     width: 100%;
+    justify-content: flex-start;
   }
 
   .voice-stage {
