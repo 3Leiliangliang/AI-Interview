@@ -96,7 +96,7 @@
             </div>
 
             <!-- 生成中的加载状态 - 增强条件支持主聊天和resume流程 -->
-            <div class="generating-status" v-if="isProcessing && conversations.length > 0">
+            <div class="generating-status" v-if="isProcessing && visibleConversationCount > 0">
               <div class="generating-indicator">
                 <div class="loading-dots">
                   <div></div>
@@ -107,7 +107,7 @@
               </div>
             </div>
           </div>
-          <div class="bottom" :class="{ 'start-screen': !conversations.length }">
+          <div class="bottom" :class="{ 'start-screen': visibleConversationCount === 0 }">
             <!-- 人工审批弹窗 - 放在输入框上方 -->
             <HumanApprovalModal
               :visible="approvalState.showModal"
@@ -128,14 +128,35 @@
               </div>
 
               <!-- 打招呼区域 - 在输入框上方 -->
-              <div v-if="!conversations.length" class="chat-examples-input">
+              <div v-if="visibleConversationCount === 0" class="chat-examples-input">
                 <h1>{{ greetingTitle }}</h1>
                 <p v-if="greetingDescription" class="greeting-description">
                   {{ greetingDescription }}
                 </p>
+                <div v-if="showInterviewStartupState" class="interview-startup-card">
+                  <div class="interview-startup-card__header">
+                    <LoaderCircle :size="18" class="loading-icon" />
+                    <span>正在准备面试</span>
+                  </div>
+                  <p class="interview-startup-card__desc">
+                    已结合岗位配置和所选简历整理好面试上下文，正在生成首轮开场问题。
+                  </p>
+                  <div class="interview-startup-steps">
+                    <div
+                      v-for="step in startupInterviewSteps"
+                      :key="step.index"
+                      class="interview-startup-step"
+                      :class="{ 'is-active': step.index === 1 }"
+                    >
+                      <span class="step-index">{{ step.index }}</span>
+                      <span class="step-label">{{ step.label }}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <AgentInputArea
+                v-if="!showInterviewStartupState"
                 ref="messageInputRef"
                 v-model="userInput"
                 :is-loading="isProcessing"
@@ -157,7 +178,11 @@
               <!-- 示例问题 -->
               <div
                 class="example-questions"
-                v-if="!conversations.length && exampleQuestions.length > 0"
+                v-if="
+                  visibleConversationCount === 0 &&
+                  exampleQuestions.length > 0 &&
+                  !showInterviewStartupState
+                "
               >
                 <div class="example-chips">
                   <div
@@ -434,6 +459,18 @@ const hasAgentStateContent = computed(() => {
 })
 
 const hasUploadedFiles = computed(() => countFiles(currentAgentState.value?.files) > 0)
+const hasSelectedResumeContext = computed(() => Boolean(runtimeContextOverrides.value.selected_resume_id))
+const showInterviewStartupState = computed(() => {
+  return isResumeInterviewMode.value && isProcessing.value && visibleConversationCount.value === 0
+})
+const startupInterviewSteps = computed(() => [
+  { index: 1, label: '发起开场并请候选人自我介绍' },
+  { index: 2, label: '追问项目经历与技术细节' },
+  { index: 3, label: '相关技术知识提问' },
+  { index: 4, label: '代码考核' },
+  { index: 5, label: '评估岗位匹配度与风险点' },
+  { index: 6, label: '输出总结与评分卡' }
+])
 
 watch(
   currentAgentState,
@@ -445,6 +482,9 @@ watch(
 
 const inputPlaceholder = computed(() => {
   if (!isResumeInterviewMode.value) return '输入问题...'
+  if (hasSelectedResumeContext.value) {
+    return isProcessing.value ? '面试正在启动，请稍候...' : '请直接回答面试问题，或补充岗位 / 公司背景...'
+  }
   return hasUploadedFiles.value
     ? '请回答当前问题，或补充目标岗位 / 公司 / 面试轮次...'
     : '先上传简历，或直接告诉我目标岗位后开始模拟面试...'
@@ -459,6 +499,9 @@ const greetingTitle = computed(() => {
 
 const greetingDescription = computed(() => {
   if (!isResumeInterviewMode.value) return ''
+  if (hasSelectedResumeContext.value) {
+    return '已注入本轮面试所选简历，系统会直接围绕该简历和岗位背景发起提问。'
+  }
   return hasUploadedFiles.value
     ? '我会根据你上传的简历，从自我介绍、项目经历、技术细节到业务成果逐题追问。'
     : '上传简历后我会自动开始提问；也可以先告诉我你想模拟的岗位方向。'
@@ -600,6 +643,10 @@ const conversations = computed(() => {
   }
   return historyConvs
 })
+
+const visibleConversationCount = computed(() =>
+  conversations.value.reduce((count, conv) => count + (conv.messages?.length || 0), 0)
+)
 
 const isLoadingMessages = computed(() => chatUIStore.isLoadingMessages)
 const isStreaming = computed(() => {
@@ -1794,9 +1841,11 @@ const startInterviewSession = async ({
   if (!threadId) return null
 
   await nextTick()
-  await handleSendMessage({
+  void handleSendMessage({
     textOverride: prompt,
     skipAutoTitle: true
+  }).catch((error) => {
+    handleChatError(error, 'send')
   })
 
   return threadId
@@ -2199,6 +2248,81 @@ watch(
   }
 }
 
+.interview-startup-card {
+  margin: 20px auto 0;
+  max-width: 560px;
+  padding: 18px 20px;
+  border-radius: 14px;
+  border: 1px solid var(--gray-200);
+  background: var(--gray-0);
+  text-align: left;
+}
+
+.interview-startup-card__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--gray-900);
+
+  .loading-icon {
+    animation: spin 1s linear infinite;
+    transform-origin: center;
+  }
+}
+
+.interview-startup-card__desc {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--gray-600);
+}
+
+.interview-startup-steps {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.interview-startup-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--gray-50);
+  color: var(--gray-700);
+}
+
+.interview-startup-step.is-active {
+  background: var(--main-20);
+  color: var(--main-color);
+}
+
+.step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--gray-200);
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.interview-startup-step.is-active .step-index {
+  background: var(--main-color);
+  color: var(--gray-0);
+}
+
+.step-label {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .example-questions {
   margin-top: 16px;
   text-align: center;
@@ -2386,6 +2510,16 @@ watch(
     background-clip: text;
     color: transparent;
     animation: waveFlash 2s linear infinite;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
   }
 }
 

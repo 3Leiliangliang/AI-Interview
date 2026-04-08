@@ -37,6 +37,10 @@ from src.services.chat_stream_service import (
 )
 from src.services.conversation_service import create_thread_view, require_user_conversation
 from src.services.history_query_service import get_agent_history_view
+from src.services.interview_resume_service import (
+    build_selected_resume_prompt_block,
+    load_selected_resume_context_payload,
+)
 from src.storage.postgres.manager import pg_manager
 from src.storage.postgres.models_business import User
 from src.utils.internal_observation import (
@@ -85,11 +89,11 @@ EVENT_TTS_RESPONSE = 352
 VOICE_OPENING_PROMPT_TEMPLATE = (
     "现在开始一轮{position}{round_name}模拟面试。"
     "你必须始终以面试官身份发言，不要代替候选人作答。"
-    "请维护固定 7 个阶段 todo：1.读取简历并确认岗位背景；2.发起开场并请候选人自我介绍；"
-    "3.追问项目经历与技术细节；4.相关技术知识提问；5.代码考核；6.评估岗位匹配度与风险点；7.输出总结与评分卡。"
-    "如果当前会话里有附件，先读取附件简历；如果没有附件，只允许调用一次 query_kb 查询“我的简历”知识。"
-    "第 4 阶段每次发技术题前都调用 pick_random_technical_question，并传入 excluded_questions 避免重复。"
-    "当第 4 阶段完成时，调用 start_code_assessment 启动代码考核，并明确引导用户进入代码工作台。"
+    "请维护固定 6 个阶段 todo：1.发起开场并请候选人自我介绍；2.追问项目经历与技术细节；"
+    "3.相关技术知识提问；4.代码考核；5.评估岗位匹配度与风险点；6.输出总结与评分卡。"
+    "如果系统已经注入选中简历上下文，优先直接使用该上下文；只有在没有注入简历时，才允许读取附件或只允许调用一次 query_kb 查询“我的简历”知识。"
+    "第 3 阶段每次发技术题前都调用 pick_random_technical_question，并传入 excluded_questions 避免重复。"
+    "当第 3 阶段完成时，调用 start_code_assessment 启动代码考核，并明确引导用户进入代码工作台。"
     "代码考核阶段除非用户明确请求提示，否则不要主动点评代码。"
 )
 
@@ -98,6 +102,7 @@ class VoiceSessionStartPayload(BaseModel):
     agent_id: str
     position: str | None = None
     round: str | None = None
+    resume_id: int | None = None
     thread_id: str | None = None
     force_new_thread: bool = False
 
@@ -109,6 +114,7 @@ class VoiceSessionClaims(BaseModel):
     agent_id: str
     position: str
     round_name: str
+    resume_id: int | None = None
 
 
 class DoubaoMsgType(IntEnum):
@@ -418,8 +424,21 @@ def _normalize_text_content(content: Any) -> str:
     return str(content or "")
 
 
-def _build_opening_prompt(position: str, round_name: str) -> str:
-    return VOICE_OPENING_PROMPT_TEMPLATE.format(position=position, round_name=round_name)
+def _build_opening_prompt(
+    position: str,
+    round_name: str,
+    *,
+    selected_resume_filename: str | None = None,
+    selected_resume_summary: dict | None = None,
+    selected_resume_structured: dict | None = None,
+    selected_resume_markdown_excerpt: str | None = None,
+) -> str:
+    return VOICE_OPENING_PROMPT_TEMPLATE.format(position=position, round_name=round_name) + build_selected_resume_prompt_block(
+        selected_resume_filename=selected_resume_filename,
+        selected_resume_summary=selected_resume_summary,
+        selected_resume_structured=selected_resume_structured,
+        selected_resume_markdown_excerpt=selected_resume_markdown_excerpt,
+    )
 
 
 def _normalize_tts_text(content: str) -> str:
@@ -486,7 +505,14 @@ async def _get_user_from_access_token(token: str, db) -> User:
     return user
 
 
-def _create_voice_session_id(*, thread_id: str, agent_id: str, position: str, round_name: str) -> str:
+def _create_voice_session_id(
+    *,
+    thread_id: str,
+    agent_id: str,
+    position: str,
+    round_name: str,
+    resume_id: int | None = None,
+) -> str:
     return AuthUtils.create_access_token(
         {
             "session_type": "voice_interview",
@@ -495,6 +521,7 @@ def _create_voice_session_id(*, thread_id: str, agent_id: str, position: str, ro
             "agent_id": agent_id,
             "position": position,
             "round_name": round_name,
+            "resume_id": resume_id,
         },
         expires_delta=timedelta(seconds=VOICE_SESSION_TOKEN_TTL_SECONDS),
     )
@@ -516,6 +543,7 @@ def _decode_voice_session_id(voice_session_id: str) -> VoiceSessionClaims:
         agent_id=str(payload.get("agent_id") or ""),
         position=str(payload.get("position") or ""),
         round_name=str(payload.get("round_name") or ""),
+        resume_id=int(payload["resume_id"]) if payload.get("resume_id") not in (None, "") else None,
     )
 
 
@@ -663,6 +691,18 @@ async def start_voice_interview_session(
 ) -> dict[str, Any]:
     position, round_name = InterviewContext.normalize_runtime_values(payload.position, payload.round)
     agent_id = str(payload.agent_id or "").strip()
+    resume_context = await load_selected_resume_context_payload(
+        db=db,
+        user_id=int(current_user.id),
+        resume_id=payload.resume_id,
+        strict=payload.resume_id is not None,
+    )
+    resume_metadata = {}
+    if resume_context:
+        resume_metadata = {
+            "resume_id": resume_context.get("selected_resume_id"),
+            "resume_filename": resume_context.get("selected_resume_filename"),
+        }
     if not agent_id:
         raise HTTPException(status_code=422, detail="agent_id 不能为空")
 
@@ -677,6 +717,7 @@ async def start_voice_interview_session(
                 "interview_mode": "voice",
                 "target_position": position,
                 "interview_round": round_name,
+                **resume_metadata,
             },
             db=db,
             current_user_id=str(current_user.id),
@@ -693,6 +734,7 @@ async def start_voice_interview_session(
                 "interview_mode": "voice",
                 "target_position": position,
                 "interview_round": round_name,
+                **resume_metadata,
             },
         )
 
@@ -703,6 +745,7 @@ async def start_voice_interview_session(
             agent_id=agent_id,
             position=position,
             round_name=round_name,
+            resume_id=payload.resume_id,
         ),
         "agent_id": agent_id,
         "position": position,
@@ -1103,6 +1146,7 @@ class VoiceInterviewBridge:
                 "context_overrides": {
                     "target_position": self.claims.position,
                     "interview_round": self.claims.round_name,
+                    "selected_resume_id": self.claims.resume_id,
                 }
             }
             config_item, agent_config_id = await _resolve_agent_config(
@@ -1112,7 +1156,13 @@ class VoiceInterviewBridge:
                 str(self.user.id),
                 None,
             )
-            agent_config = _build_effective_agent_config(self.claims.agent_id, config_item, runtime_config)
+            agent_config = await _build_effective_agent_config(
+                self.claims.agent_id,
+                config_item,
+                runtime_config,
+                db=db,
+                user_id=str(self.user.id),
+            )
             agent_config["delivery_mode"] = VOICE_DELIVERY_MODE
             input_context = {
                 "user_id": str(self.user.id),
@@ -1123,6 +1173,11 @@ class VoiceInterviewBridge:
                 "target_position": self.claims.position,
                 "interview_round": self.claims.round_name,
                 "delivery_mode": VOICE_DELIVERY_MODE,
+                "selected_resume_id": agent_config.get("selected_resume_id"),
+                "selected_resume_filename": agent_config.get("selected_resume_filename", ""),
+                "selected_resume_summary": agent_config.get("selected_resume_summary") or {},
+                "selected_resume_structured": agent_config.get("selected_resume_structured") or {},
+                "selected_resume_markdown_excerpt": agent_config.get("selected_resume_markdown_excerpt", ""),
             }
             langgraph_config = {
                 "configurable": {

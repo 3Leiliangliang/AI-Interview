@@ -1012,7 +1012,13 @@ async def _invoke_interview_finalize_turn(
             "interview_round": interview_round,
         }
     }
-    agent_config = _build_effective_agent_config("InterviewAgent", config_item, runtime_config)
+    agent_config = await _build_effective_agent_config(
+        "InterviewAgent",
+        config_item,
+        runtime_config,
+        db=db,
+        user_id=str(current_user.id),
+    )
     input_context = {
         "user_id": str(current_user.id),
         "thread_id": conversation.thread_id,

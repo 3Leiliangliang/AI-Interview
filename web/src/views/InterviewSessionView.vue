@@ -71,12 +71,19 @@ const { isVideoMode, isInitializing } = eventStream
 const interviewAgentId = computed(() => selectedAgentId.value || defaultAgentId.value || '')
 const selectedPosition = computed(() => String(route.query.position || '').trim() || DEFAULT_POSITION)
 const selectedRound = computed(() => String(route.query.round || '').trim() || DEFAULT_ROUND)
+const selectedResumeId = computed(() => {
+  const raw = String(route.query.resumeId || '').trim()
+  if (!raw) return null
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : null
+})
 const sessionKey = computed(() => String(route.query.session || '').trim())
 const threadId = computed(() => String(route.query.threadId || '').trim())
 
 const contextOverrides = computed(() => ({
   target_position: selectedPosition.value,
-  interview_round: selectedRound.value
+  interview_round: selectedRound.value,
+  selected_resume_id: selectedResumeId.value
 }))
 
 const threadTitle = computed(() => `${selectedPosition.value} · ${selectedRound.value}`)
@@ -84,12 +91,8 @@ const threadTitle = computed(() => `${selectedPosition.value} · ${selectedRound
 const interviewOpeningPrompt = computed(() => {
   return [
     `现在开始一轮${selectedPosition.value}${selectedRound.value}模拟面试。`,
-    '你必须始终以面试官身份发言，不要代替候选人作答。',
-    '请维护固定 7 个阶段 todo：1.读取简历并确认岗位背景；2.发起开场并请候选人自我介绍；3.追问项目经历与技术细节；4.相关技术知识提问；5.代码考核；6.评估岗位匹配度与风险点；7.输出总结与评分卡。',
-    '如果当前会话里有附件，先读取附件简历；如果没有附件，只允许调用一次 query_kb 查询“我的简历”知识。',
-    '第 4 阶段每次发技术题前都调用 pick_random_technical_question，并传入 excluded_questions 避免重复。',
-    '当第 4 阶段完成时，调用 start_code_assessment 启动代码考核，并明确引导用户进入代码工作台。',
-    '代码考核阶段除非用户明确请求提示，否则不要主动点评代码。'
+    '请基于当前岗位设定与系统已注入的简历上下文，直接开始本轮面试。',
+    '先完成开场引导并请候选人做简短自我介绍。'
   ].join('')
 })
 
@@ -139,7 +142,8 @@ const backToSetup = () => {
     name: 'AgentComp',
     query: {
       position: selectedPosition.value,
-      round: selectedRound.value
+      round: selectedRound.value,
+      ...(selectedResumeId.value ? { resumeId: String(selectedResumeId.value) } : {})
     }
   })
 }
@@ -155,7 +159,8 @@ const openInterviewResult = () => {
     query: {
       threadId: threadId.value,
       position: selectedPosition.value,
-      round: selectedRound.value
+      round: selectedRound.value,
+      ...(selectedResumeId.value ? { resumeId: String(selectedResumeId.value) } : {})
     }
   })
 }
@@ -201,7 +206,8 @@ const maybeStartInterview = async () => {
     threadMetadata: {
       interview_mode: 'text',
       target_position: selectedPosition.value,
-      interview_round: selectedRound.value
+      interview_round: selectedRound.value,
+      ...(selectedResumeId.value ? { resume_id: selectedResumeId.value } : {})
     },
     forceNewThread: true
   })
@@ -214,7 +220,8 @@ const maybeStartInterview = async () => {
         threadId: startedThreadId,
         position: selectedPosition.value,
         round: selectedRound.value,
-        session: sessionKey.value
+        session: sessionKey.value,
+        ...(selectedResumeId.value ? { resumeId: String(selectedResumeId.value) } : {})
       }
     })
   }
@@ -239,7 +246,8 @@ const handleAgentStateChange = (agentState) => {
     query: {
       threadId: threadId.value,
       position: selectedPosition.value,
-      round: selectedRound.value
+      round: selectedRound.value,
+      ...(selectedResumeId.value ? { resumeId: String(selectedResumeId.value) } : {})
     }
   })
 }
@@ -256,7 +264,8 @@ const handleThreadChange = (nextThread) => {
       threadId: normalizedThreadId,
       position,
       round,
-      ...(sessionKey.value ? { session: sessionKey.value } : {})
+      ...(sessionKey.value ? { session: sessionKey.value } : {}),
+      ...(selectedResumeId.value ? { resumeId: String(selectedResumeId.value) } : {})
     }
   })
 }
@@ -267,7 +276,8 @@ onMounted(async () => {
       name: 'AgentComp',
       query: {
         position: selectedPosition.value,
-        round: selectedRound.value
+        round: selectedRound.value,
+        ...(selectedResumeId.value ? { resumeId: String(selectedResumeId.value) } : {})
       }
     })
     return

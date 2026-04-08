@@ -1,7 +1,8 @@
-﻿from dataclasses import dataclass, field
+from dataclasses import dataclass, field
 from typing import Annotated
 
 from src.agents.common.context import BaseContext
+from src.services.interview_resume_service import build_selected_resume_prompt_block
 
 DEFAULT_TARGET_POSITION = "后端工程师"
 DEFAULT_INTERVIEW_ROUND = "初试"
@@ -11,15 +12,14 @@ INTERVIEW_SYSTEM_PROMPT = """你是一名专业、克制、友好的中文技术
 
 你的行为规则：
 1. 始终以面试官身份发言，不要代替候选人作答。
-2. 面试节奏遵循固定 7 个阶段：
-   1) 读取简历并确认岗位背景
-   2) 发起开场并请候选人自我介绍
-   3) 追问项目经历与技术细节
-   4) 相关技术知识提问
-   5) 代码考核
-   6) 评估岗位匹配度与风险点
-   7) 输出总结与评分卡
-3. 如果当前会话包含可读附件，优先读取简历；如果没有附件，可以只调用一次 query_kb 查询“我的简历”相关知识，不要重复检索。
+2. 面试节奏遵循固定 6 个阶段：
+   1) 发起开场并请候选人自我介绍
+   2) 追问项目经历与技术细节
+   3) 相关技术知识提问
+   4) 代码考核
+   5) 评估岗位匹配度与风险点
+   6) 输出总结与评分卡
+3. 如果系统已经注入选中简历上下文，优先直接使用该上下文；只有在没有注入简历时，才允许读取附件或只调用一次 query_kb 查询“我的简历”相关知识，不要重复检索。
 4. 问题要口语化、简洁、有连续性。候选人每次回答后，先给一句简短反馈，再进入下一问。
 5. 在第 4 阶段，发出每一道技术题前都调用 pick_random_technical_question，结合目标岗位随机抽题，并通过 excluded_questions 传入本阶段已问过的问题，避免重复。
 6. 当第 4 阶段结束并准备进入第 5 阶段时，必须调用 start_code_assessment，为当前线程启动代码考核并拿到 workbench_path，然后明确告知用户“进入代码考核”，引导其前往工作台答题。
@@ -66,6 +66,26 @@ class InterviewContext(BaseContext):
         default=DEFAULT_DELIVERY_MODE,
         metadata={"name": "输出模式", "description": "chat 或 voice_direct", "configurable": False},
     )
+    selected_resume_id: int | None = field(
+        default=None,
+        metadata={"name": "选中简历ID", "configurable": False, "hide": True},
+    )
+    selected_resume_filename: str = field(
+        default="",
+        metadata={"name": "选中简历文件名", "configurable": False, "hide": True},
+    )
+    selected_resume_summary: dict = field(
+        default_factory=dict,
+        metadata={"name": "选中简历摘要", "configurable": False, "hide": True},
+    )
+    selected_resume_structured: dict = field(
+        default_factory=dict,
+        metadata={"name": "选中简历结构化字段", "configurable": False, "hide": True},
+    )
+    selected_resume_markdown_excerpt: str = field(
+        default="",
+        metadata={"name": "选中简历正文摘录", "configurable": False, "hide": True},
+    )
 
     @staticmethod
     def normalize_runtime_values(target_position: str | None, interview_round: str | None) -> tuple[str, str]:
@@ -80,12 +100,22 @@ class InterviewContext(BaseContext):
         *,
         target_position: str | None,
         interview_round: str | None,
+        selected_resume_filename: str | None = None,
+        selected_resume_summary: dict | None = None,
+        selected_resume_structured: dict | None = None,
+        selected_resume_markdown_excerpt: str | None = None,
     ) -> str:
         normalized_position, normalized_round = cls.normalize_runtime_values(target_position, interview_round)
         template = system_prompt or cls().system_prompt
-        return template.format(
+        rendered_prompt = template.format(
             target_position=normalized_position,
             interview_round=normalized_round,
+        )
+        return rendered_prompt + build_selected_resume_prompt_block(
+            selected_resume_filename=selected_resume_filename,
+            selected_resume_summary=selected_resume_summary,
+            selected_resume_structured=selected_resume_structured,
+            selected_resume_markdown_excerpt=selected_resume_markdown_excerpt,
         )
 
     @classmethod
@@ -101,5 +131,9 @@ class InterviewContext(BaseContext):
             getattr(context, "system_prompt", None),
             target_position=target_position,
             interview_round=interview_round,
+            selected_resume_filename=getattr(context, "selected_resume_filename", ""),
+            selected_resume_summary=getattr(context, "selected_resume_summary", None),
+            selected_resume_structured=getattr(context, "selected_resume_structured", None),
+            selected_resume_markdown_excerpt=getattr(context, "selected_resume_markdown_excerpt", ""),
         )
         return context

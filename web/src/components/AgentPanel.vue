@@ -23,7 +23,7 @@
         文件 ({{ fileCount }})
       </button>
       <button class="tab" :class="{ active: activeTab === 'todos' }" @click="activeTab = 'todos'">
-        任务 ({{ completedCount }}/{{ todos.length }})
+        任务 ({{ progressCount }}/{{ todos.length }})
       </button>
     </div>
     <div class="tab-content">
@@ -191,6 +191,10 @@ const files = computed(() => {
 
 const completedCount = computed(() => {
   return todos.value.filter((t) => t.status === 'completed').length
+})
+
+const progressCount = computed(() => {
+  return todos.value.filter((t) => t.status === 'completed' || t.status === 'in_progress').length
 })
 
 // 溢出检测

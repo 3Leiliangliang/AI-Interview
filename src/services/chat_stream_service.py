@@ -1,3 +1,4 @@
+import ast
 import asyncio
 import json
 import re
@@ -15,7 +16,9 @@ from src.agents import agent_manager
 from src.plugins.guard import content_guard
 from src.repositories.agent_config_repository import AgentConfigRepository
 from src.repositories.conversation_repository import ConversationRepository
+from src.services.interview_resume_service import load_selected_resume_context_payload
 from src.services.openviking_service import openviking_service
+from src.storage.postgres.models_business import Conversation
 from src.storage.postgres.manager import pg_manager
 from src.utils.internal_observation import (
     InternalObservationStreamSanitizer,
@@ -87,6 +90,37 @@ def extract_agent_state(values: dict) -> dict:
         "files": values.get("files") or {},
         "coding_session": coding_session if isinstance(coding_session, dict) else None,
     }
+
+
+def _extract_todos_from_tool_message(msg_dict: dict[str, Any]) -> list[dict[str, Any]]:
+    if msg_dict.get("type") != "tool" or msg_dict.get("name") != "write_todos":
+        return []
+
+    content = str(msg_dict.get("content") or "").strip()
+    if "Updated todo list to" not in content:
+        return []
+
+    raw_payload = content.split("Updated todo list to", 1)[1].strip()
+    if not raw_payload:
+        return []
+
+    try:
+        parsed = ast.literal_eval(raw_payload)
+    except Exception:
+        return []
+
+    if not isinstance(parsed, list):
+        return []
+
+    todos: list[dict[str, Any]] = []
+    for item in parsed[:20]:
+        if not isinstance(item, dict):
+            continue
+        content_value = str(item.get("content") or "").strip()
+        status_value = str(item.get("status") or "").strip()
+        if content_value and status_value:
+            todos.append({"content": content_value, "status": status_value})
+    return todos
 
 
 async def enrich_agent_state_with_conversation_metadata(
@@ -357,7 +391,14 @@ def _normalize_chunk_text(content: Any) -> str:
     return str(content or "")
 
 
-def _build_effective_agent_config(agent_id: str, config_item, runtime_config: dict | None) -> dict:
+async def _build_effective_agent_config(
+    agent_id: str,
+    config_item,
+    runtime_config: dict | None,
+    *,
+    db=None,
+    user_id: str | int | None = None,
+) -> dict:
     raw_config = config_item.config_json or {}
     stored_context = raw_config.get("context", raw_config)
     effective_config = dict(stored_context) if isinstance(stored_context, dict) else {}
@@ -375,6 +416,28 @@ def _build_effective_agent_config(agent_id: str, config_item, runtime_config: di
     if agent_id == "InterviewAgent":
         from src.agents.interview_agent.context import InterviewContext
 
+        explicit_selected_resume_id = context_overrides.get("selected_resume_id")
+        selected_resume_id = effective_config.get("selected_resume_id")
+        if not selected_resume_id and db is not None:
+            thread_id = str((runtime_config or {}).get("thread_id") or "").strip()
+            if thread_id:
+                conversation_result = await db.execute(select(Conversation).where(Conversation.thread_id == thread_id))
+                conversation = conversation_result.scalar_one_or_none()
+                metadata = getattr(conversation, "extra_metadata", None) if conversation else None
+                if isinstance(metadata, dict) and metadata.get("resume_id"):
+                    selected_resume_id = metadata.get("resume_id")
+                    effective_config["selected_resume_id"] = selected_resume_id
+
+        if db is not None and user_id not in (None, "") and selected_resume_id:
+            resume_context = await load_selected_resume_context_payload(
+                db=db,
+                user_id=int(user_id),
+                resume_id=int(selected_resume_id),
+                strict=explicit_selected_resume_id not in (None, ""),
+            )
+            if resume_context:
+                effective_config.update(resume_context)
+
         target_position, interview_round = InterviewContext.normalize_runtime_values(
             effective_config.get("target_position"),
             effective_config.get("interview_round"),
@@ -385,6 +448,10 @@ def _build_effective_agent_config(agent_id: str, config_item, runtime_config: di
             effective_config.get("system_prompt"),
             target_position=target_position,
             interview_round=interview_round,
+            selected_resume_filename=effective_config.get("selected_resume_filename"),
+            selected_resume_summary=effective_config.get("selected_resume_summary"),
+            selected_resume_structured=effective_config.get("selected_resume_structured"),
+            selected_resume_markdown_excerpt=effective_config.get("selected_resume_markdown_excerpt"),
         )
 
     return effective_config
@@ -513,13 +580,24 @@ async def stream_agent_chat(
         thread_id = str(uuid.uuid4())
         logger.warning(f"No thread_id provided, generated new thread_id: {thread_id}")
 
-    agent_config = _build_effective_agent_config(agent_id, config_item, config)
+    agent_config = await _build_effective_agent_config(
+        agent_id,
+        config_item,
+        config,
+        db=db,
+        user_id=user_id,
+    )
     input_context = {
         "user_id": user_id,
         "thread_id": thread_id,
         "department_id": department_id,
         "agent_config_id": agent_config_id,
         "agent_config": agent_config,
+        "selected_resume_id": agent_config.get("selected_resume_id"),
+        "selected_resume_filename": agent_config.get("selected_resume_filename", ""),
+        "selected_resume_summary": agent_config.get("selected_resume_summary") or {},
+        "selected_resume_structured": agent_config.get("selected_resume_structured") or {},
+        "selected_resume_markdown_excerpt": agent_config.get("selected_resume_markdown_excerpt", ""),
     }
     full_msg = None
     accumulated_content: list[str] = []
@@ -528,6 +606,16 @@ async def stream_agent_chat(
 
     try:
         conv_repo = ConversationRepository(db)
+        selected_resume_id = agent_config.get("selected_resume_id")
+        selected_resume_filename = str(agent_config.get("selected_resume_filename") or "").strip()
+        if selected_resume_id:
+            await conv_repo.update_conversation(
+                thread_id,
+                metadata={
+                    "resume_id": selected_resume_id,
+                    "resume_filename": selected_resume_filename,
+                },
+            )
 
         try:
             await conv_repo.add_message_by_thread_id(
@@ -586,6 +674,10 @@ async def stream_agent_chat(
                         graph = await agent.get_graph()
                         state = await graph.aget_state(langgraph_config)
                         agent_state = extract_agent_state(getattr(state, "values", {})) if state else {}
+                        if not agent_state.get("todos"):
+                            tool_todos = _extract_todos_from_tool_message(msg_dict)
+                            if tool_todos:
+                                agent_state["todos"] = tool_todos
                         if agent_state:
                             agent_state = await enrich_agent_state_with_conversation_metadata(
                                 conv_repo,
@@ -753,13 +845,24 @@ async def stream_agent_resume(
     agent_config_id = (config or {}).get("agent_config_id")
     config_item, agent_config_id = await _resolve_agent_config(db, agent_id, department_id, user_id, agent_config_id)
 
-    agent_config = _build_effective_agent_config(agent_id, config_item, config)
+    agent_config = await _build_effective_agent_config(
+        agent_id,
+        config_item,
+        config,
+        db=db,
+        user_id=user_id,
+    )
     input_context = {
         "user_id": user_id,
         "thread_id": thread_id,
         "department_id": department_id,
         "agent_config_id": agent_config_id,
         "agent_config": agent_config,
+        "selected_resume_id": agent_config.get("selected_resume_id"),
+        "selected_resume_filename": agent_config.get("selected_resume_filename", ""),
+        "selected_resume_summary": agent_config.get("selected_resume_summary") or {},
+        "selected_resume_structured": agent_config.get("selected_resume_structured") or {},
+        "selected_resume_markdown_excerpt": agent_config.get("selected_resume_markdown_excerpt", ""),
     }
     context = agent.context_schema()
     agent_config = input_context.get("agent_config")

@@ -60,17 +60,52 @@
           </div>
         </div>
 
+        <div class="setup-section">
+          <div class="section-title">选择简历</div>
+          <div v-if="loadingResumes" class="resume-loading">
+            <LoaderCircle class="loading-icon" :size="16" />
+            <span>正在加载简历...</span>
+          </div>
+          <div v-else-if="resumeOptions.length > 0" class="resume-option-list">
+            <button
+              v-for="item in resumeOptions"
+              :key="item.id"
+              type="button"
+              class="resume-option-card"
+              :class="{ active: selectedResumeId === item.id }"
+              @click="selectedResumeId = item.id"
+            >
+              <div class="resume-option-title">{{ item.filename }}</div>
+              <div class="resume-option-meta">
+                <span>{{ formatFileSize(item.file_size) }}</span>
+                <span>{{ formatTime(item.updated_at || item.created_at) }}</span>
+              </div>
+            </button>
+          </div>
+          <div v-else class="resume-empty-state">
+            <div class="resume-empty-text">还没有已上传简历，请先上传一份再开始面试。</div>
+            <button class="secondary-btn resume-empty-action" type="button" @click="openResumeCenter">
+              去上传简历
+            </button>
+          </div>
+        </div>
+
         <div class="setup-summary">
           <span class="summary-label">当前配置</span>
           <div class="summary-tags">
             <span class="summary-tag">{{ selectedInterviewModeLabel }}</span>
             <span class="summary-tag">{{ selectedPosition }}</span>
             <span class="summary-tag">{{ selectedRound }}</span>
+            <span class="summary-tag">
+              {{ selectedResumeLabel }}
+            </span>
           </div>
         </div>
 
         <div class="setup-actions">
-          <button class="primary-btn" type="button" @click="startInterview">开始面试</button>
+          <button class="primary-btn" type="button" :disabled="!canStartInterview" @click="startInterview">
+            开始面试
+          </button>
           <button class="secondary-btn" type="button" @click="openResumeCenter">我的简历</button>
         </div>
       </div>
@@ -109,9 +144,11 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { message } from 'ant-design-vue'
 import { Sparkles, Clock, ChevronRight, LoaderCircle } from 'lucide-vue-next'
 import { useAgentStore } from '@/stores/agent'
 import { threadApi } from '@/apis/agent_api'
+import { resumeApi } from '@/apis/resume_api'
 import { parseToShanghai } from '@/utils/time'
 
 const route = useRoute()
@@ -137,12 +174,30 @@ const roundOptions = [
 const selectedInterviewMode = ref(String(route.query.mode || 'text'))
 const selectedPosition = ref(String(route.query.position || '后端工程师'))
 const selectedRound = ref(String(route.query.round || '初试'))
+const selectedResumeId = ref(route.query.resumeId ? Number(route.query.resumeId) : null)
+const resumeOptions = ref([])
+const loadingResumes = ref(false)
+const historyThreads = ref([])
+const loadingHistory = ref(false)
 
 const selectedInterviewModeLabel = computed(() => {
   return interviewModeOptions.find((item) => item.value === selectedInterviewMode.value)?.label || '文本面试'
 })
 
+const selectedResumeLabel = computed(() => {
+  const selectedResume = resumeOptions.value.find((item) => item.id === selectedResumeId.value)
+  return selectedResume?.filename || '未选择简历'
+})
+
+const canStartInterview = computed(() => {
+  return Boolean(selectedResumeId.value)
+})
+
 const startInterview = () => {
+  if (!selectedResumeId.value) {
+    message.warning('请先选择一份简历')
+    return
+  }
   const targetRouteName = selectedInterviewMode.value === 'voice' ? 'AgentVoiceInterviewComp' : 'AgentInterviewComp'
   router.push({
     name: targetRouteName,
@@ -150,6 +205,7 @@ const startInterview = () => {
       mode: selectedInterviewMode.value,
       position: selectedPosition.value,
       round: selectedRound.value,
+      resumeId: String(selectedResumeId.value),
       session: `${Date.now()}`
     }
   })
@@ -159,21 +215,53 @@ const openResumeCenter = () => {
   router.push('/resume')
 }
 
-const historyThreads = ref([])
-const loadingHistory = ref(false)
-
 const formatTime = (timeStr) => {
   if (!timeStr) return ''
   const parsed = parseToShanghai(timeStr)
   return parsed ? parsed.format('M/D HH:mm') : ''
 }
 
+const formatFileSize = (bytes) => {
+  if (!bytes) return '0 B'
+
+  const units = ['B', 'KB', 'MB', 'GB']
+  let size = bytes
+  let unitIndex = 0
+
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024
+    unitIndex += 1
+  }
+
+  return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`
+}
+
+const loadResumes = async () => {
+  loadingResumes.value = true
+  try {
+    const data = await resumeApi.getMyResumes()
+    resumeOptions.value = Array.isArray(data?.resumes) ? data.resumes : []
+
+    const hasSelectedResume = resumeOptions.value.some((item) => item.id === selectedResumeId.value)
+    if (!hasSelectedResume) {
+      selectedResumeId.value = resumeOptions.value[0]?.id || null
+    }
+  } catch (error) {
+    console.error('Failed to load resumes:', error)
+    message.error(error.message || '加载简历失败')
+  } finally {
+    loadingResumes.value = false
+  }
+}
+
 onMounted(async () => {
   loadingHistory.value = true
+  loadingResumes.value = true
   try {
     if (!agentStore.isInitialized) {
       await agentStore.initialize()
     }
+    await loadResumes()
     const agentId = agentStore.defaultAgentId
     if (agentId) {
       const threads = await threadApi.getThreads(agentId, 15, 0)
@@ -198,7 +286,8 @@ const continueInterview = (thread) => {
       mode: isVoiceThread ? 'voice' : 'text',
       position: pos ? pos.trim() : '后端工程师',
       round: rnd ? rnd.trim() : '初试',
-      threadId: thread.id
+      threadId: thread.id,
+      ...(thread?.metadata?.resume_id ? { resumeId: String(thread.metadata.resume_id) } : {})
     }
   })
 }
@@ -365,10 +454,84 @@ const continueInterview = (thread) => {
   color: var(--gray-0);
 }
 
+.primary-btn:disabled {
+  cursor: not-allowed;
+  background: var(--gray-300);
+  color: var(--gray-0);
+}
+
 .secondary-btn {
   border: 1px solid var(--gray-150);
   background: var(--gray-0);
   color: var(--gray-700);
+}
+
+.resume-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 4px;
+  color: var(--main-color);
+  font-size: 14px;
+}
+
+.resume-option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.resume-option-card {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--gray-150);
+  background: var(--gray-0);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.resume-option-card:hover {
+  border-color: var(--main-200);
+}
+
+.resume-option-card.active {
+  border-color: var(--main-color);
+  background: var(--main-20);
+}
+
+.resume-option-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-800);
+  word-break: break-all;
+}
+
+.resume-option-meta {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--gray-500);
+}
+
+.resume-empty-state {
+  padding: 18px;
+  border-radius: 12px;
+  border: 1px dashed var(--gray-200);
+  background: var(--gray-25);
+}
+
+.resume-empty-text {
+  color: var(--gray-600);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.resume-empty-action {
+  margin-top: 12px;
 }
 
 .history-card {

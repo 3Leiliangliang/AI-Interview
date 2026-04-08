@@ -439,6 +439,12 @@ const { selectedAgentId, defaultAgentId } = storeToRefs(agentStore)
 
 const selectedPosition = computed(() => String(route.query.position || '').trim() || DEFAULT_POSITION)
 const selectedRound = computed(() => String(route.query.round || '').trim() || DEFAULT_ROUND)
+const selectedResumeId = computed(() => {
+  const raw = String(route.query.resumeId || '').trim()
+  if (!raw) return null
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : null
+})
 const routeThreadId = computed(() => String(route.query.threadId || '').trim())
 const sessionKey = computed(() => String(route.query.session || '').trim())
 const interviewAgentId = computed(() => selectedAgentId.value || defaultAgentId.value || '')
@@ -470,7 +476,8 @@ const {
       query: {
         threadId: nextThreadId || currentThreadId.value,
         position: position || selectedPosition.value,
-        round: round || selectedRound.value
+        round: round || selectedRound.value,
+        ...(selectedResumeId.value ? { resumeId: String(selectedResumeId.value) } : {})
       }
     })
   }
@@ -926,7 +933,8 @@ const backToSetup = () => {
     query: {
       mode: 'voice',
       position: selectedPosition.value,
-      round: selectedRound.value
+      round: selectedRound.value,
+      ...(selectedResumeId.value ? { resumeId: String(selectedResumeId.value) } : {})
     }
   })
 }
@@ -942,7 +950,8 @@ const openInterviewResult = () => {
     query: {
       threadId: currentThreadId.value,
       position: selectedPosition.value,
-      round: selectedRound.value
+      round: selectedRound.value,
+      ...(selectedResumeId.value ? { resumeId: String(selectedResumeId.value) } : {})
     }
   })
 }
@@ -977,6 +986,7 @@ const preloadVoiceSession = async () => {
         agent_id: interviewAgentId.value,
         position: selectedPosition.value,
         round: selectedRound.value,
+        resume_id: selectedResumeId.value || undefined,
         thread_id: routeThreadId.value || undefined,
         force_new_thread: false
       }))
@@ -997,6 +1007,7 @@ const preloadVoiceSession = async () => {
           position: selectedPosition.value,
           round: selectedRound.value,
           threadId: payload.thread_id,
+          ...(selectedResumeId.value ? { resumeId: String(selectedResumeId.value) } : {}),
           ...(sessionKey.value ? { session: sessionKey.value } : {})
         }
       })
@@ -1171,7 +1182,8 @@ onMounted(async () => {
       query: {
         mode: 'voice',
         position: selectedPosition.value,
-        round: selectedRound.value
+        round: selectedRound.value,
+        ...(selectedResumeId.value ? { resumeId: String(selectedResumeId.value) } : {})
       }
     })
     return
@@ -1202,7 +1214,8 @@ watch(
       query: {
         threadId: currentThreadId.value,
         position: selectedPosition.value,
-        round: selectedRound.value
+        round: selectedRound.value,
+        ...(selectedResumeId.value ? { resumeId: String(selectedResumeId.value) } : {})
       }
     })
   }

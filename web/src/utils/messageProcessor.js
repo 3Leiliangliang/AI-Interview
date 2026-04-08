@@ -10,13 +10,22 @@ export class MessageProcessor {
     const content = typeof message?.content === 'string' ? message.content.trim() : ''
     if (!content) return false
 
-    // 匹配面试开场指令，将其隐藏。
-    // 指令通常包含特定的引导词和阶段描述。
-    return (
+    const isLegacyOpeningPrompt =
       content.includes('现在开始一轮') &&
       content.includes('你必须始终以面试官身份发言') &&
-      (content.includes('请维护固定 7 个阶段 todo') || content.includes('请维护固定 5 步面试任务'))
-    )
+      (
+        content.includes('请维护固定 7 个阶段 todo') ||
+        content.includes('请维护固定 6 个阶段 todo') ||
+        content.includes('请维护固定 5 步面试任务')
+      )
+
+    const isCompactOpeningPrompt =
+      content.startsWith('现在开始一轮') &&
+      content.includes('模拟面试') &&
+      content.includes('系统已注入的简历上下文') &&
+      content.includes('自我介绍')
+
+    return isLegacyOpeningPrompt || isCompactOpeningPrompt
   }
 
   /**

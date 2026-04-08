@@ -36,31 +36,29 @@ INTERVIEW_READ_FILE_DESCRIPTION = """读取当前会话中用户上传的简历�
 
 INTERVIEW_TODO_PROMPT = """## write_todos
 
-你正在进行一场模拟面试。你必须始终维护固定的 7 个 todo，且只能通过 write_todos 更新整份列表。
-固定任务必须始终保持以下 7 项，不能新增、删除、改名：
-1. 读取简历并确认岗位背景
-2. 发起开场并请候选人自我介绍
-3. 追问项目经历与技术细节
-4. 相关技术知识提问
-5. 代码考核
-6. 评估岗位匹配度与风险点
-7. 输出总结与评分卡
+你正在进行一场模拟面试。你必须始终维护固定的 6 个 todo，且只能通过 write_todos 更新整份列表。
+固定任务必须始终保持以下 6 项，不能新增、删除、改名：
+1. 发起开场并请候选人自我介绍
+2. 追问项目经历与技术细节
+3. 相关技术知识提问
+4. 代码考核
+5. 评估岗位匹配度与风险点
+6. 输出总结与评分卡
 
 任务状态只允许：pending / in_progress / completed
 
 使用规则：
-- 首轮正式发问前先初始化 7 条任务：第 1 条为 in_progress，其余为 pending。
-- 简历读取完成后：第 1 条改为 completed，第 2 条改为 in_progress。
-- 开场问题发出后：第 2 条改为 completed，第 3 条改为 in_progress。
-- 项目追问接近完成时：第 3 条改为 completed，第 4 条改为 in_progress。
-- 第 4 阶段进行中：每次准备发出技术问题前，都调用 pick_random_technical_question，且通过 excluded_questions 传入本阶段已问过的问题，避免重复。
-- 当你判断技术知识提问已足够时：先根据候选人前面的回答表现判断代码题难度（easy / medium / hard，拿不准用 medium），再调用 start_code_assessment，并把 difficulty_level 传进去；随后将第 4 条改为 completed，第 5 条改为 in_progress，并明确告知用户进入代码考核与工作台。
-- 代码考核开始后，第 5 条保持 in_progress；在用户完成提交或明确表示结束代码考核后，将第 5 条改为 completed，第 6 条改为 in_progress。
-- 继续交流岗位匹配度与风险点时，维护第 6 条状态；准备输出总结前，将第 6 条改为 completed，第 7 条改为 in_progress。
-- 当用户要求“总结 / 评分 / 结束面试 / 给我反馈”时，先确保第 7 条为 in_progress；输出总结与评分卡后再改为 completed。
+- 首轮正式发问前先初始化 6 条任务：第 1 条为 in_progress，其余为 pending。
+- 开场问题发出后：第 1 条改为 completed，第 2 条改为 in_progress。
+- 项目追问接近完成时：第 2 条改为 completed，第 3 条改为 in_progress。
+- 第 3 阶段进行中：每次准备发出技术问题前，都调用 pick_random_technical_question，且通过 excluded_questions 传入本阶段已问过的问题，避免重复。
+- 当你判断技术知识提问已足够时：先根据候选人前面的回答表现判断代码题难度（easy / medium / hard，拿不准用 medium），再调用 start_code_assessment，并把 difficulty_level 传进去；随后将第 3 条改为 completed，第 4 条改为 in_progress，并明确告知用户进入代码考核与工作台。
+- 代码考核开始后，第 4 条保持 in_progress；在用户完成提交或明确表示结束代码考核后，将第 4 条改为 completed，第 5 条改为 in_progress。
+- 继续交流岗位匹配度与风险点时，维护第 5 条状态；准备输出总结前，将第 5 条改为 completed，第 6 条改为 in_progress。
+- 当用户要求“总结 / 评分 / 结束面试 / 给我反馈”时，先确保第 6 条为 in_progress；输出总结与评分卡后再改为 completed。
 - 代码考核阶段，除非用户明确请求提示，否则不要主动点评代码或给出解法。
 - 每轮回答最多调用一次 write_todos。
-- 除这 7 条固定任务外，不要创建任何额外 todo。
+- 除这 6 条固定任务外，不要创建任何额外 todo。
 """
 
 
