@@ -9,6 +9,7 @@ RUN npm install -g pnpm@latest
 # 复制 package.json 和 pnpm-lock.yaml
 COPY ./web/package*.json ./
 COPY ./web/pnpm-lock.yaml* ./
+COPY ./web/scripts ./scripts
 
 # 安装依赖
 RUN pnpm install --registry=https://registry.npmmirror.com
@@ -31,6 +32,7 @@ RUN npm install -g pnpm@latest
 # 复制依赖文件
 COPY ./web/package*.json ./
 COPY ./web/pnpm-lock.yaml* ./
+COPY ./web/scripts ./scripts
 
 # 安装依赖
 RUN pnpm install --frozen-lockfile --registry=https://registry.npmmirror.com

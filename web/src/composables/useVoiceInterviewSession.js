@@ -312,6 +312,9 @@ export function useVoiceInterviewSession({ onCodingRedirect } = {}) {
     flushPendingPcmBytes()
     teardownCaptureGraph()
     isCapturing.value = false
+    if (sendStop && candidateCaptureState.value === 'listening') {
+      candidateCaptureState.value = 'processing'
+    }
     if (sendStop) {
       send({ type: 'candidate_audio_stop' })
     }

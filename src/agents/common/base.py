@@ -28,6 +28,7 @@ class BaseAgent:
 
     name = "base_agent"
     description = "base_agent"
+    has_checkpointer: bool | None = None
     capabilities: list[str] = []  # 智能体能力列表，如 ["file_upload", "web_search"] 等
     context_schema: type[BaseContext] = BaseContext  # 智能体上下文 schema
 
@@ -57,6 +58,10 @@ class BaseAgent:
         if include_configurable_items:
             configurable_items = self.context_schema.get_configurable_items()
 
+        has_checkpointer = self.has_checkpointer
+        if has_checkpointer is None:
+            has_checkpointer = await self.check_checkpointer()
+
         # Merge metadata with class attributes, metadata takes precedence
         return {
             "id": self.id,
@@ -64,7 +69,7 @@ class BaseAgent:
             "description": metadata.get("description", getattr(self, "description", "Unknown")),
             "examples": metadata.get("examples", []),
             "configurable_items": configurable_items,
-            "has_checkpointer": await self.check_checkpointer(),
+            "has_checkpointer": has_checkpointer,
             "capabilities": getattr(self, "capabilities", []),  # 智能体能力列表
         }
 

@@ -227,12 +227,12 @@ class TestVideoAggregateEndpoint:
             _make_event_payload(
                 event_type="posture_detected",
                 session_id=session_id,
-                data={"posture_score": 85, "gaze_direction": "left"},
+                data={"posture": "upright", "posture_score": 85, "gaze_direction": "left"},
             ),
             _make_event_payload(
                 event_type="posture_detected",
                 session_id=session_id,
-                data={"posture_score": 95, "gaze_direction": "right"},
+                data={"posture": "slouching", "posture_score": 95, "gaze_direction": "right"},
             ),
         ]
         batch = _make_event_batch(session_id=session_id, events=events)
@@ -245,6 +245,7 @@ class TestVideoAggregateEndpoint:
         assert result["has_data"] is True
         assert result["avg_posture_score"] == 90.0
         assert result["gaze_direction"] == "left"  # lpush reverses order, last processed is first inserted
+        assert result["current_posture"] == "slouching"
 
     async def test_aggregate_attention_events(self, test_client):
         """Should correctly aggregate attention change events."""
@@ -285,7 +286,7 @@ class TestVideoAggregateEndpoint:
             _make_event_payload(
                 event_type="posture_detected",
                 session_id=session_id,
-                data={"posture_score": 90, "gaze_direction": "center"},
+                data={"posture": "upright", "posture_score": 90, "gaze_direction": "center"},
             ),
             _make_event_payload(
                 event_type="attention_change",
@@ -309,6 +310,7 @@ class TestVideoAggregateEndpoint:
         assert result["has_data"] is True
         assert result["dominant_emotion"] == "happy"
         assert result["avg_posture_score"] == 90.0
+        assert result["current_posture"] == "upright"
         assert result["avg_attention_score"] == 75.0
         assert len(result["recent_alerts"]) == 1
         assert result["event_count"] == 4

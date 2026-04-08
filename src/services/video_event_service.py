@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from typing import Any
 
@@ -75,10 +76,18 @@ class VideoEventService:
 
         # 情绪聚合
         emotion_scores: dict[str, float] = {}
-        for event in events:
-            if event.get("type") == "emotion_detected":
-                for emo, score in event.get("data", {}).get("scores", {}).items():
-                    emotion_scores[emo] = emotion_scores.get(emo, 0) + score
+        for idx, event in enumerate(events):
+            if event.get("type") != "emotion_detected":
+                continue
+
+            # Redis 使用 LPUSH，index 越小越新。给越新的情绪更高权重，提高灵敏度。
+            recency_weight = math.exp(-idx / 20)
+            for emo, score in event.get("data", {}).get("scores", {}).items():
+                try:
+                    numeric_score = float(score)
+                except (TypeError, ValueError):
+                    continue
+                emotion_scores[emo] = emotion_scores.get(emo, 0.0) + numeric_score * recency_weight
 
         dominant_emotion = "neutral"
         if emotion_scores:
@@ -89,12 +98,20 @@ class VideoEventService:
 
         # 姿态聚合
         posture_scores: list[float] = []
+        posture_counts: dict[str, int] = {}
+        current_posture: str | None = None
         gaze_direction = "center"
         for event in events:
             if event.get("type") == "posture_detected":
-                posture_scores.append(event.get("data", {}).get("posture_score", 100))
-                gaze_direction = event.get("data", {}).get("gaze_direction", "center")
+                data = event.get("data", {})
+                posture_name = str(data.get("posture") or "").strip() or "upright"
+                posture_scores.append(data.get("posture_score", 100))
+                gaze_direction = data.get("gaze_direction", "center")
+                posture_counts[posture_name] = posture_counts.get(posture_name, 0) + 1
+                if current_posture is None:
+                    current_posture = posture_name
         avg_posture = round(sum(posture_scores) / len(posture_scores), 1) if posture_scores else None
+        dominant_posture = max(posture_counts, key=posture_counts.get) if posture_counts else current_posture
 
         # 注意力聚合
         attention_scores: list[float] = []
@@ -115,6 +132,8 @@ class VideoEventService:
             "dominant_emotion": dominant_emotion,
             "emotion_scores": emotion_scores,
             "avg_posture_score": avg_posture,
+            "current_posture": current_posture,
+            "dominant_posture": dominant_posture,
             "gaze_direction": gaze_direction,
             "avg_attention_score": avg_attention,
             "recent_alerts": recent_alerts,

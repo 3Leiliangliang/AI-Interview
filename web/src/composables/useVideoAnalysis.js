@@ -43,6 +43,9 @@ export function useVideoAnalysis() {
   let blinkTimestamps = []
   let prevGazeDirection = 'center'
   let gazeChangeTimestamps = []
+  let stableEmotion = 'neutral'
+  let emotionCandidate = 'neutral'
+  let emotionCandidateFrames = 0
 
   // ==================== 常量 ====================
 
@@ -52,6 +55,7 @@ export function useVideoAnalysis() {
   const ATTENTION_WINDOW_MS = 60_000 // 眨眼/视线统计窗口 1 分钟
   const GAZE_CHANGE_THRESHOLD = 5 // 视线方向变化计数阈值（每分钟）
 
+  const EMOTION_CONFIRM_FRAMES = 2
   const VISION_WASM_PATH = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.34/wasm'
 
   const MODEL_CONFIGS = {
@@ -232,17 +236,17 @@ export function useVideoAnalysis() {
     // 按规则推断 dominant
     let dominant = 'neutral'
 
-    if (mouthSmile > 0.3) {
+    if (mouthSmile > 0.22) {
       dominant = 'happy'
-    } else if (mouthFrown > 0.2 && browInnerUpVal < 0.1) {
+    } else if (mouthFrown > 0.16 && browInnerUpVal < 0.14) {
       dominant = 'sad'
-    } else if (browInnerUpVal > 0.3 && mouthFrown > 0.15) {
+    } else if (browInnerUpVal > 0.22 && mouthFrown > 0.12) {
       dominant = 'angry'
-    } else if (eyeWide > 0.2 && mouthOpen > 0.3) {
+    } else if (eyeWide > 0.16 && mouthOpen > 0.24) {
       dominant = 'surprised'
-    } else if (browInnerUpVal > 0.25 && eyeWide > 0.2 && mouthStretch < 0.1) {
+    } else if (browInnerUpVal > 0.2 && eyeWide > 0.16 && mouthStretch < 0.16) {
       dominant = 'fear'
-    } else if (noseWrinkle > 0.2 || mouthPress > 0.3) {
+    } else if (noseWrinkle > 0.16 || mouthPress > 0.24) {
       dominant = 'disgust'
     }
 
@@ -262,6 +266,35 @@ export function useVideoAnalysis() {
    * @param {Array<Array<{x:number,y:number,z:number,visibility:number}>>|null} poseLandmarks
    * @returns {{ posture: string, head_tilt_angle: number, gaze_direction: string, shoulder_balance: number, posture_score: number }}
    */
+  function smoothDominantEmotion(dominant, faceDetected) {
+    if (!faceDetected) {
+      stableEmotion = 'neutral'
+      emotionCandidate = 'neutral'
+      emotionCandidateFrames = 0
+      return 'neutral'
+    }
+
+    if (dominant === stableEmotion) {
+      emotionCandidate = dominant
+      emotionCandidateFrames = 0
+      return stableEmotion
+    }
+
+    if (dominant === emotionCandidate) {
+      emotionCandidateFrames += 1
+    } else {
+      emotionCandidate = dominant
+      emotionCandidateFrames = 1
+    }
+
+    if (emotionCandidateFrames >= EMOTION_CONFIRM_FRAMES) {
+      stableEmotion = dominant
+      emotionCandidateFrames = 0
+    }
+
+    return stableEmotion
+  }
+
   function computePosture(poseLandmarks) {
     const defaultResult = {
       posture: 'upright',
@@ -430,7 +463,17 @@ export function useVideoAnalysis() {
         ? faceResult.faceBlendshapes[0].categories
         : null
 
-    const emotion = inferEmotion(blendshapes)
+    const rawEmotion = inferEmotion(blendshapes)
+    const smoothedDominant = smoothDominantEmotion(rawEmotion.dominant, rawEmotion.face_detected)
+    const smoothedIntensity =
+      smoothedDominant === 'neutral'
+        ? rawEmotion.scores.neutral || rawEmotion.intensity || 0
+        : rawEmotion.scores[smoothedDominant] || rawEmotion.intensity || 0
+    const emotion = {
+      ...rawEmotion,
+      dominant: smoothedDominant,
+      intensity: smoothedIntensity
+    }
 
     // PoseLandmarker 分析
     let poseResult
@@ -507,6 +550,9 @@ export function useVideoAnalysis() {
     blinkTimestamps = []
     prevGazeDirection = 'center'
     gazeChangeTimestamps = []
+    stableEmotion = 'neutral'
+    emotionCandidate = 'neutral'
+    emotionCandidateFrames = 0
 
     startFpsCounter()
     animationFrameId = requestAnimationFrame(analysisLoop)

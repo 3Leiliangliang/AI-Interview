@@ -221,15 +221,15 @@ class TestAggregateEvents:
         assert result["event_count"] == 2
 
     async def test_aggregate_posture(self, service: VideoEventService, mock_redis):
-        """Should compute average posture score and gaze direction."""
+        """Should compute average posture score and retain current posture."""
         events = [
             json.dumps({
                 "type": "posture_detected",
-                "data": {"posture_score": 85, "gaze_direction": "left"},
+                "data": {"posture": "upright", "posture_score": 85, "gaze_direction": "left"},
             }),
             json.dumps({
                 "type": "posture_detected",
-                "data": {"posture_score": 95, "gaze_direction": "right"},
+                "data": {"posture": "slouching", "posture_score": 95, "gaze_direction": "right"},
             }),
         ]
         mock_redis.lrange.return_value = [e.encode() for e in events]
@@ -237,6 +237,8 @@ class TestAggregateEvents:
         result = await service.aggregate_events("sess-1")
         assert result["avg_posture_score"] == 90.0
         assert result["gaze_direction"] == "right"
+        assert result["current_posture"] == "upright"
+        assert result["dominant_posture"] in {"upright", "slouching"}
 
     async def test_aggregate_attention(self, service: VideoEventService, mock_redis):
         """Should compute average attention score."""
@@ -282,7 +284,7 @@ class TestAggregateEvents:
             }),
             json.dumps({
                 "type": "posture_detected",
-                "data": {"posture_score": 90, "gaze_direction": "center"},
+                "data": {"posture": "upright", "posture_score": 90, "gaze_direction": "center"},
             }),
             json.dumps({
                 "type": "attention_change",
@@ -300,9 +302,35 @@ class TestAggregateEvents:
         assert result["dominant_emotion"] == "happy"
         assert result["avg_posture_score"] == 90.0
         assert result["gaze_direction"] == "center"
+        assert result["current_posture"] == "upright"
         assert result["avg_attention_score"] == 75.0
         assert len(result["recent_alerts"]) == 1
         assert result["event_count"] == 4
+
+    async def test_aggregate_tracks_current_posture_from_latest_event(
+        self, service: VideoEventService, mock_redis
+    ):
+        """Should expose the latest posture classification for UI and middleware use."""
+        events = [
+            json.dumps({
+                "type": "posture_detected",
+                "data": {"posture": "leaning_forward", "posture_score": 88, "gaze_direction": "center"},
+            }),
+            json.dumps({
+                "type": "posture_detected",
+                "data": {"posture": "slouching", "posture_score": 62, "gaze_direction": "down"},
+            }),
+            json.dumps({
+                "type": "posture_detected",
+                "data": {"posture": "leaning_forward", "posture_score": 84, "gaze_direction": "center"},
+            }),
+        ]
+        mock_redis.lrange.return_value = [e.encode() for e in events]
+
+        result = await service.aggregate_events("sess-1")
+
+        assert result["current_posture"] == "leaning_forward"
+        assert result["dominant_posture"] == "leaning_forward"
 
     async def test_aggregate_no_matching_event_types(self, service: VideoEventService, mock_redis):
         """Events with unknown types should still count but produce no specific metrics."""

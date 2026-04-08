@@ -17,6 +17,10 @@ from src.repositories.agent_config_repository import AgentConfigRepository
 from src.repositories.conversation_repository import ConversationRepository
 from src.services.openviking_service import openviking_service
 from src.storage.postgres.manager import pg_manager
+from src.utils.internal_observation import (
+    InternalObservationStreamSanitizer,
+    strip_internal_observation_text,
+)
 from src.utils.logging_config import logger
 
 INTERVIEW_SCORECARD_PATTERN = re.compile(
@@ -340,6 +344,19 @@ def _ensure_full_msg(full_msg: AIMessage | None, accumulated_content: list[str])
     return full_msg
 
 
+def _sanitize_full_msg(full_msg: AIMessage | None) -> AIMessage | None:
+    """Ensure saved assistant message never carries internal observation tags."""
+    if full_msg and hasattr(full_msg, "content"):
+        full_msg.content = strip_internal_observation_text(str(full_msg.content or ""))
+    return full_msg
+
+
+def _normalize_chunk_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    return str(content or "")
+
+
 def _build_effective_agent_config(agent_id: str, config_item, runtime_config: dict | None) -> dict:
     raw_config = config_item.config_json or {}
     stored_context = raw_config.get("context", raw_config)
@@ -506,6 +523,8 @@ async def stream_agent_chat(
     }
     full_msg = None
     accumulated_content: list[str] = []
+    stream_sanitizer = InternalObservationStreamSanitizer()
+    last_ai_metadata: dict[str, Any] | None = None
 
     try:
         conv_repo = ConversationRepository(db)
@@ -527,22 +546,40 @@ async def stream_agent_chat(
 
         full_msg = None
         accumulated_content = []
+        stream_sanitizer = InternalObservationStreamSanitizer()
+        last_ai_metadata = None
         async for msg, metadata in agent.stream_messages(messages, input_context=input_context):
             if isinstance(msg, AIMessageChunk):
-                accumulated_content.append(msg.content)
+                raw_delta = _normalize_chunk_text(msg.content)
+                if not raw_delta:
+                    continue
+                accumulated_content.append(raw_delta)
 
                 content_for_check = "".join(accumulated_content[-10:])
                 if conf.enable_content_guard and await content_guard.check_with_keywords(content_for_check):
-                    full_msg = AIMessage(content="".join(accumulated_content))
+                    full_msg = _sanitize_full_msg(AIMessage(content="".join(accumulated_content)))
                     await save_partial_message(conv_repo, thread_id, full_msg, "content_guard_blocked")
                     meta["time_cost"] = asyncio.get_event_loop().time() - start_time
                     yield make_chunk(status="interrupted", message="检测到敏感内容，已中断输出", meta=meta)
                     return
 
-                yield make_chunk(content=msg.content, msg=msg.model_dump(), metadata=metadata, status="loading")
+                last_ai_metadata = metadata if isinstance(metadata, dict) else None
+                safe_delta = stream_sanitizer.feed(raw_delta)
+                if not safe_delta:
+                    continue
+
+                safe_msg = msg.model_dump()
+                safe_msg["content"] = safe_delta
+                yield make_chunk(content=safe_delta, msg=safe_msg, metadata=metadata, status="loading")
             else:
                 msg_dict = msg.model_dump()
-                yield make_chunk(msg=msg_dict, metadata=metadata, status="loading")
+                if msg_dict.get("type") == "ai":
+                    safe_content = strip_internal_observation_text(str(msg_dict.get("content") or ""))
+                    msg_dict["content"] = safe_content
+                    if safe_content:
+                        yield make_chunk(content=safe_content, msg=msg_dict, metadata=metadata, status="loading")
+                else:
+                    yield make_chunk(msg=msg_dict, metadata=metadata, status="loading")
 
                 try:
                     if msg_dict.get("type") == "tool":
@@ -559,7 +596,19 @@ async def stream_agent_chat(
                 except Exception as e:
                     logger.error(f"Error processing tool message: {e}")
 
+        remaining_safe_delta = stream_sanitizer.flush()
+        if remaining_safe_delta:
+            yield make_chunk(
+                content=remaining_safe_delta,
+                msg={"type": "ai", "content": remaining_safe_delta},
+                metadata=last_ai_metadata or {},
+                status="loading",
+            )
+
         full_msg = _ensure_full_msg(full_msg, accumulated_content)
+        if full_msg:
+            full_msg.content = stream_sanitizer.full_text()
+        full_msg = _sanitize_full_msg(full_msg)
 
         if conf.enable_content_guard and hasattr(full_msg, "content") and await content_guard.check(full_msg.content):
             await save_partial_message(conv_repo, thread_id, full_msg, "content_guard_blocked")
@@ -609,6 +658,9 @@ async def stream_agent_chat(
         async def save_cleanup():
             nonlocal full_msg
             full_msg = _ensure_full_msg(full_msg, accumulated_content)
+            if full_msg:
+                full_msg.content = stream_sanitizer.full_text()
+            full_msg = _sanitize_full_msg(full_msg)
 
             async with pg_manager.get_async_session_context() as new_db:
                 new_conv_repo = ConversationRepository(new_db)
@@ -637,6 +689,9 @@ async def stream_agent_chat(
         error_type = "unexpected_error"
 
         full_msg = _ensure_full_msg(full_msg, accumulated_content)
+        if full_msg:
+            full_msg.content = stream_sanitizer.full_text()
+        full_msg = _sanitize_full_msg(full_msg)
 
         async with pg_manager.get_async_session_context() as new_db:
             new_conv_repo = ConversationRepository(new_db)
