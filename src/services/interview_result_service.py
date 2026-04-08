@@ -45,6 +45,11 @@ REVERSE_DIMENSION_LABELS = {
     "综合素质": "soft_skills",
     "编码能力": "technical_competence",
 }
+FILLER_TERMS = ("嗯", "呃", "额", "啊", "就是", "然后", "那个", "其实")
+HEDGE_TERMS = ("可能", "也许", "大概", "应该", "不太确定", "我猜", "我觉得", "或许")
+ASSERTIVE_TERMS = ("我会", "我能", "我负责", "我主导", "最终", "落地", "推进", "优化")
+SENTENCE_SPLIT_PATTERN = re.compile(r"[。！？；]+")
+PAUSE_PUNCTUATION = "，、。；！？"
 
 
 def _normalize_score_value(value: Any) -> int | None:
@@ -53,6 +58,10 @@ def _normalize_score_value(value: Any) -> int | None:
     except (TypeError, ValueError):
         return None
     return max(0, min(100, int(score)))
+
+
+def _clamp_score(value: float, *, lower: int = 0, upper: int = 100) -> int:
+    return max(lower, min(upper, round(value)))
 
 
 def _normalize_string_list(value: Any) -> list[str]:
@@ -83,6 +92,44 @@ def _normalize_dimensions(value: Any) -> list[dict[str, Any]]:
         return result
 
     return []
+
+
+def _normalize_expression_metric(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+
+    score = _normalize_score_value(value.get("score"))
+    level = str(value.get("level") or "").strip()
+    detail = str(value.get("detail") or "").strip()
+    metric_value = str(value.get("value") or "").strip()
+    if score is None and not level and not detail and not metric_value:
+        return None
+
+    return {
+        "score": score,
+        "level": level,
+        "detail": detail,
+        "value": metric_value,
+    }
+
+
+def _normalize_expression_analysis(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+
+    normalized = {
+        "input_mode": str(value.get("input_mode") or "").strip(),
+        "summary": str(value.get("summary") or "").strip(),
+        "speech_rate": _normalize_expression_metric(value.get("speech_rate")),
+        "pause_control": _normalize_expression_metric(value.get("pause_control")),
+        "clarity": _normalize_expression_metric(value.get("clarity")),
+        "confidence": _normalize_expression_metric(value.get("confidence")),
+    }
+
+    if not any(normalized.get(key) for key in ("speech_rate", "pause_control", "clarity", "confidence")):
+        return None
+
+    return normalized
 
 
 def _normalize_detailed_scores(value: Any) -> list[dict[str, Any]]:
@@ -214,6 +261,203 @@ def _strip_scorecard_block(content: str) -> str:
     return INTERVIEW_SCORECARD_PATTERN.sub("", content).strip()
 
 
+def _count_terms(content: str, terms: tuple[str, ...]) -> int:
+    text = str(content or "")
+    if not text:
+        return 0
+    return sum(text.count(term) for term in terms)
+
+
+def _estimate_speech_duration_seconds(
+    *,
+    content: str,
+    previous_assistant_at,
+    current_created_at,
+) -> float:
+    estimated_duration = max(8.0, len(content) / 3.6)
+    if previous_assistant_at is None or current_created_at is None:
+        return estimated_duration
+
+    gap_seconds = (current_created_at - previous_assistant_at).total_seconds()
+    if gap_seconds <= 0:
+        return estimated_duration
+    if 5 <= gap_seconds <= 180:
+        return max(estimated_duration * 0.7, min(gap_seconds, estimated_duration * 1.8))
+    return estimated_duration
+
+
+def _collect_speech_turns(messages: list[Any] | None) -> list[dict[str, Any]]:
+    turns: list[dict[str, Any]] = []
+    last_assistant_created_at = None
+
+    for message in messages or []:
+        role = str(getattr(message, "role", "") or "").strip()
+        metadata = getattr(message, "extra_metadata", None)
+        metadata = metadata if isinstance(metadata, dict) else {}
+
+        if role == "assistant" and not metadata.get("hidden_from_history"):
+            last_assistant_created_at = getattr(message, "created_at", None)
+            continue
+
+        if role != "user" or metadata.get("hidden_from_history"):
+            continue
+        if str(metadata.get("voice_input_mode") or "").strip() != "speech":
+            continue
+
+        content = str(getattr(message, "content", "") or "").strip()
+        if not content:
+            continue
+
+        created_at = getattr(message, "created_at", None)
+        turns.append(
+            {
+                "content": content,
+                "char_count": len(content),
+                "duration_seconds": _estimate_speech_duration_seconds(
+                    content=content,
+                    previous_assistant_at=last_assistant_created_at,
+                    current_created_at=created_at,
+                ),
+            }
+        )
+
+    return turns
+
+
+def _build_expression_metric(
+    *,
+    score: float,
+    level: str,
+    detail: str,
+    value: str,
+) -> dict[str, Any]:
+    return {
+        "score": _clamp_score(score),
+        "level": level,
+        "detail": detail,
+        "value": value,
+    }
+
+
+def _build_expression_analysis(
+    *,
+    conversation,
+    scorecard: dict[str, Any] | None,
+    messages: list[Any] | None,
+) -> dict[str, Any] | None:
+    metadata = dict(getattr(conversation, "extra_metadata", None) or {})
+    if str(metadata.get("interview_mode") or "").strip() != "voice":
+        return None
+
+    speech_turns = _collect_speech_turns(messages)
+    if not speech_turns:
+        return None
+
+    total_chars = sum(turn["char_count"] for turn in speech_turns)
+    total_duration_seconds = max(sum(turn["duration_seconds"] for turn in speech_turns), 1.0)
+    chars_per_minute = round(total_chars / total_duration_seconds * 60)
+
+    filler_count = sum(_count_terms(turn["content"], FILLER_TERMS) for turn in speech_turns)
+    hedge_count = sum(_count_terms(turn["content"], HEDGE_TERMS) for turn in speech_turns)
+    assertive_count = sum(_count_terms(turn["content"], ASSERTIVE_TERMS) for turn in speech_turns)
+    punctuation_count = sum(sum(turn["content"].count(char) for char in PAUSE_PUNCTUATION) for turn in speech_turns)
+    sentences = [
+        segment.strip()
+        for turn in speech_turns
+        for segment in SENTENCE_SPLIT_PATTERN.split(turn["content"])
+        if segment.strip()
+    ]
+    sentence_count = max(len(sentences), 1)
+    avg_sentence_chars = round(total_chars / sentence_count, 1)
+    filler_density = filler_count / max(total_chars, 1) * 100
+    hedge_density = hedge_count / max(total_chars, 1) * 100
+    punctuation_density = punctuation_count / max(total_chars, 1) * 100
+
+    speech_rate_score = 96 - min(abs(chars_per_minute - 220) * 0.32, 42)
+    if chars_per_minute < 160:
+        speech_rate_level = "偏慢"
+    elif chars_per_minute > 280:
+        speech_rate_level = "偏快"
+    else:
+        speech_rate_level = "适中"
+
+    pause_control_score = 80 - filler_density * 8
+    if 3 <= punctuation_density <= 12:
+        pause_control_score += 8
+    elif punctuation_density < 2:
+        pause_control_score -= 8
+    if filler_density < 1.2:
+        pause_control_level = "自然"
+    elif filler_density < 2.8:
+        pause_control_level = "稳定"
+    else:
+        pause_control_level = "待优化"
+
+    clarity_score = 78 - filler_density * 4
+    if 12 <= avg_sentence_chars <= 38:
+        clarity_score += 10
+    elif avg_sentence_chars > 50 or avg_sentence_chars < 8:
+        clarity_score -= 8
+    if 3 <= punctuation_density <= 12:
+        clarity_score += 4
+    if clarity_score >= 85:
+        clarity_level = "清晰"
+    elif clarity_score >= 70:
+        clarity_level = "较清晰"
+    else:
+        clarity_level = "待优化"
+
+    communication_score = _extract_dimension_scores(scorecard).get("communication")
+    confidence_score = 72 + assertive_count * 2.5 - hedge_density * 9 - filler_density * 3
+    confidence_score += (_clamp_score(pause_control_score) - 75) * 0.12
+    confidence_score += (_clamp_score(clarity_score) - 75) * 0.12
+    if communication_score is not None:
+        confidence_score += (communication_score - 70) * 0.18
+    if confidence_score >= 85:
+        confidence_level = "自信"
+    elif confidence_score >= 70:
+        confidence_level = "稳健"
+    else:
+        confidence_level = "保守"
+
+    speech_rate_metric = _build_expression_metric(
+        score=speech_rate_score,
+        level=speech_rate_level,
+        value=f"约 {chars_per_minute} 字/分钟",
+        detail=f"基于 {len(speech_turns)} 次语音回答估算，当前回答节奏整体{speech_rate_level}。",
+    )
+    pause_control_metric = _build_expression_metric(
+        score=pause_control_score,
+        level=pause_control_level,
+        value=f"语气词 {filler_count} 次",
+        detail=f"语气词占比约 {filler_density:.1f}%，停顿节奏整体{pause_control_level}。",
+    )
+    clarity_metric = _build_expression_metric(
+        score=clarity_score,
+        level=clarity_level,
+        value=f"句均 {avg_sentence_chars} 字",
+        detail=f"句子平均长度约 {avg_sentence_chars} 字，表达结构{clarity_level}。",
+    )
+    confidence_metric = _build_expression_metric(
+        score=confidence_score,
+        level=confidence_level,
+        value=f"肯定表达 {assertive_count} 次",
+        detail=f"结合措辞强度与沟通表现推断，当前表达状态偏{confidence_level}。",
+    )
+
+    return {
+        "input_mode": "speech",
+        "summary": (
+            f"本轮共分析 {len(speech_turns)} 次语音回答，语速{speech_rate_level}，"
+            f"停顿控制{pause_control_level}，整体表达清晰度为{clarity_level}。"
+        ),
+        "speech_rate": speech_rate_metric,
+        "pause_control": pause_control_metric,
+        "clarity": clarity_metric,
+        "confidence": confidence_metric,
+    }
+
+
 def _extract_scorecard(content: str) -> dict[str, Any] | None:
     if not content:
         return None
@@ -280,6 +524,7 @@ def _normalize_result_payload(value: Any, *, conversation, coding_session: dict[
         "summary_markdown": str(value.get("summary_markdown") or "").strip(),
         "scorecard": scorecard,
         "error_message": str(value.get("error_message") or "").strip(),
+        "expression_analysis": _normalize_expression_analysis(value.get("expression_analysis")),
     }
 
     if payload["status"] == "completed" and payload["scorecard"]:
@@ -548,6 +793,7 @@ async def get_interview_result(
 ) -> dict[str, Any]:
     conv_repo, conversation = await _require_interview_conversation(db, thread_id=thread_id, current_user_id=current_user_id)
     coding_session = get_coding_session_from_metadata(conversation.extra_metadata)
+    messages = await conv_repo.get_messages_by_thread_id(thread_id)
 
     stored_result = _normalize_result_payload(
         (conversation.extra_metadata or {}).get(INTERVIEW_RESULT_METADATA_KEY),
@@ -555,15 +801,20 @@ async def get_interview_result(
         coding_session=coding_session,
     )
     if _is_result_complete_enough(stored_result):
+        result_payload = dict(stored_result or {})
+        result_payload["expression_analysis"] = _build_expression_analysis(
+            conversation=conversation,
+            scorecard=result_payload.get("scorecard"),
+            messages=messages,
+        )
         return {
             "thread_id": conversation.thread_id,
             "title": conversation.title,
             "agent_id": conversation.agent_id,
-            "result": stored_result,
+            "result": result_payload,
             "coding_session": coding_session,
         }
 
-    messages = await conv_repo.get_messages_by_thread_id(thread_id)
     for message in reversed(messages):
         if getattr(message, "role", "") != "assistant":
             continue
@@ -577,6 +828,11 @@ async def get_interview_result(
             current_user_id=current_user_id,
             result_payload=derived,
         )
+        derived["expression_analysis"] = _build_expression_analysis(
+            conversation=conversation,
+            scorecard=derived.get("scorecard"),
+            messages=messages,
+        )
         return {
             "thread_id": conversation.thread_id,
             "title": conversation.title,
@@ -584,6 +840,14 @@ async def get_interview_result(
             "result": derived,
             "coding_session": coding_session,
         }
+
+    if stored_result:
+        stored_result = dict(stored_result)
+        stored_result["expression_analysis"] = _build_expression_analysis(
+            conversation=conversation,
+            scorecard=stored_result.get("scorecard"),
+            messages=messages,
+        )
 
     return {
         "thread_id": conversation.thread_id,

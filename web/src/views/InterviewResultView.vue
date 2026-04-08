@@ -54,6 +54,33 @@
           <InterviewScorePanel v-if="scorecard" :scorecard="scorecard" />
         </div>
 
+        <div v-if="expressionMetrics.length" class="panel-card">
+          <div class="panel-header">
+            <div>
+              <div class="panel-title">表达分析</div>
+              <div v-if="expressionAnalysis?.summary" class="panel-meta expression-meta">
+                <span>{{ expressionAnalysis.summary }}</span>
+              </div>
+            </div>
+            <a-tag color="blue">语音作答</a-tag>
+          </div>
+
+          <div class="expression-grid">
+            <div v-for="item in expressionMetrics" :key="item.key" class="expression-card">
+              <div class="expression-card__top">
+                <span class="expression-card__label">{{ item.label }}</span>
+                <a-tag color="default">{{ item.metric.level || '已分析' }}</a-tag>
+              </div>
+              <div class="expression-card__score">
+                <span class="expression-card__number">{{ item.metric.score ?? '-' }}</span>
+                <span class="expression-card__unit">/100</span>
+              </div>
+              <div v-if="item.metric.value" class="expression-card__value">{{ item.metric.value }}</div>
+              <div v-if="item.metric.detail" class="expression-card__detail">{{ item.metric.detail }}</div>
+            </div>
+          </div>
+        </div>
+
         <div class="panel-card" v-if="summaryMarkdown">
           <div class="panel-header">
             <div class="panel-title">综合结论</div>
@@ -166,6 +193,7 @@ const parseThreadTitle = (title) => {
 const result = computed(() => payload.value?.result || null)
 const codingSession = computed(() => payload.value?.coding_session || null)
 const scorecard = computed(() => result.value?.scorecard || null)
+const expressionAnalysis = computed(() => result.value?.expression_analysis || null)
 const summaryMarkdown = computed(() =>
   String(result.value?.summary_markdown || '')
     .replace(/\n*\s*完整结果已生成，可在面试结果页查看。?\s*$/u, '')
@@ -191,6 +219,17 @@ const resultRoute = computed(() => ({
   }
 }))
 const generatedAtText = computed(() => (result.value?.generated_at ? formatDateTime(result.value.generated_at) : ''))
+const expressionMetrics = computed(() => {
+  const analysis = expressionAnalysis.value
+  if (!analysis) return []
+
+  return [
+    { key: 'speech_rate', label: '语速', metric: analysis.speech_rate },
+    { key: 'pause_control', label: '停顿控制', metric: analysis.pause_control },
+    { key: 'clarity', label: '清晰度', metric: analysis.clarity },
+    { key: 'confidence', label: '自信度', metric: analysis.confidence }
+  ].filter((item) => item.metric)
+})
 
 const judgeStatus = computed(
   () => String(codingSession.value?.judge_status || codingSession.value?.judge_result?.status || '').trim() || 'UNKNOWN'
@@ -397,8 +436,72 @@ onMounted(async () => {
   margin-top: 8px;
 }
 
+.expression-meta {
+  margin-top: 6px;
+}
+
 .summary-preview {
   margin-top: 14px;
+}
+
+.expression-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.expression-card {
+  padding: 14px;
+  border: 1px solid var(--gray-150);
+  border-radius: 12px;
+  background: var(--gray-25);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.expression-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.expression-card__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-800);
+}
+
+.expression-card__score {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  color: var(--main-color);
+}
+
+.expression-card__number {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.expression-card__unit {
+  font-size: 12px;
+  color: var(--gray-500);
+}
+
+.expression-card__value {
+  font-size: 13px;
+  color: var(--gray-700);
+  font-weight: 500;
+}
+
+.expression-card__detail {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--gray-600);
 }
 
 .coding-summary {
