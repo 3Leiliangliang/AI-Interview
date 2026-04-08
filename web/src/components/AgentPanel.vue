@@ -138,7 +138,7 @@
 
 <script setup>
 import { computed, ref, onMounted, onUpdated, nextTick, watch } from 'vue'
-import { Download, X, FolderCode, RefreshCw, Folder, FolderOpen } from 'lucide-vue-next'
+import { Download, X, FolderCode } from 'lucide-vue-next'
 import {
   CheckCircleOutlined,
   SyncOutlined,
@@ -149,7 +149,7 @@ import {
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 import { useThemeStore } from '@/stores/theme'
-import { getFileIcon, getFileIconColor, formatFileSize } from '@/utils/file_utils'
+import { getFileIcon, getFileIconColor } from '@/utils/file_utils'
 import FileTreeComponent from '@/components/FileTreeComponent.vue'
 
 const props = defineProps({
@@ -319,7 +319,7 @@ const buildTreeData = (filesList) => {
 
         if (nameParts.length > 1) {
           // If extension exists
-          const ext = nameParts.pop()
+          nameParts.pop()
           // Keep last 5 chars if possible, or just the extension
           // User asked for "last 5 chars".
           // If we treat the whole thing as a string:
@@ -369,24 +369,6 @@ const buildTreeData = (filesList) => {
   return root
 }
 
-// Helper to truncate filename with tail preservation
-const truncateFilename = (name) => {
-  if (!name) return ''
-  // This is a visual truncation helper; for true dynamic CSS truncation,
-  // we'd need a more complex setup. Here we rely on CSS text-overflow
-  // but if we want specifically "last 5 chars" visible, we might need
-  // to split the string if we were using a JS-only approach.
-  // However, the user asked for "show ellipsis, and last 5 chars".
-  // CSS `text-overflow: ellipsis` puts it at the end.
-  // To do middle truncation via CSS is hard.
-  // Let's try to do it via JS for the title attribute, but for visual
-  // we might use a CSS trick or just standard ellipsis if the JS one is too static.
-  // Let's stick to standard ellipsis for now but maybe try to implement the requested logic if possible.
-  // Actually, pure CSS start/end truncation is tricky.
-  // Let's provide a computed display name logic in the template or a method.
-  return name
-}
-
 const fileTreeData = computed(() => buildTreeData(normalizedFiles.value))
 
 const onFileSelect = (selectedKeys, { node }) => {
@@ -407,22 +389,6 @@ const getFileName = (fileItem) => {
     return fileItem.path.split('/').pop() || fileItem.path
   }
   return '未知文件'
-}
-
-const formatDate = (dateString) => {
-  if (!dateString) return ''
-  try {
-    const date = new Date(dateString)
-    return date.toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  } catch (error) {
-    return dateString
-  }
 }
 
 const formatContent = (contentArray) => {

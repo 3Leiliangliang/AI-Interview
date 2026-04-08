@@ -39,6 +39,10 @@ from src.services.conversation_service import create_thread_view, require_user_c
 from src.services.history_query_service import get_agent_history_view
 from src.storage.postgres.manager import pg_manager
 from src.storage.postgres.models_business import User
+from src.utils.internal_observation import (
+    InternalObservationStreamSanitizer,
+    strip_internal_observation_text,
+)
 from src.utils.logging_config import logger
 
 DOUBAO_TTS_WS_URL = "wss://openspeech.bytedance.com/api/v3/tts/bidirection"
@@ -1158,6 +1162,7 @@ class VoiceInterviewBridge:
                     raise RuntimeError("豆包 TTS 会话结束超时") from exc
 
             accumulated_content: list[str] = []
+            stream_sanitizer = InternalObservationStreamSanitizer()
             tts_buffer = ""
             async for msg, _metadata in agent.stream_messages(
                 [HumanMessage(content=query)],
@@ -1167,8 +1172,12 @@ class VoiceInterviewBridge:
                     delta = _normalize_text_content(msg.content)
                     if delta:
                         accumulated_content.append(delta)
-                        await self._send_event("assistant_delta", content=delta)
-                        cleaned_delta = _normalize_tts_text(delta)
+                        safe_delta = stream_sanitizer.feed(delta)
+                        if not safe_delta:
+                            continue
+
+                        await self._send_event("assistant_delta", content=safe_delta)
+                        cleaned_delta = _normalize_tts_text(safe_delta)
                         if cleaned_delta:
                             tts_buffer += cleaned_delta
                             sentence_break = max(tts_buffer.rfind("。"), tts_buffer.rfind("！"), tts_buffer.rfind("？"))
@@ -1194,7 +1203,14 @@ class VoiceInterviewBridge:
                         await self._send_event("agent_state", agent_state=agent_state)
                         await self._maybe_send_coding_redirect(agent_state)
 
-            final_text = "".join(accumulated_content).strip()
+            remaining_safe_delta = stream_sanitizer.flush()
+            if remaining_safe_delta:
+                await self._send_event("assistant_delta", content=remaining_safe_delta)
+                cleaned_remaining_delta = _normalize_tts_text(remaining_safe_delta)
+                if cleaned_remaining_delta:
+                    tts_buffer += cleaned_remaining_delta
+
+            final_text = strip_internal_observation_text("".join(accumulated_content)).strip()
             remaining_tts_text = _normalize_tts_text(tts_buffer)
             if remaining_tts_text:
                 logger.info("Sending final TTS chunk: %s", remaining_tts_text)

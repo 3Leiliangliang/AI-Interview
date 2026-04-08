@@ -68,6 +68,6 @@ done
 
 addgroup -g 903 spj || true
 adduser -u 900 -S -G spj server || true
-chown -R server:spj "$DATA/log" "$DATA/config" "$DATA/ssl" "$DATA/public" "$APP/dist" || true
+chown -R server:spj "$DATA/log" "$DATA/config" "$DATA/ssl" "$DATA/test_case" "$DATA/public" "$APP/dist" || true
 
 exec supervisord -c /app/deploy/supervisord.conf

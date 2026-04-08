@@ -1,36 +1,38 @@
 """Unit tests for VideoContextMiddleware."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse
-from langchain_core.messages import SystemMessage
+
+import pytest
+from langchain.agents.middleware import ModelRequest, ModelResponse
+from langchain_core.messages import AIMessage, SystemMessage
 
 from src.agents.common.middlewares.video_context_middleware import VideoContextMiddleware
 
 
-def _make_request(has_context=True):
+def _make_request(has_context: bool = True):
     """Create a mock ModelRequest."""
     runtime = MagicMock()
     if has_context:
         runtime.context.thread_id = "thread-1"
     else:
         runtime.context = None
+
     request = MagicMock(spec=ModelRequest)
     request.runtime = runtime
     request.system_message = SystemMessage(content=[])
     return request
 
 
-async def _make_handler():
+async def _make_handler(response: ModelResponse | None = None):
     """Create a mock async handler."""
 
-    async def handler(req):
-        return ModelResponse(result=[])
+    async def handler(_req):
+        return response or ModelResponse(result=[])
 
     return handler
 
 
-def _aggregated_data(event_count=3):
+def _aggregated_data(event_count: int = 3):
     """Create mock aggregated video data."""
     return {
         "has_data": True,
@@ -38,6 +40,7 @@ def _aggregated_data(event_count=3):
         "dominant_emotion": "happy",
         "avg_attention_score": 85.0,
         "avg_posture_score": 90.0,
+        "current_posture": "leaning_forward",
         "gaze_direction": "center",
         "recent_alerts": [],
     }
@@ -69,7 +72,6 @@ class TestVideoContextMiddleware:
         with patch.object(middleware, "_create_service", return_value=mock_service):
             result = await middleware.awrap_model_call(request, handler)
 
-        # Should not call service at all
         mock_service.consume_events_since.assert_not_called()
         assert result.result == []
 
@@ -101,12 +103,10 @@ class TestVideoContextMiddleware:
         """Video analysis summary is injected into system message."""
         mock_service.consume_events_since.return_value = (_aggregated_data(), 10)
 
-        # 使用真实 SystemMessage 以便验证 content_blocks
-        original_sm = SystemMessage(content=[{"type": "text", "text": "原始提示词"}])
+        original_sm = SystemMessage(content=[{"type": "text", "text": "original prompt"}])
         request = _make_request(has_context=True)
         request.system_message = original_sm
 
-        # 捕获 override 传入的参数
         captured_override = {}
         original_override = request.override
 
@@ -120,16 +120,39 @@ class TestVideoContextMiddleware:
         with patch.object(middleware, "_create_service", return_value=mock_service):
             await middleware.awrap_model_call(request, handler)
 
-        # 验证 override 被调用并传入了 system_message
         assert "system_message" in captured_override
         new_sm = captured_override["system_message"]
         content_str = str(new_sm.content)
-        assert "[面试观察备注" in content_str
-        assert "原始提示词" in content_str
+        assert "<internal_interview_observation>" in content_str
+        assert "source=video_analysis" in content_str
+        assert "[[video_observation_internal]]" in content_str
+        assert "original prompt" in content_str
 
-        # cursor should be updated after successful consume
         assert middleware._last_event_counts["thread-1"] == 10
         mock_service.close.assert_called_once()
+
+    async def test_sanitizes_internal_observation_from_model_output(self, middleware, mock_service):
+        """If model echoes internal observation text, it should be stripped."""
+        mock_service.consume_events_since.return_value = (_aggregated_data(), 10)
+        request = _make_request(has_context=True)
+        leaked_output = (
+            "我们开始下一题。\n"
+            "<internal_interview_observation>\n"
+            "[[video_observation_internal]] internal_only=true\n"
+            "[[video_observation_internal]] 情绪=平稳\n"
+            "</internal_interview_observation>\n"
+            "请先做一个简短自我介绍。"
+        )
+        handler = await _make_handler(ModelResponse(result=[AIMessage(content=leaked_output)]))
+
+        with patch.object(middleware, "_create_service", return_value=mock_service):
+            response = await middleware.awrap_model_call(request, handler)
+
+        assert len(response.result) == 1
+        content = response.result[0].content
+        assert "<internal_interview_observation>" not in content
+        assert "[[video_observation_internal]]" not in content
+        assert "请先做一个简短自我介绍。" in content
 
     async def test_service_close_called_on_success(self, middleware, mock_service):
         """Service.close is always called after consume, even with data."""
@@ -144,10 +167,8 @@ class TestVideoContextMiddleware:
 
     async def test_consume_failure_does_not_update_cursor(self, middleware, mock_service):
         """Redis exception does NOT update cursor - old cursor value stays."""
-        # Set initial cursor value
         middleware._last_event_counts["thread-1"] = 10
 
-        # Simulate Redis exception
         mock_service.consume_events_since.side_effect = Exception("Redis error")
         request = _make_request(has_context=True)
         handler = await _make_handler()
@@ -155,10 +176,7 @@ class TestVideoContextMiddleware:
         with patch.object(middleware, "_create_service", return_value=mock_service):
             await middleware.awrap_model_call(request, handler)
 
-        # close should still be called even on error
         mock_service.close.assert_called_once()
-
-        # Cursor should NOT be updated - should still be 10 (old value)
         assert middleware._last_event_counts["thread-1"] == 10
 
     async def test_consume_success_updates_cursor(self, middleware, mock_service):
@@ -171,16 +189,13 @@ class TestVideoContextMiddleware:
         with patch.object(middleware, "_create_service", return_value=mock_service):
             await middleware.awrap_model_call(request, handler)
 
-        # Cursor should be updated to new value
         assert middleware._last_event_counts["thread-1"] == 15
 
     async def test_incremental_consumption_per_thread(self, middleware, mock_service):
         """Different threads track consumption position independently."""
-        # Set different cursor values for different threads
         middleware._last_event_counts["thread-1"] = 5
         middleware._last_event_counts["thread-2"] = 20
 
-        # Consume for thread-1 should use 5, not 0
         mock_service.consume_events_since.return_value = (_aggregated_data(), 13)
         request1 = _make_request(has_context=True)
         request1.runtime.context.thread_id = "thread-1"
@@ -189,7 +204,5 @@ class TestVideoContextMiddleware:
         with patch.object(middleware, "_create_service", return_value=mock_service):
             await middleware.awrap_model_call(request1, handler)
 
-        # thread-1 cursor updated to 13
         assert middleware._last_event_counts["thread-1"] == 13
-        # thread-2 cursor unchanged
         assert middleware._last_event_counts["thread-2"] == 20

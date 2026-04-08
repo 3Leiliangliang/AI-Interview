@@ -83,6 +83,7 @@ def _create_interview_filesystem_middleware() -> FilesystemMiddleware:
 class InterviewAgent(BaseAgent):
     name = "模拟面试官"
     description = "根据简历发起结构化模拟面试，并在结束后输出总结与评分卡。"
+    has_checkpointer = True
     context_schema = InterviewContext
     capabilities = ["file_upload", "files", "resume_interview", "todo"]
 
