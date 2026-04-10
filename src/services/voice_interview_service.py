@@ -1137,8 +1137,6 @@ class VoiceInterviewBridge:
         agent = agent_manager.get_agent(self.claims.agent_id)
         if not agent:
             raise HTTPException(status_code=404, detail=f"智能体 {self.claims.agent_id} 不存在")
-        if not self.user.department_id:
-            raise HTTPException(status_code=400, detail="当前用户未绑定部门")
 
         async with pg_manager.get_async_session_context() as db:
             conv_repo = ConversationRepository(db)
@@ -1152,7 +1150,6 @@ class VoiceInterviewBridge:
             config_item, agent_config_id = await _resolve_agent_config(
                 db,
                 self.claims.agent_id,
-                self.user.department_id,
                 str(self.user.id),
                 None,
             )
@@ -1167,7 +1164,6 @@ class VoiceInterviewBridge:
             input_context = {
                 "user_id": str(self.user.id),
                 "thread_id": self.claims.thread_id,
-                "department_id": self.user.department_id,
                 "agent_config_id": agent_config_id,
                 "agent_config": agent_config,
                 "target_position": self.claims.position,

@@ -3,7 +3,6 @@ from fastapi import APIRouter
 from server.routers.auth_router import auth
 from server.routers.chat_router import chat
 from server.routers.dashboard_router import dashboard
-from server.routers.department_router import department
 from server.routers.knowledge_router import knowledge
 from server.routers.evaluation_router import evaluation
 from server.routers.interview_router import interview
@@ -23,7 +22,6 @@ router.include_router(system)
 router.include_router(auth)
 router.include_router(chat)
 router.include_router(dashboard)
-router.include_router(department)
 router.include_router(knowledge)
 router.include_router(evaluation)
 router.include_router(interview)

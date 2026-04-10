@@ -123,7 +123,7 @@
 
       <!-- 共享配置 -->
       <h3>共享设置</h3>
-      <ShareConfigForm v-model="shareConfig" :auto-select-user-dept="true" />
+      <ShareConfigForm v-model="shareConfig" />
       <template #footer>
         <a-button key="back" @click="cancelCreateDatabase">取消</a-button>
         <a-button
@@ -250,8 +250,7 @@ const state = reactive({
 
 // 共享配置状态（用于提交数据）
 const shareConfig = ref({
-  is_shared: true,
-  accessible_department_ids: []
+  enabled_for_agents: true
 })
 
 
@@ -410,8 +409,7 @@ const resetNewDatabase = () => {
   Object.assign(newDatabase, createEmptyDatabaseForm())
   // 重置共享配置
   shareConfig.value = {
-    is_shared: true,
-    accessible_department_ids: []
+    enabled_for_agents: true
   }
 }
 
@@ -486,10 +484,7 @@ const buildRequestData = () => {
   requestData.additional_params.position = newDatabase.position
 
   requestData.share_config = {
-    is_shared: shareConfig.value.is_shared,
-    accessible_departments: shareConfig.value.is_shared
-      ? []
-      : shareConfig.value.accessible_department_ids || []
+    enabled_for_agents: shareConfig.value.enabled_for_agents !== false
   }
 
   if (newDatabase.kb_type === 'openviking') {

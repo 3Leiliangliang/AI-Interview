@@ -133,7 +133,7 @@ const router = createRouter({
           path: '',
           name: 'ProblemSetManageComp',
           component: () => import('../views/ProblemSetManageView.vue'),
-          meta: { keepAlive: false, requiresAuth: true }
+          meta: { keepAlive: false, requiresAuth: true, requiresAdmin: true }
         }
       ]
     },

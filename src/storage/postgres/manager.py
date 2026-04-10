@@ -201,6 +201,7 @@ class PostgresManager(metaclass=SingletonMeta):
             "CREATE INDEX IF NOT EXISTS idx_agent_runs_thread_created ON agent_runs(thread_id, created_at DESC)",
             "CREATE INDEX IF NOT EXISTS idx_agent_runs_status_updated ON agent_runs(status, updated_at)",
             "CREATE INDEX IF NOT EXISTS ix_conversations_is_pinned ON conversations(is_pinned)",
+            "ALTER TABLE IF EXISTS agent_configs ALTER COLUMN department_id DROP NOT NULL",
         ]
         async with self.async_engine.begin() as conn:
             for stmt in stmts:

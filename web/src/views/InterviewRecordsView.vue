@@ -136,8 +136,7 @@ const chartSeries = computed(() => historyPayload.value?.chart?.series || [])
 const targetUserLabel = computed(() => {
   const username = String(targetUser.value?.username || userStore.username || '').trim()
   if (!username) return '当前用户'
-  const departmentName = String(targetUser.value?.department_name || '').trim()
-  return departmentName ? `${username}（${departmentName}）` : username
+  return username
 })
 
 const getStatusLabel = (status) => {
@@ -188,7 +187,7 @@ const loadUsers = async () => {
     userOptions.value = (users || [])
       .filter((item) => item.role === 'user' || item.id === currentUserId)
       .map((item) => ({
-        label: item.department_name ? `${item.username}（${item.department_name}）` : item.username,
+        label: item.username,
         value: item.id
       }))
   } catch (error) {

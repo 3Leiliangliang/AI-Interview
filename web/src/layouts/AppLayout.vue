@@ -15,6 +15,7 @@ import { useConfigStore } from '@/stores/config'
 import { useDatabaseStore } from '@/stores/database'
 import { useInfoStore } from '@/stores/info'
 import { useTaskerStore } from '@/stores/tasker'
+import { useUserStore } from '@/stores/user'
 import { storeToRefs } from 'pinia'
 import UserInfoComponent from '@/components/UserInfoComponent.vue'
 import DebugComponent from '@/components/DebugComponent.vue'
@@ -25,6 +26,7 @@ const configStore = useConfigStore()
 const databaseStore = useDatabaseStore()
 const infoStore = useInfoStore()
 const taskerStore = useTaskerStore()
+const userStore = useUserStore()
 const { activeCount: activeCountRef, isDrawerOpen } = storeToRefs(taskerStore)
 
 const layoutSettings = reactive({
@@ -80,10 +82,14 @@ onMounted(async () => {
   await infoStore.loadInfoConfig()
   // 加载其他配置
   getRemoteConfig()
-  getRemoteDatabase()
+  if (userStore.isAdmin) {
+    getRemoteDatabase()
+  }
   fetchGithubStars() // Fetch GitHub stars on mount
   // 预加载任务数据，确保任务中心打开时有内容
-  taskerStore.loadTasks()
+  if (userStore.isAdmin) {
+    taskerStore.loadTasks()
+  }
 })
 
 // 打印当前页面的路由信息，使用 vue3 的 setup composition API
@@ -143,30 +149,34 @@ const mainList = computed(() => {
       matchNames: ['ResumeListComp', 'ResumeDetailComp'],
       icon: FileText,
       activeIcon: FileText
-    },
-    {
-      name: '知识库',
-      path: '/database',
-      matchNames: ['DatabaseComp', 'DatabaseInfoComp'],
-      icon: LibraryBig,
-      activeIcon: LibraryBig
-    },
-    {
-      name: '题库管理',
-      path: '/problemsets',
-      matchNames: ['ProblemSetManageComp'],
-      icon: Blocks,
-      activeIcon: Blocks
     }
   ]
 
-  items.push({
-    name: 'Dashboard',
-    path: '/dashboard',
-    matchNames: ['DashboardComp'],
-    icon: BarChart3,
-    activeIcon: BarChart3
-  })
+  if (userStore.isAdmin) {
+    items.push(
+      {
+        name: '知识库',
+        path: '/database',
+        matchNames: ['DatabaseComp', 'DatabaseInfoComp'],
+        icon: LibraryBig,
+        activeIcon: LibraryBig
+      },
+      {
+        name: '题库管理',
+        path: '/problemsets',
+        matchNames: ['ProblemSetManageComp'],
+        icon: Blocks,
+        activeIcon: Blocks
+      },
+      {
+        name: 'Dashboard',
+        path: '/dashboard',
+        matchNames: ['DashboardComp'],
+        icon: BarChart3,
+        activeIcon: BarChart3
+      }
+    )
+  }
 
   return items
 })
@@ -222,6 +232,7 @@ provide('settingsModal', {
           </a-tooltip>
         </RouterLink>
         <div
+          v-if="userStore.isAdmin"
           class="nav-item task-center"
           :class="{ active: isDrawerOpen }"
           @click="taskerStore.openDrawer()"

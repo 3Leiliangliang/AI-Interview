@@ -149,13 +149,21 @@ class KnowledgeBaseManager:
                 logger.warning(f"Skip database due to missing metadata: db_id={row.db_id}, kb_type={kb_type}")
                 continue
 
-            db_info["share_config"] = row.share_config or {"is_shared": True, "accessible_departments": []}
+            db_info["share_config"] = self._normalize_share_config(row.share_config)
             db_info["additional_params"] = ensure_chunk_defaults_in_additional_params(row.additional_params)
             all_databases.append(db_info)
         return {"databases": all_databases}
 
+    @staticmethod
+    def _normalize_share_config(share_config: dict | None) -> dict:
+        raw_config = share_config or {}
+        enabled_for_agents = raw_config.get("enabled_for_agents")
+        if enabled_for_agents is None:
+            enabled_for_agents = raw_config.get("is_shared", True)
+        return {"enabled_for_agents": bool(enabled_for_agents)}
+
     async def check_accessible(self, user: dict, db_id: str) -> bool:
-        if user.get("role") == "superadmin":
+        if user.get("role") in {"superadmin", "admin"}:
             return True
 
         from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
@@ -165,25 +173,8 @@ class KnowledgeBaseManager:
         if kb is None:
             return False
 
-        share_config = kb.share_config or {}
-        is_shared = share_config.get("is_shared", True)
-
-        if is_shared:
-            return True
-
-        user_department_id = user.get("department_id")
-        accessible_departments = share_config.get("accessible_departments", [])
-
-        if user_department_id is None:
-            return False
-
-        try:
-            user_department_id = int(user_department_id)
-            accessible_departments = [int(d) for d in accessible_departments]
-        except (ValueError, TypeError):
-            return False
-
-        return user_department_id in accessible_departments
+        share_config = self._normalize_share_config(kb.share_config)
+        return bool(share_config.get("enabled_for_agents", True))
 
     async def get_databases_by_raw_id(self, user_id: int) -> dict:
         from src.repositories.user_repository import UserRepository
@@ -206,13 +197,9 @@ class KnowledgeBaseManager:
         return await self.get_databases_by_user(user)
 
     async def get_databases_by_user(self, user: User) -> dict:
+        user_info = {"role": user.role}
 
-        user_info = {
-            "role": user.role,
-            "department_id": user.department_id,
-        }
-
-        logger.info(f"Getting databases for user {user.id} with role {user.role} and department {user.department_id}")
+        logger.info(f"Getting databases for user {user.id} with role {user.role}")
 
         all_databases = (await self.get_databases()).get("databases", [])
 
@@ -265,8 +252,7 @@ class KnowledgeBaseManager:
         if await self.database_name_exists(database_name):
             raise ValueError(f"????? '{database_name}' ???????????")
 
-        if share_config is None:
-            share_config = {"is_shared": True, "accessible_departments": []}
+        share_config = self._normalize_share_config(share_config)
 
         kwargs = ensure_chunk_defaults_in_additional_params(kwargs)
 
@@ -363,7 +349,7 @@ class KnowledgeBaseManager:
             }
 
         db_info["additional_params"] = ensure_chunk_defaults_in_additional_params(kb.additional_params)
-        db_info["share_config"] = kb.share_config or {"is_shared": True, "accessible_departments": []}
+        db_info["share_config"] = self._normalize_share_config(kb.share_config)
         db_info["mindmap"] = kb.mindmap
         db_info["sample_questions"] = kb.sample_questions or []
         db_info["query_params"] = kb.query_params

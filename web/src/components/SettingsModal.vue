@@ -40,15 +40,6 @@
           <UserOutlined class="icon" />
           <span>用户管理</span>
         </div>
-        <div
-          class="sider-item"
-          :class="{ activesec: activeTab === 'department' }"
-          @click="activeTab = 'department'"
-          v-if="userStore.isSuperAdmin"
-        >
-          <TeamOutlined class="icon" />
-          <span>部门管理</span>
-        </div>
       </div>
 
       <!-- 顶部导航 (Mobile) -->
@@ -77,14 +68,6 @@
         >
           用户管理
         </div>
-        <div
-          class="nav-item"
-          :class="{ active: activeTab === 'department' }"
-          @click="activeTab = 'department'"
-          v-if="userStore.isSuperAdmin"
-        >
-          部门管理
-        </div>
       </div>
 
       <!-- 内容区域 -->
@@ -101,10 +84,6 @@
           <div v-show="activeTab === 'user'" v-if="userStore.isAdmin">
             <UserManagementComponent />
           </div>
-
-          <div v-show="activeTab === 'department'" v-if="userStore.isSuperAdmin">
-            <DepartmentManagementComponent />
-          </div>
         </div>
       </div>
     </div>
@@ -114,11 +93,10 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
-import { SettingOutlined, CodeOutlined, UserOutlined, TeamOutlined } from '@ant-design/icons-vue'
+import { SettingOutlined, CodeOutlined, UserOutlined } from '@ant-design/icons-vue'
 import BasicSettingsSection from '@/components/BasicSettingsSection.vue'
 import ModelProvidersComponent from '@/components/ModelProvidersComponent.vue'
 import UserManagementComponent from '@/components/UserManagementComponent.vue'
-import DepartmentManagementComponent from '@/components/DepartmentManagementComponent.vue'
 
 const props = defineProps({
   visible: {

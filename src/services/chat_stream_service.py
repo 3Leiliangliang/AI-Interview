@@ -457,9 +457,7 @@ async def _build_effective_agent_config(
     return effective_config
 
 
-async def _resolve_agent_config(
-    db, agent_id: str, department_id, user_id: str, agent_config_id: int | str | None
-) -> tuple:
+async def _resolve_agent_config(db, agent_id: str, user_id: str, agent_config_id: int | str | None) -> tuple:
     """解析 agent_config，返回 (config_item, agent_config_id)"""
     config_repo = AgentConfigRepository(db)
     config_item = None
@@ -469,13 +467,11 @@ async def _resolve_agent_config(
         except Exception:
             logger.warning(f"Failed to fetch agent config {agent_config_id}: {traceback.format_exc()}")
             config_item = None
-        if config_item is not None and (config_item.department_id != department_id or config_item.agent_id != agent_id):
+        if config_item is not None and config_item.agent_id != agent_id:
             config_item = None
 
     if config_item is None:
-        config_item = await config_repo.get_or_create_default(
-            department_id=department_id, agent_id=agent_id, created_by=user_id
-        )
+        config_item = await config_repo.get_or_create_default(agent_id=agent_id, created_by=user_id)
         agent_config_id = config_item.id
 
     return config_item, agent_config_id
@@ -568,13 +564,8 @@ async def stream_agent_chat(
     messages = [human_message]
 
     user_id = str(current_user.id)
-    department_id = current_user.department_id
-    if not department_id:
-        yield make_chunk(status="error", error_type="no_department", error_message="当前用户未绑定部门", meta=meta)
-        return
-
     agent_config_id = config.get("agent_config_id")
-    config_item, agent_config_id = await _resolve_agent_config(db, agent_id, department_id, user_id, agent_config_id)
+    config_item, agent_config_id = await _resolve_agent_config(db, agent_id, user_id, agent_config_id)
 
     if not (thread_id := config.get("thread_id")):
         thread_id = str(uuid.uuid4())
@@ -590,7 +581,6 @@ async def stream_agent_chat(
     input_context = {
         "user_id": user_id,
         "thread_id": thread_id,
-        "department_id": department_id,
         "agent_config_id": agent_config_id,
         "agent_config": agent_config,
         "selected_resume_id": agent_config.get("selected_resume_id"),
@@ -835,15 +825,8 @@ async def stream_agent_resume(
     graph = await agent.get_graph()
 
     user_id = str(current_user.id)
-    department_id = current_user.department_id
-    if not department_id:
-        yield make_resume_chunk(
-            status="error", error_type="no_department", error_message="当前用户未绑定部门", meta=meta
-        )
-        return
-
     agent_config_id = (config or {}).get("agent_config_id")
-    config_item, agent_config_id = await _resolve_agent_config(db, agent_id, department_id, user_id, agent_config_id)
+    config_item, agent_config_id = await _resolve_agent_config(db, agent_id, user_id, agent_config_id)
 
     agent_config = await _build_effective_agent_config(
         agent_id,
@@ -855,7 +838,6 @@ async def stream_agent_resume(
     input_context = {
         "user_id": user_id,
         "thread_id": thread_id,
-        "department_id": department_id,
         "agent_config_id": agent_config_id,
         "agent_config": agent_config,
         "selected_resume_id": agent_config.get("selected_resume_id"),

@@ -11,8 +11,6 @@ export const useUserStore = defineStore('user', () => {
   const phoneNumber = ref('')
   const avatar = ref('')
   const userRole = ref('')
-  const departmentId = ref(null)
-  const departmentName = ref('')
 
   // 计算属性
   const isLoggedIn = computed(() => !!token.value)
@@ -56,8 +54,6 @@ export const useUserStore = defineStore('user', () => {
       phoneNumber.value = data.phone_number || ''
       avatar.value = data.avatar || ''
       userRole.value = data.role
-      departmentId.value = data.department_id || null
-      departmentName.value = data.department_name || ''
 
       // 只保存 token 到本地存储
       localStorage.setItem('user_token', data.access_token)
@@ -78,8 +74,6 @@ export const useUserStore = defineStore('user', () => {
     phoneNumber.value = ''
     avatar.value = ''
     userRole.value = ''
-    departmentId.value = null
-    departmentName.value = ''
 
     // 清除 agentStore 状态，确保重新登录时能正确加载数据
     const agentStore = useAgentStore()
@@ -114,8 +108,6 @@ export const useUserStore = defineStore('user', () => {
       phoneNumber.value = data.phone_number || ''
       avatar.value = data.avatar || ''
       userRole.value = data.role
-      departmentId.value = data.department_id || null
-      departmentName.value = data.department_name || ''
 
       // 只保存 token 到本地存储
       localStorage.setItem('user_token', data.access_token)
@@ -309,8 +301,6 @@ export const useUserStore = defineStore('user', () => {
       phoneNumber.value = userData.phone_number || ''
       avatar.value = userData.avatar || ''
       userRole.value = userData.role
-      departmentId.value = userData.department_id || null
-      departmentName.value = userData.department_name || ''
 
       return userData
     } catch (error) {
@@ -362,8 +352,6 @@ export const useUserStore = defineStore('user', () => {
     phoneNumber,
     avatar,
     userRole,
-    departmentId,
-    departmentName,
 
     // 计算属性
     isLoggedIn,

@@ -41,22 +41,13 @@
                   <div class="user-info-content">
                     <div class="name-tag-row">
                       <h4 class="username">{{ user.username }}</h4>
-                      <div
-                        v-if="
-                          user.role === 'admin' ||
-                          user.role === 'superadmin' ||
-                          user.department_name
-                        "
-                        class="role-dept-badge"
-                      >
+                      <div v-if="user.role === 'admin' || user.role === 'superadmin'" class="role-dept-badge">
                         <span class="role-icon-wrapper" :class="getRoleClass(user.role)">
                           <UserLock v-if="user.role === 'superadmin'" :size="14" />
                           <UserStar v-else-if="user.role === 'admin'" :size="14" />
                           <User v-else :size="14" />
                         </span>
-                        <span v-if="user.department_name" class="dept-text">
-                          {{ user.department_name }}
-                        </span>
+                        <span class="dept-text">{{ getRoleLabel(user.role) }}</span>
                       </div>
                     </div>
                     <div class="user-id-row">ID: {{ user.user_id || '-' }}</div>
@@ -97,10 +88,7 @@
                     size="small"
                     danger
                     @click="confirmDeleteUser(user)"
-                    :disabled="
-                      user.id === userStore.userId ||
-                      (user.role === 'superadmin' && userStore.userRole !== 'superadmin')
-                    "
+                    :disabled="user.id === userStore.userId || (user.role !== 'user' && !userStore.isSuperAdmin)"
                     class="action-btn"
                   >
                     <DeleteOutlined />
@@ -212,22 +200,6 @@
           </a-select>
         </a-form-item>
 
-        <!-- 部门选择器（仅超级管理员可见） -->
-        <a-form-item v-if="userStore.isSuperAdmin" label="部门" class="form-item">
-          <a-select
-            v-model:value="userManagement.form.departmentId"
-            size="large"
-            placeholder="请选择部门"
-          >
-            <a-select-option
-              v-for="dept in departmentManagement.departments"
-              :key="dept.id"
-              :value="dept.id"
-            >
-              {{ dept.name }}
-            </a-select-option>
-          </a-select>
-        </a-form-item>
       </a-form>
     </a-modal>
   </div>
@@ -237,7 +209,6 @@
 import { reactive, onMounted, watch } from 'vue'
 import { notification, Modal } from 'ant-design-vue'
 import { useUserStore } from '@/stores/user'
-import { departmentApi } from '@/apis'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { User, UserLock, UserStar } from 'lucide-vue-next'
 import { formatDateTime } from '@/utils/time'
@@ -260,28 +231,11 @@ const userManagement = reactive({
     password: '',
     confirmPassword: '',
     role: 'user', // 默认角色
-    departmentId: null, // 部门ID
     usernameError: '', // 用户名错误信息
     phoneError: '' // 手机号错误信息
   },
   displayPasswordFields: true // 编辑时是否显示密码字段
 })
-
-// 部门列表（仅超级管理员使用）
-const departmentManagement = reactive({
-  departments: []
-})
-
-// 获取部门列表
-const fetchDepartments = async () => {
-  if (!userStore.isSuperAdmin) return // 普通管理员不需要获取所有部门列表
-  try {
-    const departments = await departmentApi.getDepartments()
-    departmentManagement.departments = departments
-  } catch (error) {
-    console.error('获取部门列表失败:', error)
-  }
-}
 
 // 添加验证用户名并生成user_id的函数
 const validateAndGenerateUserId = async () => {
@@ -373,7 +327,6 @@ const showAddUserModal = () => {
     password: '',
     confirmPassword: '',
     role: 'user', // 默认角色为普通用户
-    departmentId: null,
     usernameError: '',
     phoneError: ''
   }
@@ -393,7 +346,6 @@ const showEditUserModal = (user) => {
     password: '',
     confirmPassword: '',
     role: user.role,
-    departmentId: user.department_id || null,
     usernameError: '',
     phoneError: ''
   }
@@ -452,11 +404,6 @@ const handleUserFormSubmit = async () => {
         updateData.phone_number = userManagement.form.phoneNumber
       }
 
-      // 超级管理员可以修改部门
-      if (userStore.isSuperAdmin && userManagement.form.departmentId) {
-        updateData.department_id = userManagement.form.departmentId
-      }
-
       // 如果显示了密码字段并且填写了密码，才更新密码
       if (userManagement.displayPasswordFields && userManagement.form.password) {
         updateData.password = userManagement.form.password
@@ -469,12 +416,7 @@ const handleUserFormSubmit = async () => {
       const createData = {
         username: userManagement.form.username.trim(),
         password: userManagement.form.password,
-        role: userManagement.form.role
-      }
-
-      // 超级管理员可以指定部门
-      if (userStore.isSuperAdmin && userManagement.form.departmentId) {
-        createData.department_id = userManagement.form.departmentId
+        role: userStore.isSuperAdmin ? userManagement.form.role : 'user'
       }
 
       // 添加手机号字段（如果填写了）
@@ -579,7 +521,6 @@ const getRoleClass = (role) => {
 // 在组件挂载时获取用户列表
 onMounted(async () => {
   await fetchUsers()
-  await fetchDepartments()
 })
 </script>
 

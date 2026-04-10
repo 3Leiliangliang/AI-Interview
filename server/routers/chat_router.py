@@ -206,21 +206,14 @@ async def list_agent_configs(
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if not current_user.department_id:
-        raise HTTPException(status_code=400, detail="当前用户未绑定部门")
-
     if not agent_manager.get_agent(agent_id):
         raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
     repo = AgentConfigRepository(db)
-    items = await repo.list_by_department_agent(department_id=current_user.department_id, agent_id=agent_id)
+    items = await repo.list_by_agent(agent_id=agent_id)
     if not items:
-        await repo.get_or_create_default(
-            department_id=current_user.department_id,
-            agent_id=agent_id,
-            created_by=str(current_user.id),
-        )
-        items = await repo.list_by_department_agent(department_id=current_user.department_id, agent_id=agent_id)
+        await repo.get_or_create_default(agent_id=agent_id, created_by=str(current_user.id))
+        items = await repo.list_by_agent(agent_id=agent_id)
 
     configs = [
         {
@@ -244,15 +237,12 @@ async def get_agent_config_profile(
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if not current_user.department_id:
-        raise HTTPException(status_code=400, detail="当前用户未绑定部门")
-
     if not agent_manager.get_agent(agent_id):
         raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
     repo = AgentConfigRepository(db)
     item = await repo.get_by_id(config_id)
-    if not item or item.agent_id != agent_id or item.department_id != current_user.department_id:
+    if not item or item.agent_id != agent_id:
         raise HTTPException(status_code=404, detail="配置不存在")
 
     return {"config": item.to_dict()}
@@ -265,15 +255,11 @@ async def create_agent_config_profile(
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if not current_user.department_id:
-        raise HTTPException(status_code=400, detail="当前用户未绑定部门")
-
     if not agent_manager.get_agent(agent_id):
         raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
     repo = AgentConfigRepository(db)
     item = await repo.create(
-        department_id=current_user.department_id,
         agent_id=agent_id,
         name=payload.name,
         description=payload.description,
@@ -298,15 +284,12 @@ async def update_agent_config_profile(
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if not current_user.department_id:
-        raise HTTPException(status_code=400, detail="当前用户未绑定部门")
-
     if not agent_manager.get_agent(agent_id):
         raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
     repo = AgentConfigRepository(db)
     item = await repo.get_by_id(config_id)
-    if not item or item.agent_id != agent_id or item.department_id != current_user.department_id:
+    if not item or item.agent_id != agent_id:
         raise HTTPException(status_code=404, detail="配置不存在")
 
     updated = await repo.update(
@@ -329,15 +312,12 @@ async def set_agent_config_default(
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if not current_user.department_id:
-        raise HTTPException(status_code=400, detail="当前用户未绑定部门")
-
     if not agent_manager.get_agent(agent_id):
         raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
     repo = AgentConfigRepository(db)
     item = await repo.get_by_id(config_id)
-    if not item or item.agent_id != agent_id or item.department_id != current_user.department_id:
+    if not item or item.agent_id != agent_id:
         raise HTTPException(status_code=404, detail="配置不存在")
 
     updated = await repo.set_default(config=item, updated_by=str(current_user.id))
@@ -351,15 +331,12 @@ async def delete_agent_config_profile(
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if not current_user.department_id:
-        raise HTTPException(status_code=400, detail="当前用户未绑定部门")
-
     if not agent_manager.get_agent(agent_id):
         raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
     repo = AgentConfigRepository(db)
     item = await repo.get_by_id(config_id)
-    if not item or item.agent_id != agent_id or item.department_id != current_user.department_id:
+    if not item or item.agent_id != agent_id:
         raise HTTPException(status_code=404, detail="配置不存在")
 
     await repo.delete(config=item, updated_by=str(current_user.id))

@@ -88,7 +88,6 @@ class User(Base):
             "phone_number": self.phone_number,
             "avatar": self.avatar,
             "role": self.role,
-            "department_id": self.department_id,
             "created_at": format_utc_datetime(self.created_at),
             "last_login": format_utc_datetime(self.last_login),
             "login_failed_count": self.login_failed_count,
@@ -187,12 +186,12 @@ class UserResume(Base):
 
 
 class AgentConfig(Base):
-    """智能体配置（按部门共享，多份可切换）"""
+    """智能体配置（全局共享，多份可切换）"""
 
     __tablename__ = "agent_configs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    department_id = Column(Integer, ForeignKey("departments.id"), nullable=False, index=True)
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=True, index=True)
     agent_id = Column(String(64), nullable=False, index=True)
 
     name = Column(String(100), nullable=False)
@@ -224,7 +223,6 @@ class AgentConfig(Base):
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
-            "department_id": self.department_id,
             "agent_id": self.agent_id,
             "name": self.name,
             "description": self.description,

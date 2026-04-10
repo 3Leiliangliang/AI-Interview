@@ -4,6 +4,7 @@ import os
 import re
 import tempfile
 import uuid
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -23,9 +24,12 @@ from src.services.resume_summary_service import resume_summary_service
 from src.storage.minio import aupload_file_to_minio, get_minio_client
 from src.storage.postgres.manager import pg_manager
 from src.storage.postgres.models_business import User, UserResume
+from src.utils.datetime_utils import utc_now_naive
 from src.utils import logger
 
 resume = APIRouter(prefix="/resume", tags=["resume"])
+_BACKGROUND_TASKS: set[asyncio.Task[Any]] = set()
+SUMMARY_STALE_TIMEOUT = timedelta(minutes=5)
 
 SECTION_KEYWORDS = {
     "education": ["教育经历", "教育背景", "教育", "education"],
@@ -529,10 +533,43 @@ def _serialize_resume(resume_record: UserResume, include_markdown: bool = True) 
     return data
 
 
-def _fire_and_forget(coro) -> None:
+def _is_summary_in_progress(status: str | None) -> bool:
+    return (status or "pending") in {"pending", "processing", "extracting"}
+
+
+async def _mark_stale_summary_if_needed(db: AsyncSession, resume_record: UserResume) -> UserResume:
+    if not _is_summary_in_progress(resume_record.summary_status):
+        return resume_record
+
+    updated_at = resume_record.updated_at or resume_record.created_at
+    if updated_at and utc_now_naive() - updated_at < SUMMARY_STALE_TIMEOUT:
+        return resume_record
+
+    resume_record.summary_status = "failed"
+    resume_record.summary_error = "简历分析超时，请点击“重新分析”重试"
+    await db.commit()
+    await db.refresh(resume_record)
+    logger.warning("简历摘要任务超时，已标记失败，resume_id=%s", resume_record.id)
+    return resume_record
+
+
+def _fire_and_forget(coro, *, label: str) -> None:
     """创建后台任务并追踪异常，防止静默丢失"""
     task = asyncio.create_task(coro)
-    task.add_done_callback(lambda t: t.exception() is not None and logger.error(f"后台任务异常: {t.exception()}"))
+    _BACKGROUND_TASKS.add(task)
+    logger.info("%s已提交", label)
+
+    def _on_done(done_task: asyncio.Task[Any]) -> None:
+        _BACKGROUND_TASKS.discard(done_task)
+        try:
+            exc = done_task.exception()
+        except asyncio.CancelledError:
+            logger.warning("%s已取消", label)
+            return
+        if exc is not None:
+            logger.error("%s异常: %s", label, exc)
+
+    task.add_done_callback(_on_done)
 
 
 async def _trigger_summary_extraction(resume_id: int) -> None:
@@ -548,7 +585,7 @@ async def _trigger_summary_extraction(resume_id: int) -> None:
 
                 result = await session.execute(select(UserResume).where(UserResume.id == resume_id))
                 record = result.scalar_one_or_none()
-                if record and record.summary_status == "processing":
+                if record and _is_summary_in_progress(record.summary_status):
                     record.summary_status = "failed"
                     record.summary_error = f"后台任务异常: {e}"
                     await session.commit()
@@ -583,6 +620,7 @@ async def get_my_resume_detail(
     resume_record = result.scalar_one_or_none()
     if resume_record is None:
         raise HTTPException(status_code=404, detail="简历不存在")
+    resume_record = await _mark_stale_summary_if_needed(db, resume_record)
 
     return {
         "message": "success",
@@ -621,6 +659,7 @@ async def extract_progress(
                     if record is None:
                         yield f"data: {json.dumps({'stage': 'failed', 'error': '简历记录不存在'})}\n\n"
                         break
+                    record = await _mark_stale_summary_if_needed(session, record)
 
                     status = record.summary_status or "pending"
 
@@ -658,6 +697,7 @@ async def retry_extract_resume(
     record = result.scalar_one_or_none()
     if record is None:
         raise HTTPException(status_code=404, detail="简历不存在")
+    record = await _mark_stale_summary_if_needed(db, record)
 
     if record.summary_status not in ("failed", "completed"):
         raise HTTPException(status_code=400, detail="简历正在处理中，请稍后重试")
@@ -668,7 +708,7 @@ async def retry_extract_resume(
     await db.commit()
 
     # 异步触发重新提取
-    _fire_and_forget(_trigger_summary_extraction(resume_id))
+    _fire_and_forget(_trigger_summary_extraction(resume_id), label=f"简历摘要提取[{resume_id}]")
 
     return {"message": "success", "resume_id": resume_id}
 
@@ -738,14 +778,14 @@ async def upload_my_resume(
                 logger.warning("Sync resume to OpenViking failed for user %s: %s", current_user.user_id, exc)
 
         # 异步触发 LLM 瑘历摘要提取（不阻塞主流程）
-        _fire_and_forget(_trigger_summary_extraction(resume_record.id))
+        _fire_and_forget(_trigger_summary_extraction(resume_record.id), label=f"简历摘要提取[{resume_record.id}]")
 
         # 如果指定了目标岗位，异步触发匹配
         if job_id:
             resume_record.target_job_id = job_id
             resume_record.match_status = "pending"
             await db.commit()
-            _fire_and_forget(_trigger_resume_match(resume_record.id, job_id))
+            _fire_and_forget(_trigger_resume_match(resume_record.id, job_id), label=f"简历岗位匹配[{resume_record.id}:{job_id}]")
 
         return {
             "message": "success",

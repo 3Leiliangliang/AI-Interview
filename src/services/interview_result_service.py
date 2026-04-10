@@ -17,7 +17,7 @@ from src.services.chat_stream_service import (
     save_messages_from_langgraph_state,
 )
 from src.services.interview_coding_service import get_coding_session_from_metadata
-from src.storage.postgres.models_business import Department, User
+from src.storage.postgres.models_business import User
 from src.utils.datetime_utils import format_utc_datetime
 from src.utils.logging_config import logger
 
@@ -594,18 +594,11 @@ async def _resolve_target_user(
         return target_user
 
     if current_user.role == "admin":
-        if not current_user.department_id or target_user.department_id != current_user.department_id:
+        if target_user.role != "user":
             raise HTTPException(status_code=403, detail="无权查看该用户的面试记录")
         return target_user
 
     raise HTTPException(status_code=403, detail="无权查看其他用户的面试记录")
-
-
-async def _get_department_name(db: AsyncSession, department_id: int | None) -> str:
-    if not department_id:
-        return ""
-    result = await db.execute(select(Department.name).where(Department.id == department_id))
-    return str(result.scalar_one_or_none() or "").strip()
 
 
 def _build_history_record(*, conversation, result_payload: dict[str, Any] | None) -> dict[str, Any]:
@@ -869,8 +862,6 @@ async def get_interview_history(
         current_user=current_user,
         target_user_id=user_id,
     )
-    department_name = await _get_department_name(db, target_user.department_id)
-
     conv_repo = ConversationRepository(db)
     conversations = await conv_repo.list_conversations(
         user_id=str(target_user.id),
@@ -913,8 +904,6 @@ async def get_interview_history(
             "user_id": target_user.user_id,
             "username": target_user.username,
             "role": target_user.role,
-            "department_id": target_user.department_id,
-            "department_name": department_name,
         },
         "chart": _build_history_chart(records),
         "records": records,
@@ -976,10 +965,6 @@ async def _invoke_interview_finalize_turn(
     if not agent:
         raise HTTPException(status_code=500, detail="模拟面试智能体不存在")
 
-    department_id = current_user.department_id
-    if not department_id:
-        raise HTTPException(status_code=400, detail="当前用户未绑定部门")
-
     conv_repo = ConversationRepository(db)
     prompt = _build_finalize_prompt(
         target_position=target_position,
@@ -1002,7 +987,6 @@ async def _invoke_interview_finalize_turn(
     config_item, agent_config_id = await _resolve_agent_config(
         db,
         "InterviewAgent",
-        department_id,
         str(current_user.id),
         None,
     )
@@ -1022,7 +1006,6 @@ async def _invoke_interview_finalize_turn(
     input_context = {
         "user_id": str(current_user.id),
         "thread_id": conversation.thread_id,
-        "department_id": department_id,
         "agent_config_id": agent_config_id,
         "agent_config": agent_config,
     }

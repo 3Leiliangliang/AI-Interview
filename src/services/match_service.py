@@ -415,7 +415,11 @@ class MatchService:
         has_current_job = False
         if work_experience and min_years:
             for exp in work_experience:
-                duration = exp.get("duration", "")
+                if not isinstance(exp, dict):
+                    continue
+                duration = exp.get("duration") or ""
+                if not isinstance(duration, str):
+                    duration = str(duration)
                 if "至今" in duration or "Present" in duration or "present" in duration:
                     has_current_job = True
                     year_match = re.search(r"20\d{2}", duration)
@@ -456,8 +460,10 @@ class MatchService:
             details=details,
         )
 
-    def _extract_education_level(self, degree_str: str) -> int:
+    def _extract_education_level(self, degree_str: str | None) -> int:
         """从学位字符串提取学历等级"""
+        if not degree_str or not isinstance(degree_str, str):
+            return 0
         for level_name, level_value in EDUCATION_LEVELS.items():
             if level_name in degree_str:
                 return level_value
@@ -483,7 +489,9 @@ class MatchService:
 
         max_level = 0
         for edu in resume_education:
-            degree = edu.get("degree", "")
+            if not isinstance(edu, dict):
+                continue
+            degree = edu.get("degree") or ""
             level = self._extract_education_level(degree)
             if level > max_level:
                 max_level = level
@@ -521,7 +529,9 @@ class MatchService:
                 max_actual_level = 0
                 max_degree = ""
                 for edu in resume_education:
-                    degree = edu.get("degree", "")
+                    if not isinstance(edu, dict):
+                        continue
+                    degree = edu.get("degree") or ""
                     level = self._extract_education_level(degree)
                     if level > max_actual_level:
                         max_actual_level = level
@@ -571,10 +581,15 @@ class MatchService:
             # 验证并规范化输入
             validated_summary = self._validate_resume_summary(resume_summary)
 
-            jd_skills = job_dict.get("required_skills", [])
-            jd_preferred_skills = job_dict.get("preferred_skills", [])
+            jd_skills = job_dict.get("required_skills") or []
+            jd_preferred_skills = job_dict.get("preferred_skills") or []
             min_experience = job_dict.get("min_experience_years")
             education_level = job_dict.get("education_level")
+
+            if not isinstance(jd_skills, list):
+                jd_skills = []
+            if not isinstance(jd_preferred_skills, list):
+                jd_preferred_skills = []
 
             # 从 skills 对象中提取所有技能列表
             skills_data = validated_summary.get("skills", {})
@@ -588,14 +603,23 @@ class MatchService:
             else:
                 resume_skills = skills_data if isinstance(skills_data, list) else []
 
-            work_experience = validated_summary.get("work_experience", [])
-            project_experience = validated_summary.get("project_experience", [])
-            education = validated_summary.get("education", [])
+            work_experience = validated_summary.get("work_experience") or []
+            project_experience = validated_summary.get("project_experience") or []
+            education = validated_summary.get("education") or []
+
+            if not isinstance(work_experience, list):
+                work_experience = []
+            if not isinstance(project_experience, list):
+                project_experience = []
+            if not isinstance(education, list):
+                education = []
 
             # 从 project_experience 的 tech_stack 中提取技能补充到技能池
             if isinstance(project_experience, list):
                 for proj in project_experience:
-                    tech_stack = proj.get("tech_stack", [])
+                    if not isinstance(proj, dict):
+                        continue
+                    tech_stack = proj.get("tech_stack") or []
                     if isinstance(tech_stack, list):
                         resume_skills.extend(tech_stack)
 

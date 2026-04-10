@@ -106,25 +106,21 @@
         <a-select v-model:value="editForm.chunk_preset_id" :options="chunkPresetOptions" />
       </a-form-item>
 
-      <!-- 共享配置（超级管理员可编辑，非共享时本部门管理员也可编辑） -->
+      <!-- 共享配置 -->
       <a-form-item v-if="canEditShareConfig" label="共享设置" name="share_config">
         <a-form-item-rest>
           <ShareConfigForm
             ref="shareConfigFormRef"
             :model-value="database.share_config"
-            :auto-select-user-dept="true"
           />
         </a-form-item-rest>
       </a-form-item>
       <!-- 非编辑状态下显示共享配置信息 -->
       <a-form-item v-else-if="database.share_config" label="共享设置" name="share_config_readonly">
         <div class="share-config-readonly">
-          <a-tag :color="database.share_config.is_shared !== false ? 'green' : 'blue'">
-            {{ database.share_config.is_shared !== false ? '全员共享' : '指定部门' }}
+          <a-tag :color="database.share_config.enabled_for_agents !== false ? 'green' : 'default'">
+            {{ database.share_config.enabled_for_agents !== false ? '普通用户可用' : '仅管理员可用' }}
           </a-tag>
-          <span v-if="database.share_config.is_shared === false" class="dept-names">
-            {{ getAccessibleDeptNames() }}
-          </span>
         </div>
       </a-form-item>
     </a-form>
@@ -132,7 +128,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, h, onMounted } from 'vue'
+import { ref, reactive, computed, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDatabaseStore } from '@/stores/database'
 import { useUserStore } from '@/stores/user'
@@ -145,8 +141,6 @@ import {
 import { message } from 'ant-design-vue'
 import { LeftOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue'
 import { Pencil, Trash2, Copy } from 'lucide-vue-next'
-import { departmentApi } from '@/apis/department_api'
-import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'
 import AiTextarea from '@/components/AiTextarea.vue'
 import ShareConfigForm from '@/components/ShareConfigForm.vue'
 
@@ -156,45 +150,11 @@ const userStore = useUserStore()
 
 const database = computed(() => store.database)
 
-// 部门列表（用于显示部门名称）
-const departments = ref([])
-
-// 加载部门列表
-const loadDepartments = async () => {
-  try {
-    const res = await departmentApi.getDepartments()
-    departments.value = res.departments || res || []
-  } catch (e) {
-    console.error('加载部门列表失败:', e)
-    departments.value = []
-  }
-}
-
-// 初始化时加载部门
-onMounted(() => {
-  loadDepartments()
-})
-
-// 获取可访问的部门名称
-const getAccessibleDeptNames = () => {
-  const deptIds = database.value?.share_config?.accessible_departments || []
-  if (deptIds.length === 0) return '无'
-  return deptIds
-    .map((id) => {
-      const dept = departments.value.find((d) => d.id === id)
-      return dept?.name || `部门${id}`
-    })
-    .join('、')
-}
-
 // 是否可以编辑共享配置
-// 规则：1. 超级管理员可以编辑所有
-//       2. 管理员也可以编辑（后端会验证权限）
 const canEditShareConfig = computed(() => {
   if (userStore.isSuperAdmin) {
     return true
   }
-  // 管理员可以编辑共享配置，后端会验证权限
   return userStore.isAdmin
 })
 
@@ -279,29 +239,19 @@ const handleEditSubmit = () => {
       }
 
       // 从 ShareConfigForm 组件直接获取当前值
-      let finalIsShared = true
-      let finalDeptIds = []
+      let enabledForAgents = true
 
       if (shareConfigFormRef.value) {
         const formConfig = shareConfigFormRef.value.config
-        finalIsShared = formConfig.is_shared
-        finalDeptIds = formConfig.accessible_department_ids || []
+        enabledForAgents = formConfig.enabled_for_agents !== false
       }
-
-      console.log(
-        '[handleEditSubmit] 直接从组件获取 - is_shared:',
-        finalIsShared,
-        'dept_ids:',
-        JSON.stringify(finalDeptIds)
-      )
 
       const updateData = {
         name: editForm.name,
         description: editForm.description,
         additional_params: {},
         share_config: {
-          is_shared: finalIsShared,
-          accessible_departments: finalIsShared ? [] : finalDeptIds
+          enabled_for_agents: enabledForAgents
         }
       }
 
@@ -316,28 +266,6 @@ const handleEditSubmit = () => {
     .catch((err) => {
       console.error('表单验证失败:', err)
     })
-}
-
-// LLM 模型选择处理
-const llmModelSpec = computed(() => {
-  const provider = editForm.llm_info?.provider || ''
-  const modelName = editForm.llm_info?.model_name || ''
-  if (provider && modelName) {
-    return `${provider}/${modelName}`
-  }
-  return ''
-})
-
-const handleLLMSelect = (spec) => {
-  console.log('LLM选择:', spec)
-  if (typeof spec !== 'string' || !spec) return
-
-  const index = spec.indexOf('/')
-  const provider = index !== -1 ? spec.slice(0, index) : ''
-  const modelName = index !== -1 ? spec.slice(index + 1) : ''
-
-  editForm.llm_info.provider = provider
-  editForm.llm_info.model_name = modelName
 }
 
 const deleteDatabase = () => {
