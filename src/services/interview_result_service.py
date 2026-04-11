@@ -98,27 +98,6 @@ DIMENSION_DISPLAY_CONFIG = {
         "focus_title": "项目复盘与岗位匹配",
     },
 }
-COMMUNICATION_RESOURCE_LIBRARY = {
-    "communication": [
-        {
-            "title": "STAR 法则回答模板",
-            "summary": "围绕情境、任务、行动、结果组织回答，减少绕圈和信息缺失。",
-            "source_ref": "internal://communication/star-method",
-        },
-        {
-            "title": "高频追问下的结构化表达清单",
-            "summary": "练习先结论、后细节、再复盘的表达节奏，提升回答的条理性。",
-            "source_ref": "internal://communication/structured-answer-checklist",
-        },
-    ],
-    "soft_skills": [
-        {
-            "title": "项目亮点提炼指南",
-            "summary": "把项目经历拆成目标、挑战、动作、结果，便于展示岗位匹配度。",
-            "source_ref": "internal://communication/project-storytelling",
-        }
-    ],
-}
 LOW_SCORE_THRESHOLD = 75
 WEAKNESS_LIMIT = 3
 RESOURCE_LIMIT = 5
@@ -908,12 +887,12 @@ async def _select_knowledge_resources(
             seen_refs.add(ref)
             resources.append(
                 {
-                    "resource_type": "knowledge",
-                    "title": f"{db_info.get('name') or '知识库'} · 推荐知识点",
-                    "summary": question,
-                    "source_type": "knowledge_base",
-                    "source_id": db_id,
-                    "source_ref": ref,
+        "resource_type": "knowledge",
+        "title": f"{db_info.get('name') or '知识库'} · 推荐 QA",
+        "summary": question,
+        "source_type": "knowledge_base",
+        "source_id": db_id,
+        "source_ref": ref,
                 }
             )
             if len(resources) >= RESOURCE_LIMIT:
@@ -972,23 +951,6 @@ def _select_problem_resources(
             }
         )
     return selected
-
-
-def _select_communication_resources(dimension_key: str) -> list[dict[str, str]]:
-    items = COMMUNICATION_RESOURCE_LIBRARY.get(dimension_key) or []
-    return [
-        {
-            "resource_type": "communication",
-            "title": item["title"],
-            "summary": item["summary"],
-            "source_type": "internal_article",
-            "source_id": dimension_key,
-            "source_ref": item["source_ref"],
-        }
-        for item in items
-    ]
-
-
 def _build_practice_task(dimension_key: str, reason: str) -> dict[str, Any]:
     config = DIMENSION_DISPLAY_CONFIG[dimension_key]
     minute_map = {
@@ -1057,10 +1019,10 @@ async def _generate_improvement_plan(
     ).strip()
     difficulty_level = str((coding_session or {}).get("difficulty_level") or "").strip()
     dimension_keywords = {
-        "technical_competence": ["基础", "原理", "技术", "知识点"],
+        "technical_competence": ["基础", "原理", "技术", "知识点", "问答", "八股"],
         "problem_solving": ["算法", "题解", "边界", "复杂度"],
-        "communication": ["表达", "沟通", "结构化"],
-        "soft_skills": ["项目", "协作", "亮点", "岗位"],
+        "communication": ["表达", "沟通", "结构化", "回答", "追问"],
+        "soft_skills": ["项目", "协作", "亮点", "岗位", "经历"],
     }
 
     for dimension_key, score in weakness_candidates[:WEAKNESS_LIMIT]:
@@ -1095,7 +1057,10 @@ async def _generate_improvement_plan(
                 keywords=dimension_keywords[dimension_key],
             )
         else:
-            resources = _select_communication_resources(dimension_key)
+            resources = await _select_knowledge_resources(
+                user_id=str(conversation.user_id),
+                keywords=dimension_keywords[dimension_key],
+            )
 
         for resource in resources:
             ref = str(resource.get("source_ref") or "").strip()

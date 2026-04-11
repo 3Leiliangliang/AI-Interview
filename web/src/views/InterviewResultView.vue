@@ -363,8 +363,8 @@ const getDimensionLabel = (key) => dimensionLabelMap[key] || key || '待分析'
 
 const getResourceTypeLabel = (type) => {
   const labelMap = {
-    knowledge: '知识点',
-    interview_question: '面试题',
+    knowledge: '知识库 QA',
+    interview_question: '编程题',
     communication: '沟通表达'
   }
   return labelMap[type] || type || '资源'
