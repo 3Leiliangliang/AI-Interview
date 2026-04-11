@@ -42,9 +42,22 @@ REVERSE_DIMENSION_LABELS = {
     "实战经验": "technical_competence",
     "问题解决": "problem_solving",
     "沟通表达": "communication",
+    "沟通与表达": "communication",
     "综合素质": "soft_skills",
     "编码能力": "technical_competence",
+    "代码能力": "problem_solving",
+    "项目经验与技术深度": "technical_competence",
+    "基础知识": "technical_competence",
+    "岗位匹配度": "soft_skills",
 }
+DIMENSION_KEYWORD_MAPPING = (
+    (("项目经验", "技术深度"), "technical_competence"),
+    (("基础知识",), "technical_competence"),
+    (("代码能力", "编程能力", "工程实现"), "problem_solving"),
+    (("问题解决",), "problem_solving"),
+    (("沟通表达", "沟通与表达", "表达能力"), "communication"),
+    (("综合素质", "岗位匹配度", "岗位匹配", "团队协作"), "soft_skills"),
+)
 FILLER_TERMS = ("嗯", "呃", "额", "啊", "就是", "然后", "那个", "其实")
 HEDGE_TERMS = ("可能", "也许", "大概", "应该", "不太确定", "我猜", "我觉得", "或许")
 ASSERTIVE_TERMS = ("我会", "我能", "我负责", "我主导", "最终", "落地", "推进", "优化")
@@ -60,6 +73,59 @@ def _normalize_score_value(value: Any) -> int | None:
     return max(0, min(100, int(score)))
 
 
+def _parse_numeric_score(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _detect_score_scale(value: Any) -> float | None:
+    raw_scores: list[float] = []
+
+    if isinstance(value, list):
+        for item in value:
+            if not isinstance(item, dict):
+                continue
+            score = _parse_numeric_score(item.get("score"))
+            if score is not None:
+                raw_scores.append(score)
+    elif isinstance(value, dict):
+        for raw_score in value.values():
+            score = _parse_numeric_score(raw_score)
+            if score is not None:
+                raw_scores.append(score)
+
+    if not raw_scores:
+        return None
+
+    max_score = max(raw_scores)
+    if max_score <= 5:
+        return 5
+    if max_score <= 10:
+        return 10
+    return None
+
+
+def _normalize_interview_score(value: Any, *, scale_hint: float | None = None) -> int | None:
+    raw_score = _parse_numeric_score(value)
+    if raw_score is None:
+        return None
+
+    if scale_hint is not None:
+        if scale_hint <= 5:
+            raw_score *= 20
+        elif scale_hint <= 10:
+            raw_score *= 10
+    else:
+        if raw_score <= 5:
+            raw_score *= 20
+        elif raw_score <= 10:
+            raw_score *= 10
+
+    return _normalize_score_value(raw_score)
+
+
 def _clamp_score(value: float, *, lower: int = 0, upper: int = 100) -> int:
     return max(lower, min(upper, round(value)))
 
@@ -72,20 +138,22 @@ def _normalize_string_list(value: Any) -> list[str]:
 
 def _normalize_dimensions(value: Any) -> list[dict[str, Any]]:
     if isinstance(value, list):
+        scale_hint = _detect_score_scale(value)
         result: list[dict[str, Any]] = []
         for item in value:
             if not isinstance(item, dict):
                 continue
             name = str(item.get("name") or "").strip()
-            score = _normalize_score_value(item.get("score"))
+            score = _normalize_interview_score(item.get("score"), scale_hint=scale_hint)
             if name and score is not None:
                 result.append({"name": name, "score": score})
         return result
 
     if isinstance(value, dict):
+        scale_hint = _detect_score_scale(value)
         result = []
         for name, score in value.items():
-            normalized_score = _normalize_score_value(score)
+            normalized_score = _normalize_interview_score(score, scale_hint=scale_hint)
             normalized_name = str(name or "").strip()
             if normalized_name and normalized_score is not None:
                 result.append({"name": normalized_name, "score": normalized_score})
@@ -138,12 +206,7 @@ def _normalize_detailed_scores(value: Any) -> list[dict[str, Any]]:
 
     result: list[dict[str, Any]] = []
     for key, raw_score in value.items():
-        try:
-            numeric_score = float(raw_score)
-        except (TypeError, ValueError):
-            continue
-        display_score = round(numeric_score * 10) if numeric_score <= 10 else round(numeric_score)
-        normalized_score = _normalize_score_value(display_score)
+        normalized_score = _normalize_interview_score(raw_score)
         if normalized_score is None:
             continue
         result.append({"name": _label_dimension_key(str(key)), "score": normalized_score})
@@ -172,7 +235,15 @@ def _normalize_dimension_key(key: str) -> str:
     normalized = str(key or "").strip()
     if not normalized:
         return ""
-    return REVERSE_DIMENSION_LABELS.get(normalized, normalized)
+    normalized_no_space = normalized.replace(" ", "")
+    direct_mapping = REVERSE_DIMENSION_LABELS.get(normalized) or REVERSE_DIMENSION_LABELS.get(normalized_no_space)
+    if direct_mapping:
+        return direct_mapping
+
+    for keywords, target_key in DIMENSION_KEYWORD_MAPPING:
+        if any(keyword in normalized_no_space for keyword in keywords):
+            return target_key
+    return normalized
 
 
 def _normalize_scorecard(value: Any) -> dict[str, Any] | None:
@@ -185,20 +256,27 @@ def _normalize_scorecard(value: Any) -> dict[str, Any] | None:
     )
     detailed_scores = _extract_score_mapping(value.get("detailed_scores") or value.get("rating_scores"))
     dimension_scores = _extract_score_mapping(value.get("dimension_scores"))
+    dimensions_scale_hint = _detect_score_scale(value.get("dimensions"))
+    fallback_scale_hint = _detect_score_scale(detailed_scores or dimension_scores)
     interview_outcome = value.get("interview_outcome") if isinstance(value.get("interview_outcome"), dict) else {}
     match_assessment = value.get("match_assessment") if isinstance(value.get("match_assessment"), dict) else {}
     fallback_dimensions = _normalize_detailed_scores(detailed_scores or dimension_scores)
     fallback_overall = None
     if fallback_dimensions:
         fallback_overall = round(sum(item["score"] for item in fallback_dimensions) / len(fallback_dimensions))
+    raw_overall_value = value.get(
+        "overall",
+        value.get("overall_score", value.get("total_score", value.get("total"))),
+    )
+    normalized_overall = _normalize_interview_score(
+        raw_overall_value,
+        scale_hint=dimensions_scale_hint or fallback_scale_hint,
+    )
+    if normalized_overall is None and fallback_overall is not None:
+        normalized_overall = _normalize_score_value(fallback_overall)
 
     normalized = {
-        "overall": _normalize_score_value(
-            value.get(
-                "overall",
-                value.get("overall_score", value.get("total_score", value.get("total", fallback_overall))),
-            )
-        ),
+        "overall": normalized_overall,
         "role": str(
             value.get("role")
             or value.get("position")
@@ -563,16 +641,21 @@ def _extract_dimension_scores(scorecard: dict[str, Any] | None) -> dict[str, int
     }
     if not isinstance(scorecard, dict):
         return values
+    buckets: dict[str, list[int]] = {key: [] for key in values}
 
     for item in scorecard.get("dimensions") or []:
         if not isinstance(item, dict):
             continue
         normalized_key = _normalize_dimension_key(item.get("name"))
-        if normalized_key not in values:
+        if normalized_key not in buckets:
             continue
         score = _normalize_score_value(item.get("score"))
         if score is not None:
-            values[normalized_key] = score
+            buckets[normalized_key].append(score)
+
+    for key, score_bucket in buckets.items():
+        if score_bucket:
+            values[key] = round(sum(score_bucket) / len(score_bucket))
     return values
 
 
@@ -623,7 +706,8 @@ def _build_history_record(*, conversation, result_payload: dict[str, Any] | None
     ).strip()
 
     result_status = str((result_payload or {}).get("status") or "").strip()
-    if result_status == "completed" and (scorecard or {}).get("overall") is not None:
+    is_complete_result = _is_result_complete_enough(result_payload)
+    if result_status == "completed" and is_complete_result:
         status = "completed"
     elif result_status in {"generating", "failed"}:
         status = result_status
@@ -664,7 +748,7 @@ def _build_history_record(*, conversation, result_payload: dict[str, Any] | None
         "status": status,
         "overall_score": (scorecard or {}).get("overall"),
         "dimensions": dimension_items,
-        "has_result": status == "completed" and isinstance(scorecard, dict),
+        "has_result": status == "completed" and is_complete_result,
         "result_generated_at": str((result_payload or {}).get("generated_at") or "").strip(),
     }
 

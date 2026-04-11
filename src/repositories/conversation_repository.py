@@ -237,7 +237,17 @@ class ConversationRepository:
                 return pinned_conversations[:limit]
             remaining_limit = limit - pinned_count
 
-        if remaining_limit is not None and remaining_limit > 0:
+        if remaining_limit is None:
+            non_pinned_query = (
+                select(Conversation)
+                .where(*base_conditions)
+                .where(~Conversation.is_pinned)
+                .order_by(Conversation.updated_at.desc())
+                .offset(remaining_offset)
+            )
+            result = await self.db.execute(non_pinned_query)
+            non_pinned_conversations = list(result.scalars().all())
+        elif remaining_limit > 0:
             non_pinned_query = (
                 select(Conversation)
                 .where(*base_conditions)

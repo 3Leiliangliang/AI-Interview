@@ -164,13 +164,13 @@ const getInterviewModeLabel = (mode) => {
 }
 
 const formatOverallScore = (score) => {
-  const numeric = Number(score)
-  return Number.isFinite(numeric) ? `${Math.round(numeric)}` : '--'
+  if (typeof score !== 'number' || !Number.isFinite(score)) return '--'
+  return `${Math.round(score)}`
 }
 
 const formatDimensionScore = (score) => {
-  const numeric = Number(score)
-  return Number.isFinite(numeric) ? numeric : '--'
+  if (typeof score !== 'number' || !Number.isFinite(score)) return '--'
+  return score
 }
 
 const filterUserOption = (input, option) => {
@@ -207,6 +207,12 @@ const loadHistory = async () => {
     message.error(error.message || '加载面试记录失败')
   } finally {
     loading.value = false
+    if (!chartCategories.value.length) {
+      chartInstance?.dispose()
+      chartInstance = null
+      return
+    }
+    await renderChart()
   }
 }
 
@@ -251,8 +257,8 @@ const buildChartOption = () => {
 }
 
 const renderChart = async () => {
-  if (!chartRef.value || !chartCategories.value.length) return
   await nextTick()
+  if (!chartRef.value || !chartCategories.value.length) return
   if (!chartInstance) {
     chartInstance = echarts.init(chartRef.value)
   }
