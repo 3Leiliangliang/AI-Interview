@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+import ast
 import hashlib
 import html
 import json
@@ -309,11 +310,13 @@ def _build_sample_run_result(
 
     for index, raw_case in enumerate(raw_cases, start=1):
         status = _result_code_to_status(raw_case.get("result"))
-        status_list.append(status)
         output_text = str(raw_case.get("output") or "")
         expected = examples[index - 1].get("output", "") if index - 1 < len(examples) else ""
         sample_input = examples[index - 1].get("input", "") if index - 1 < len(examples) else ""
         is_output_like = status in {"ACCEPTED", "WRONG_ANSWER", "PARTIALLY_ACCEPTED"}
+        if is_output_like:
+            status = "ACCEPTED" if _sample_outputs_match(output_text, expected) else "WRONG_ANSWER"
+        status_list.append(status)
         stdout = output_text if is_output_like else ""
         stderr = "" if is_output_like else output_text
         if stdout:
@@ -385,6 +388,178 @@ def _dedupe_preserve_order(values: list[str]) -> list[str]:
         seen.add(value)
         result.append(value)
     return result
+
+
+def _parse_loose_literal(value: str) -> Any:
+    text = value.strip()
+    if not text:
+        return ""
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    normalized = re.sub(r"\btrue\b", "True", text)
+    normalized = re.sub(r"\bfalse\b", "False", normalized)
+    normalized = re.sub(r"\bnull\b", "None", normalized)
+    return ast.literal_eval(normalized)
+
+
+def _sample_outputs_match(actual_output: str, expected_output: str) -> bool:
+    actual = actual_output.strip()
+    expected = expected_output.strip()
+    if actual == expected:
+        return True
+    try:
+        return _parse_loose_literal(actual) == _parse_loose_literal(expected)
+    except (ValueError, SyntaxError, json.JSONDecodeError):
+        return False
+
+
+def _extract_javascript_function_signature(code: str) -> tuple[str, list[str]] | None:
+    match = re.search(
+        r"(?:^|\n)\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\((.*?)\)",
+        code,
+        re.DOTALL,
+    )
+    if not match:
+        return None
+    function_name = match.group(1)
+    raw_params = match.group(2).strip()
+    if not raw_params:
+        return function_name, []
+
+    params: list[str] = []
+    for raw_param in raw_params.split(","):
+        param = raw_param.strip()
+        if not param:
+            continue
+        param = param.removeprefix("...")
+        param = param.split("=", 1)[0].strip()
+        param = param.split(":", 1)[0].strip()
+        if param:
+            params.append(param)
+    return function_name, params
+
+
+def _strip_javascript_exports(code: str) -> str:
+    return re.sub(r"(^|\n)(\s*)export\s+(default\s+)?", r"\1\2", code)
+
+
+def _build_seed_problem_sample_source(problem: dict[str, Any], language: str, code: str) -> str:
+    if language != "javascript":
+        return code
+    if str(problem.get("source") or "").strip() != OJ_PROBLEM_SOURCE:
+        return code
+
+    starter_code = str(((problem.get("starter_code") or {}).get(language)) or "")
+    signature = _extract_javascript_function_signature(starter_code) or _extract_javascript_function_signature(code)
+    if not signature:
+        return code
+
+    function_name, param_names = signature
+    encoded_param_names = json.dumps(param_names, ensure_ascii=False)
+    return (
+        f"{_strip_javascript_exports(code).rstrip()}\n\n"
+        "function __sampleSplitTopLevel(source) {\n"
+        "  const parts = [];\n"
+        "  let current = '';\n"
+        "  let depth = 0;\n"
+        "  let quote = '';\n"
+        "  let escaped = false;\n"
+        "  for (const char of source) {\n"
+        "    if (quote) {\n"
+        "      current += char;\n"
+        "      if (escaped) {\n"
+        "        escaped = false;\n"
+        "        continue;\n"
+        "      }\n"
+        "      if (char === '\\\\') {\n"
+        "        escaped = true;\n"
+        "        continue;\n"
+        "      }\n"
+        "      if (char === quote) {\n"
+        "        quote = '';\n"
+        "      }\n"
+        "      continue;\n"
+        "    }\n"
+        "    if (char === '\"' || char === \"'\") {\n"
+        "      quote = char;\n"
+        "      current += char;\n"
+        "      continue;\n"
+        "    }\n"
+        "    if (char === '[' || char === '{' || char === '(') {\n"
+        "      depth += 1;\n"
+        "      current += char;\n"
+        "      continue;\n"
+        "    }\n"
+        "    if (char === ']' || char === '}' || char === ')') {\n"
+        "      depth = Math.max(0, depth - 1);\n"
+        "      current += char;\n"
+        "      continue;\n"
+        "    }\n"
+        "    if (char === ',' && depth === 0) {\n"
+        "      if (current.trim()) {\n"
+        "        parts.push(current.trim());\n"
+        "      }\n"
+        "      current = '';\n"
+        "      continue;\n"
+        "    }\n"
+        "    current += char;\n"
+        "  }\n"
+        "  if (current.trim()) {\n"
+        "    parts.push(current.trim());\n"
+        "  }\n"
+        "  return parts;\n"
+        "}\n\n"
+        "function __sampleEval(expression) {\n"
+        "  return Function(`\"use strict\"; return (${expression});`)();\n"
+        "}\n\n"
+        "function __sampleParseArgs(rawInput, paramNames) {\n"
+        "  const input = rawInput.trim();\n"
+        "  if (!input) {\n"
+        "    return [];\n"
+        "  }\n"
+        "  if (input.startsWith('{')) {\n"
+        "    const payload = __sampleEval(input);\n"
+        "    if (payload && typeof payload === 'object' && !Array.isArray(payload)) {\n"
+        "      return paramNames.map((name) => payload[name]);\n"
+        "    }\n"
+        "  }\n"
+        "  const parts = __sampleSplitTopLevel(input);\n"
+        "  if (parts.every((part) => part.includes('='))) {\n"
+        "    const values = Object.create(null);\n"
+        "    for (const part of parts) {\n"
+        "      const [name, expression] = part.split(/=(.+)/, 2);\n"
+        "      values[name.trim()] = __sampleEval(expression.trim());\n"
+        "    }\n"
+        "    return paramNames.map((name) => values[name]);\n"
+        "  }\n"
+        "  if (paramNames.length <= 1) {\n"
+        "    return [__sampleEval(input)];\n"
+        "  }\n"
+        "  return parts.map((part) => __sampleEval(part));\n"
+        "}\n\n"
+        "function __sampleFormat(value) {\n"
+        "  if (typeof value === 'string') {\n"
+        "    return value;\n"
+        "  }\n"
+        "  if (typeof value === 'number' || typeof value === 'boolean' || value == null) {\n"
+        "    return String(value);\n"
+        "  }\n"
+        "  return JSON.stringify(value);\n"
+        "}\n\n"
+        "const __sampleInput = require('fs').readFileSync(0, 'utf8');\n"
+        f"const __sampleArgs = __sampleParseArgs(__sampleInput, {encoded_param_names});\n"
+        f"Promise.resolve({function_name}(...__sampleArgs))\n"
+        "  .then((result) => {\n"
+        "    process.stdout.write(__sampleFormat(result));\n"
+        "  })\n"
+        "  .catch((error) => {\n"
+        "    console.error(error && error.stack ? error.stack : String(error));\n"
+        "    process.exit(1);\n"
+        "  });\n"
+    )
 
 
 def _to_frontend_language(language: str) -> str | None:
@@ -1338,7 +1513,8 @@ async def run_sample_coding_session(
     code: str,
 ) -> dict[str, Any]:
     coding_session = await get_coding_session(db, thread_id=thread_id, current_user_id=current_user_id)
-    allowed_languages = (coding_session.get("problem") or {}).get("allowed_languages") or SUPPORTED_FRONTEND_LANGUAGES
+    problem = coding_session.get("problem") or {}
+    allowed_languages = problem.get("allowed_languages") or SUPPORTED_FRONTEND_LANGUAGES
     if language not in SUPPORTED_FRONTEND_LANGUAGES or language not in allowed_languages:
         raise HTTPException(status_code=400, detail=f"Unsupported language: {language}")
 
@@ -1358,10 +1534,11 @@ async def run_sample_coding_session(
         raise HTTPException(status_code=400, detail=f"Unsupported language: {language}")
 
     max_cpu_time, max_memory = _get_sample_run_limits(language)
+    sample_source = _build_seed_problem_sample_source(problem, language, code)
     judge_response = await _judge_server_request(
         {
             "language_config": language_config,
-            "src": code,
+            "src": sample_source,
             "max_cpu_time": max_cpu_time,
             "max_memory": max_memory,
             "test_case": examples,

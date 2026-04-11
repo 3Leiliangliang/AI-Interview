@@ -29,13 +29,13 @@ PROBLEM_OJ_CONFIG = {
     "two-sum-index": {
         "description": (
             "<p>请实现 <code>twoSum(nums, target)</code>，返回两个和为 <code>target</code> 的元素下标。</p>"
-            "<p>评测时标准输入为一行 JSON，例如：<code>{\"nums\":[2,7,11,15],\"target\":9}</code>。</p>"
+            "<p>样例输入按函数入参展示，例如：<code>nums = [2, 7, 11, 15], target = 9</code>。</p>"
         ),
-        "input_description": "<p>输入为一个 JSON 对象，包含 <code>nums</code> 数组和 <code>target</code> 整数。</p>",
-        "output_description": "<p>输出一个 JSON 数组，如 <code>[0,1]</code>。</p>",
+        "input_description": "<p>函数接收两个参数：<code>nums</code> 为整数数组，<code>target</code> 为目标整数。</p>",
+        "output_description": "<p>函数返回一个数组，如 <code>[0,1]</code>。</p>",
         "samples": [
-            {"input": '{"nums":[2,7,11,15],"target":9}', "output": "[0,1]"},
-            {"input": '{"nums":[3,2,4],"target":6}', "output": "[1,2]"},
+            {"input": "nums = [2, 7, 11, 15], target = 9", "output": "[0, 1]"},
+            {"input": "nums = [3, 2, 4], target = 6", "output": "[1, 2]"},
         ],
         "test_cases": [
             ('{"nums":[2,7,11,15],"target":9}', "[0,1]"),
@@ -69,13 +69,13 @@ process.stdout.write(JSON.stringify(result))""",
     "valid-parentheses": {
         "description": (
             "<p>请实现 <code>isValid(s)</code>，判断括号字符串是否有效闭合。</p>"
-            "<p>评测时标准输入为一行 JSON，例如：<code>{\"s\":\"()[]{}\"}</code>。</p>"
+            "<p>样例输入按函数入参展示，例如：<code>s = '()[]{}'</code>。</p>"
         ),
-        "input_description": "<p>输入为一个 JSON 对象，包含字符串字段 <code>s</code>。</p>",
-        "output_description": "<p>输出 <code>true</code> 或 <code>false</code>。</p>",
+        "input_description": "<p>函数接收一个参数：<code>s</code> 为括号字符串。</p>",
+        "output_description": "<p>函数返回 <code>true</code> 或 <code>false</code>。</p>",
         "samples": [
-            {"input": '{"s":"()[]{}"}', "output": "true"},
-            {"input": '{"s":"([)]"}', "output": "false"},
+            {"input": "s = '()[]{}'", "output": "true"},
+            {"input": "s = '([)]'", "output": "false"},
         ],
         "test_cases": [
             ('{"s":"()[]{}"}', "true"),
@@ -114,12 +114,12 @@ process.stdout.write(String(isValid(payload.s)))""",
     "max-subarray": {
         "description": (
             "<p>请实现 <code>maxSubArray(nums)</code>，返回连续子数组的最大和。</p>"
-            "<p>评测时标准输入为一行 JSON，例如：<code>{\"nums\":[-2,1,-3,4,-1,2,1,-5,4]}</code>。</p>"
+            "<p>样例输入按函数入参展示，例如：<code>nums = [-2,1,-3,4,-1,2,1,-5,4]</code>。</p>"
         ),
-        "input_description": "<p>输入为一个 JSON 对象，包含整数数组字段 <code>nums</code>。</p>",
-        "output_description": "<p>输出一个整数。</p>",
+        "input_description": "<p>函数接收一个参数：<code>nums</code> 为整数数组。</p>",
+        "output_description": "<p>函数返回一个整数。</p>",
         "samples": [
-            {"input": '{"nums":[-2,1,-3,4,-1,2,1,-5,4]}', "output": "6"},
+            {"input": "nums = [-2,1,-3,4,-1,2,1,-5,4]", "output": "6"},
         ],
         "test_cases": [
             ('{"nums":[-2,1,-3,4,-1,2,1,-5,4]}', "6"),
@@ -265,6 +265,32 @@ def create_problem(session: requests.Session, payload: dict) -> None:
         raise RuntimeError(f"Create problem failed: {body}")
 
 
+def get_existing_problem_id(session: requests.Session, display_id: str) -> int | None:
+    response = session.get(f"{DEFAULT_BASE_URL}/api/problem", params={"problem_id": display_id}, timeout=30)
+    if response.status_code == 404:
+        return None
+    response.raise_for_status()
+    payload = response.json()
+    if payload.get("error"):
+        return None
+    data = payload.get("data") or {}
+    problem_id = data.get("id")
+    return int(problem_id) if problem_id is not None else None
+
+
+def update_problem(session: requests.Session, payload: dict) -> None:
+    response = session.put(
+        f"{DEFAULT_BASE_URL}/api/admin/problem",
+        json=payload,
+        headers=csrf_headers(session),
+        timeout=30,
+    )
+    response.raise_for_status()
+    body = response.json()
+    if body.get("error"):
+        raise RuntimeError(f"Update problem failed: {body}")
+
+
 def main() -> None:
     session = requests.Session()
     login(session)
@@ -277,13 +303,15 @@ def main() -> None:
         config = PROBLEM_OJ_CONFIG.get(problem["id"])
         if not config:
             raise RuntimeError(f"Missing OJ config for problem: {problem['id']}")
-        if problem_exists(session, problem["id"]):
-            skipped += 1
-            print(f"Skip existing problem: {problem['id']}")
-            continue
-
         upload_data = upload_test_cases(session, config["test_cases"])
         payload = build_problem_payload(problem, upload_data)
+        existing_problem_id = get_existing_problem_id(session, problem["id"])
+        if existing_problem_id is not None:
+            payload["id"] = existing_problem_id
+            update_problem(session, payload)
+            print(f"Updated problem: {problem['id']}")
+            continue
+
         create_problem(session, payload)
         imported += 1
         print(f"Imported problem: {problem['id']}")
