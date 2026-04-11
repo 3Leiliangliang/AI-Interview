@@ -463,8 +463,8 @@ const startSubmissionPolling = () => {
         pollTimer = null
         if (latestSubmittedId.value && latestSubmittedId.value === session.value?.submission_id) {
           latestSubmittedId.value = ''
-          message.success('代码考核已完成，正在为你打开面试结果页')
-          goToInterviewResult(true)
+          message.success('代码考核已完成，正在返回面试继续后续环节')
+          goBackToInterview()
         }
       }
     } catch (error) {

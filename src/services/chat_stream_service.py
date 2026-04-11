@@ -10,6 +10,7 @@ from typing import Any
 
 from langchain.messages import AIMessage, AIMessageChunk, HumanMessage
 from langgraph.types import Command
+from sqlalchemy import select
 
 from src import config as conf
 from src.agents import agent_manager
