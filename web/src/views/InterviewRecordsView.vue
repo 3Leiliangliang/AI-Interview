@@ -17,88 +17,166 @@
           show-search
           :filter-option="filterUserOption"
         />
-        <a-button :loading="loading" @click="loadHistory">刷新</a-button>
+        <a-button :loading="loading" @click="loadHistory">
+          <template #icon><SyncOutlined /></template>
+          刷新数据
+        </a-button>
       </div>
     </div>
 
-    <div class="panel-card chart-card">
-      <div class="section-header">
-        <div>
-          <div class="section-title">能力成长曲线</div>
-          <div class="section-subtitle">
-            {{ targetUserLabel }} · 基于已生成评分卡的历史面试结果
+    <div class="dashboard-grid">
+      <div class="panel-card chart-card">
+        <div class="section-header">
+          <div>
+            <div class="section-title">能力成长曲线</div>
+            <div class="section-subtitle">
+              {{ targetUserLabel }} · 基于已生成评分卡的历史面试结果
+            </div>
+          </div>
+        </div>
+
+        <div v-if="loading" class="state-panel compact">
+          <a-spin />
+        </div>
+        <div v-else-if="!chartCategories.length" class="state-panel compact">
+          <a-empty description="暂无可视化数据，完成几轮面试后会在这里展示成长曲线" />
+        </div>
+        <div v-else ref="chartRef" class="growth-chart"></div>
+      </div>
+
+      <div class="panel-card profile-card">
+        <div class="section-header">
+          <div>
+            <div class="section-title">长期短板提醒</div>
+            <div class="section-subtitle">最近 5 次已完成面试中的反复薄弱点</div>
+          </div>
+          <a-tag v-if="profile.pending_practice_count" color="purple">{{ profile.pending_practice_count }} 个待练习项</a-tag>
+        </div>
+
+        <div v-if="loading" class="state-panel compact">
+          <a-spin />
+        </div>
+        <div v-else-if="!profile.top_weakness_dimensions?.length && !profile.latest_focus?.length" class="state-panel compact">
+          <a-empty description="完成更多面试后分析短板" />
+        </div>
+        <div v-else class="profile-content">
+          <div v-if="profile.top_weakness_dimensions?.length" class="profile-section">
+            <div class="profile-section__title">反复偏弱维度</div>
+            <div class="profile-chip-list">
+              <div
+                v-for="item in profile.top_weakness_dimensions"
+                :key="item.dimension_key"
+                class="profile-chip"
+              >
+                <div class="profile-chip__header">
+                  <span class="profile-chip__title">{{ item.label }}</span>
+                  <span class="profile-chip__score">{{ item.average_score }} 分</span>
+                </div>
+                <div class="profile-chip__meta">
+                  低分出现 {{ item.low_score_count }} 次
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="profile.latest_focus?.length" class="profile-section focus-section">
+            <div class="profile-section__title">最近建议</div>
+            <div class="profile-focus-list">
+              <div v-for="item in profile.latest_focus" :key="`${item.dimension_key}-${item.title}`" class="profile-focus-item">
+                <div class="profile-focus-item__title">{{ item.title }}</div>
+                <div class="profile-focus-item__desc">{{ item.focus }}</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-
-      <div v-if="loading" class="state-panel compact">
-        <a-spin />
-      </div>
-      <div v-else-if="!chartCategories.length" class="state-panel compact">
-        <a-empty description="暂无可视化数据，完成几轮面试后会在这里展示成长曲线" />
-      </div>
-      <div v-else ref="chartRef" class="growth-chart"></div>
     </div>
 
     <div class="panel-card records-card">
       <div class="section-header">
-        <div>
+        <div class="records-header-info">
           <div class="section-title">历史记录</div>
           <div class="section-subtitle">展示全部面试线程，成长曲线仅统计已完成结果</div>
         </div>
-        <a-tag color="blue">{{ records.length }} 条</a-tag>
+        <div class="records-stats">
+          <div class="stat-item">
+            <span class="stat-label">总面试</span>
+            <span class="stat-value">{{ records.length }}</span>
+          </div>
+          <div class="stat-divider"></div>
+          <div class="stat-item">
+            <span class="stat-label">已完成</span>
+            <span class="stat-value">{{ records.filter(r => r.status === 'completed').length }}</span>
+          </div>
+        </div>
       </div>
 
-      <div v-if="loading" class="state-panel compact">
-        <a-spin />
+      <div v-if="loading" class="state-panel list-loading">
+        <a-spin tip="加载记录中..." />
       </div>
-      <div v-else-if="records.length === 0" class="state-panel compact">
+      <div v-else-if="records.length === 0" class="state-panel empty-list">
         <a-empty description="暂无面试记录" />
       </div>
       <div v-else class="records-list">
         <div v-for="record in records" :key="record.thread_id" class="record-item">
-          <div class="record-main">
-            <div class="record-top">
-              <div>
-                <div class="record-title">{{ record.title || '未命名面试' }}</div>
-                <div class="record-meta">
-                  <span>{{ formatDateTime(record.updated_at) }}</span>
-                  <span>创建于 {{ formatDateTime(record.created_at) }}</span>
+          <div class="record-status-indicator" :class="record.status"></div>
+          <div class="record-content">
+            <div class="record-main-info">
+              <div class="record-header-row">
+                <div class="record-title-group">
+                  <h3 class="record-title">{{ record.title || '未命名面试' }}</h3>
+                  <div class="record-time-info">
+                    <span class="time-item">更新：{{ formatDateTime(record.updated_at) }}</span>
+                    <span class="time-separator">·</span>
+                    <span class="time-item">创建：{{ formatDateTime(record.created_at) }}</span>
+                  </div>
+                </div>
+
+                <div class="record-badge-group">
+                  <a-tag class="tag-flat">{{ getInterviewModeLabel(record.interview_mode) }}</a-tag>
+                  <a-tag class="tag-flat">{{ record.position }}</a-tag>
+                  <a-tag class="tag-flat">{{ record.round }}</a-tag>
+                  <a-tag :color="getStatusColor(record.status)" class="tag-status">
+                    {{ getStatusLabel(record.status) }}
+                  </a-tag>
                 </div>
               </div>
 
-              <div class="record-score">
-                <span class="score-label">总分</span>
-                <span class="score-value">{{ formatOverallScore(record.overall_score) }}</span>
+              <div v-if="record.dimensions?.length" class="record-stats-section">
+                <div class="record-overall-score">
+                  <span class="score-num">{{ formatOverallScore(record.overall_score) }}</span>
+                  <span class="score-unit">综合得分</span>
+                </div>
+                <div class="dimension-grid">
+                  <div
+                    v-for="dimension in record.dimensions"
+                    :key="dimension.key"
+                    class="dimension-stat"
+                  >
+                    <div class="dimension-line">
+                      <span class="dim-label">{{ dimension.label }}</span>
+                      <span class="dim-val">{{ formatDimensionScore(dimension.score) }}</span>
+                    </div>
+                    <div class="dim-progress-bg">
+                      <div class="dim-progress-fill" :style="{ width: `${dimension.score}%` }"></div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div class="record-tags">
-              <a-tag>{{ getInterviewModeLabel(record.interview_mode) }}</a-tag>
-              <a-tag>{{ record.position }}</a-tag>
-              <a-tag>{{ record.round }}</a-tag>
-              <a-tag :color="getStatusColor(record.status)">
-                {{ getStatusLabel(record.status) }}
-              </a-tag>
-            </div>
-
-            <div v-if="record.dimensions?.length" class="dimension-list">
-              <div
-                v-for="dimension in record.dimensions"
-                :key="dimension.key"
-                class="dimension-item"
-              >
-                <span class="dimension-label">{{ dimension.label }}</span>
-                <span class="dimension-value">{{ formatDimensionScore(dimension.score) }}</span>
+            <div class="record-footer">
+              <div class="footer-actions">
+                <a-button @click="continueInterview(record)">
+                  <template #icon><PlayCircleOutlined /></template>
+                  继续面试
+                </a-button>
+                <a-button v-if="record.has_result" type="primary" @click="openInterviewResult(record)">
+                  <template #icon><FileSearchOutlined /></template>
+                  查看报告
+                </a-button>
               </div>
             </div>
-          </div>
-
-          <div class="record-actions">
-            <a-button @click="continueInterview(record)">继续面试</a-button>
-            <a-button v-if="record.has_result" type="primary" @click="openInterviewResult(record)">
-              查看结果
-            </a-button>
           </div>
         </div>
       </div>
@@ -111,6 +189,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
 import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
+import {
+  SyncOutlined,
+  PlayCircleOutlined,
+  FileSearchOutlined
+} from '@ant-design/icons-vue'
 
 import { interviewHistoryApi } from '@/apis/interview_history'
 import { useUserStore } from '@/stores/user'
@@ -130,6 +213,14 @@ const userSelectionReady = ref(false)
 let chartInstance = null
 
 const records = computed(() => historyPayload.value?.records || [])
+const profile = computed(
+  () =>
+    historyPayload.value?.profile || {
+      top_weakness_dimensions: [],
+      latest_focus: [],
+      pending_practice_count: 0
+    }
+)
 const targetUser = computed(() => historyPayload.value?.target_user || null)
 const chartCategories = computed(() => historyPayload.value?.chart?.categories || [])
 const chartSeries = computed(() => historyPayload.value?.chart?.series || [])
@@ -227,7 +318,7 @@ const buildChartOption = () => {
     },
     grid: {
       left: 20,
-      right: 20,
+      right: 40,
       top: 50,
       bottom: 20,
       containLabel: true
@@ -334,200 +425,439 @@ onBeforeUnmount(() => {
 <style lang="less" scoped>
 .interview-records-view {
   min-height: 100%;
-  padding: 20px;
+  width: 100%;
+  padding: 24px;
   background: var(--gray-50);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
 .panel-card {
   background: var(--gray-0);
   border: 1px solid var(--gray-200);
   border-radius: 16px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px var(--shadow-1);
+
+  &:hover {
+    box-shadow: 0 4px 12px var(--shadow-2);
+  }
 }
 
-.page-toolbar,
-.section-header,
-.record-top,
-.record-item,
-.record-actions {
+.page-toolbar {
   display: flex;
-}
-
-.page-toolbar,
-.section-header {
   align-items: center;
   justify-content: space-between;
+  padding: 24px;
+  flex-wrap: wrap;
   gap: 16px;
-  padding: 16px 20px;
 }
 
-.toolbar-title,
-.section-title,
-.record-title {
-  color: var(--gray-900);
-  font-weight: 600;
+.page-toolbar > :first-child {
+  flex: 1 1 320px;
+  min-width: 0;
 }
 
 .toolbar-title {
-  font-size: 18px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--gray-900);
+  line-height: 1.3;
 }
 
-.toolbar-subtitle,
-.section-subtitle,
-.record-meta,
-.score-label,
-.dimension-label {
-  color: var(--gray-500);
+.toolbar-subtitle {
   font-size: 13px;
+  color: var(--gray-500);
+  margin-top: 6px;
+  line-height: 1.5;
+  word-break: break-word;
 }
 
 .toolbar-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
   gap: 12px;
+  margin-left: auto;
 }
 
-.user-select {
-  width: 260px;
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1.1fr;
+  gap: 20px;
 }
 
-.chart-card,
-.records-card {
-  padding: 0;
+.section-header {
+  padding: 20px 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--gray-800);
+}
+
+.section-subtitle {
+  font-size: 12px;
+  color: var(--gray-500);
+  margin-top: 6px;
+  line-height: 1.5;
 }
 
 .growth-chart {
   width: 100%;
-  height: 360px;
-  padding: 0 12px 16px;
+  height: 320px;
+  padding: 0 16px 20px;
 }
 
-.state-panel.compact {
-  min-height: 240px;
+.profile-content {
+  padding: 0 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.profile-section__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-700);
+  margin-bottom: 12px;
+}
+
+.profile-chip-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.profile-chip {
+  padding: 12px;
+  background: var(--main-40);
+  border-radius: 12px;
+  border: 1px solid var(--main-100);
+}
+
+.profile-chip__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.profile-chip__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--main-800);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-chip__score {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--main-600);
+}
+
+.profile-chip__meta {
+  font-size: 11px;
+  color: var(--main-500);
+}
+
+.profile-focus-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.profile-focus-item {
+  padding: 12px;
+  background: var(--gray-25);
+  border-radius: 12px;
+  border: 1px solid var(--gray-150);
+}
+
+.profile-focus-item__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-800);
+  margin-bottom: 4px;
+}
+
+.profile-focus-item__desc {
+  font-size: 12px;
+  color: var(--gray-600);
+  line-height: 1.5;
+}
+
+/* Records List */
+.records-stats {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 24px;
+  gap: 16px;
+  background: var(--gray-50);
+  padding: 6px 16px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--gray-500);
+}
+
+.stat-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--gray-800);
+}
+
+.stat-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--gray-200);
 }
 
 .records-list {
+  padding: 0 24px 24px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 0 20px 20px;
-}
-
-.record-item {
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 16px;
-  border: 1px solid var(--gray-150);
-  border-radius: 14px;
-  background: var(--gray-25);
-}
-
-.record-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.record-top {
-  justify-content: space-between;
   gap: 16px;
 }
 
-.record-title {
-  font-size: 16px;
-}
-
-.record-meta {
+.record-item {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 6px;
+  background: var(--gray-0);
+  border: 1px solid var(--gray-150);
+  border-radius: 14px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: var(--main-200);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px var(--shadow-1);
+  }
 }
 
-.record-score {
-  min-width: 64px;
-  text-align: right;
+.record-status-indicator {
+  width: 4px;
+  flex-shrink: 0;
+  background: var(--gray-300);
+
+  &.completed { background: var(--color-success-500); }
+  &.in_progress { background: var(--main-400); }
+  &.generating { background: var(--color-info-500); }
+  &.failed { background: var(--color-error-500); }
 }
 
-.score-value {
-  display: block;
+.record-content {
+  flex: 1;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.record-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.record-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--gray-900);
+  margin: 0;
+}
+
+.record-time-info {
   margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.time-item {
+  font-size: 12px;
+  color: var(--gray-500);
+}
+
+.time-separator {
+  color: var(--gray-300);
+}
+
+.record-badge-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tag-flat {
+  margin: 0;
+  border: none;
+  background: var(--gray-100);
+  color: var(--gray-600);
+  border-radius: 4px;
+  padding: 2px 10px;
+}
+
+.record-stats-section {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  background: var(--gray-25);
+  padding: 16px;
+  border-radius: 12px;
+}
+
+.record-overall-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 80px;
+  text-align: center;
+}
+
+.score-num {
+  font-size: 32px;
+  font-weight: 800;
   color: var(--main-color);
-  font-size: 24px;
-  font-weight: 700;
   line-height: 1;
 }
 
-.record-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
+.score-unit {
+  font-size: 11px;
+  color: var(--gray-500);
+  margin-top: 4px;
+  white-space: nowrap;
 }
 
-.dimension-list {
+.dimension-grid {
+  flex: 1;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 14px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
 }
 
-.dimension-item {
+.dimension-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dimension-line {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--gray-150);
-  border-radius: 10px;
-  background: var(--gray-0);
+  align-items: center;
 }
 
-.dimension-value {
+.dim-label {
+  font-size: 12px;
+  color: var(--gray-600);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dim-val {
+  font-size: 13px;
+  font-weight: 700;
   color: var(--gray-800);
-  font-size: 14px;
-  font-weight: 600;
 }
 
-.record-actions {
-  flex-shrink: 0;
-  flex-direction: column;
-  gap: 10px;
+.dim-progress-bg {
+  height: 4px;
+  background: var(--gray-200);
+  border-radius: 2px;
+  overflow: hidden;
 }
 
-@media (max-width: 960px) {
+.dim-progress-fill {
+  height: 100%;
+  background: var(--main-400);
+  border-radius: 2px;
+}
+
+.record-footer {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--gray-50);
+  padding-top: 12px;
+}
+
+.footer-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.state-panel.compact {
+  min-height: 200px;
+}
+
+@media (max-width: 1200px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .dimension-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .interview-records-view {
+    padding: 16px;
+  }
+
   .page-toolbar,
-  .section-header,
-  .record-top,
-  .record-item {
+  .section-header {
+    padding: 16px;
+  }
+
+  .record-header-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .record-stats-section {
     flex-direction: column;
     align-items: stretch;
+    gap: 16px;
   }
 
-  .toolbar-actions {
-    flex-direction: column;
-    align-items: stretch;
+  .record-overall-score {
+    flex-direction: row;
+    gap: 12px;
+    justify-content: flex-start;
   }
 
-  .user-select {
+  .dimension-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .records-stats {
     width: 100%;
-  }
-
-  .record-score {
-    text-align: left;
-  }
-
-  .dimension-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .record-actions {
-    width: 100%;
+    justify-content: center;
   }
 }
 </style>

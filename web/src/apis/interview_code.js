@@ -3,6 +3,7 @@
 export const interviewCodeApi = {
   getCodingSession: (threadId) => apiGet(`/api/interview/${threadId}/coding-session`),
   getInterviewResult: (threadId) => apiGet(`/api/interview/${threadId}/result`),
+  getImprovementPlan: (threadId) => apiGet(`/api/interview/${threadId}/improvement-plan`),
   finalizeInterviewResult: (threadId, payload = {}) =>
     apiPost(`/api/interview/${threadId}/result/finalize`, payload),
   startCodingSession: (threadId, payload = {}) =>

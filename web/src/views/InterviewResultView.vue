@@ -81,6 +81,90 @@
           </div>
         </div>
 
+        <div v-if="improvementPlan" class="panel-card">
+          <div class="panel-header">
+            <div>
+              <div class="panel-title">个性化提升路径</div>
+              <div class="panel-meta">
+                <span>围绕本轮表现生成短板诊断、练习任务与下次评估重点</span>
+              </div>
+            </div>
+            <a-tag color="processing">练习-评估-提升</a-tag>
+          </div>
+
+          <div class="improvement-layout">
+            <section v-if="improvementPlan.weaknesses?.length" class="improvement-section">
+              <div class="improvement-section__title">短板诊断</div>
+              <div class="improvement-grid">
+                <div
+                  v-for="item in improvementPlan.weaknesses"
+                  :key="`${item.dimension_key}-${item.title}`"
+                  class="improvement-card"
+                >
+                  <div class="improvement-card__top">
+                    <span class="improvement-card__title">{{ item.title }}</span>
+                    <a-tag color="default">{{ getDimensionLabel(item.dimension_key) }}</a-tag>
+                  </div>
+                  <div class="improvement-card__desc">{{ item.reason }}</div>
+                </div>
+              </div>
+            </section>
+
+            <section v-if="improvementPlan.recommended_resources?.length" class="improvement-section">
+              <div class="improvement-section__title">推荐资源</div>
+              <div class="resource-list">
+                <div
+                  v-for="item in improvementPlan.recommended_resources"
+                  :key="`${item.resource_type}-${item.title}-${item.source_ref}`"
+                  class="resource-item"
+                >
+                  <div class="resource-item__top">
+                    <span class="resource-item__title">{{ item.title }}</span>
+                    <a-tag :color="getResourceTagColor(item.resource_type)">
+                      {{ getResourceTypeLabel(item.resource_type) }}
+                    </a-tag>
+                  </div>
+                  <div class="resource-item__summary">{{ item.summary }}</div>
+                </div>
+              </div>
+            </section>
+
+            <section v-if="improvementPlan.practice_tasks?.length" class="improvement-section">
+              <div class="improvement-section__title">本周练习任务</div>
+              <div class="task-list">
+                <div
+                  v-for="item in improvementPlan.practice_tasks"
+                  :key="`${item.action_type}-${item.title}`"
+                  class="task-item"
+                >
+                  <div>
+                    <div class="task-item__title">{{ item.title }}</div>
+                    <div class="task-item__objective">{{ item.objective }}</div>
+                  </div>
+                  <div class="task-item__meta">{{ item.estimated_minutes }} 分钟</div>
+                </div>
+              </div>
+            </section>
+
+            <section v-if="improvementPlan.next_assessment_focus?.length" class="improvement-section">
+              <div class="improvement-section__title">下次评估重点</div>
+              <div class="focus-list">
+                <div
+                  v-for="item in improvementPlan.next_assessment_focus"
+                  :key="`${item.dimension_key}-${item.title}`"
+                  class="focus-item"
+                >
+                  <div class="focus-item__title">
+                    {{ item.title }}
+                    <span class="focus-item__tag">{{ getDimensionLabel(item.dimension_key) }}</span>
+                  </div>
+                  <div class="focus-item__desc">{{ item.focus }}</div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+
         <div class="panel-card" v-if="summaryMarkdown">
           <div class="panel-header">
             <div class="panel-title">综合结论</div>
@@ -168,6 +252,7 @@ const themeStore = useThemeStore()
 const loading = ref(false)
 const finalizing = ref(false)
 const payload = ref(null)
+const improvementPlanPayload = ref(null)
 
 const threadId = computed(() => String(route.query.threadId || '').trim())
 const selectedPosition = computed(() => String(route.query.position || '').trim() || '后端工程师')
@@ -193,6 +278,9 @@ const parseThreadTitle = (title) => {
 const result = computed(() => payload.value?.result || null)
 const codingSession = computed(() => payload.value?.coding_session || null)
 const scorecard = computed(() => result.value?.scorecard || null)
+const improvementPlan = computed(
+  () => improvementPlanPayload.value?.improvement_plan || result.value?.improvement_plan || null
+)
 const expressionAnalysis = computed(() => result.value?.expression_analysis || null)
 const summaryMarkdown = computed(() =>
   String(result.value?.summary_markdown || '')
@@ -264,11 +352,48 @@ const judgeStatusColor = computed(() => {
 
 const judgeStatusLabel = computed(() => judgeStatusLabelMap[judgeStatus.value] || judgeStatus.value)
 
+const dimensionLabelMap = {
+  technical_competence: '技术能力',
+  problem_solving: '问题解决',
+  communication: '沟通表达',
+  soft_skills: '综合素质'
+}
+
+const getDimensionLabel = (key) => dimensionLabelMap[key] || key || '待分析'
+
+const getResourceTypeLabel = (type) => {
+  const labelMap = {
+    knowledge: '知识点',
+    interview_question: '面试题',
+    communication: '沟通表达'
+  }
+  return labelMap[type] || type || '资源'
+}
+
+const getResourceTagColor = (type) => {
+  const colorMap = {
+    knowledge: 'blue',
+    interview_question: 'gold',
+    communication: 'green'
+  }
+  return colorMap[type] || 'default'
+}
+
+const loadImprovementPlan = async () => {
+  if (!threadId.value) return
+  try {
+    improvementPlanPayload.value = await interviewCodeApi.getImprovementPlan(threadId.value)
+  } catch (error) {
+    improvementPlanPayload.value = null
+  }
+}
+
 const loadResult = async () => {
   if (!threadId.value) return
   loading.value = true
   try {
     payload.value = await interviewCodeApi.getInterviewResult(threadId.value)
+    await loadImprovementPlan()
   } catch (error) {
     message.error(error.message || '加载面试结果失败')
   } finally {
@@ -285,6 +410,7 @@ const finalizeResult = async (force = false) => {
       interview_round: displayRound.value,
       force
     })
+    await loadImprovementPlan()
     if ((payload.value?.result || {}).status === 'completed') {
       router.replace(resultRoute.value)
       message.success(force ? '面试结果已重新生成' : '面试结果已生成')
@@ -444,6 +570,82 @@ onMounted(async () => {
   margin-top: 14px;
 }
 
+.improvement-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 14px;
+}
+
+.improvement-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.improvement-section__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-800);
+}
+
+.improvement-grid,
+.resource-list,
+.task-list,
+.focus-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.improvement-card,
+.resource-item,
+.task-item,
+.focus-item {
+  padding: 14px;
+  border: 1px solid var(--gray-150);
+  border-radius: 12px;
+  background: var(--gray-25);
+}
+
+.improvement-card__top,
+.resource-item__top,
+.task-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.improvement-card__title,
+.resource-item__title,
+.task-item__title,
+.focus-item__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+.improvement-card__desc,
+.resource-item__summary,
+.task-item__objective,
+.focus-item__desc {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--gray-600);
+}
+
+.task-item__meta,
+.focus-item__tag {
+  color: var(--gray-500);
+  font-size: 12px;
+}
+
+.focus-item__tag {
+  margin-left: 8px;
+}
+
 .expression-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -548,6 +750,12 @@ onMounted(async () => {
 
   .summary-value {
     text-align: left;
+  }
+
+  .improvement-card__top,
+  .resource-item__top,
+  .task-item {
+    flex-direction: column;
   }
 }
 </style>

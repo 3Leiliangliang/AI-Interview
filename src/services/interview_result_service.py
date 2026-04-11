@@ -9,6 +9,7 @@ from langchain.messages import HumanMessage
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src import knowledge_base
 from src.agents import agent_manager
 from src.repositories.conversation_repository import ConversationRepository
 from src.services.chat_stream_service import (
@@ -16,7 +17,7 @@ from src.services.chat_stream_service import (
     _resolve_agent_config,
     save_messages_from_langgraph_state,
 )
-from src.services.interview_coding_service import get_coding_session_from_metadata
+from src.services.interview_coding_service import get_coding_session_from_metadata, list_imported_problem_packages
 from src.storage.postgres.models_business import User
 from src.utils.datetime_utils import format_utc_datetime
 from src.utils.logging_config import logger
@@ -63,6 +64,66 @@ HEDGE_TERMS = ("可能", "也许", "大概", "应该", "不太确定", "我猜",
 ASSERTIVE_TERMS = ("我会", "我能", "我负责", "我主导", "最终", "落地", "推进", "优化")
 SENTENCE_SPLIT_PATTERN = re.compile(r"[。！？；]+")
 PAUSE_PUNCTUATION = "，、。；！？"
+DIMENSION_DISPLAY_CONFIG = {
+    "technical_competence": {
+        "label": "技术能力",
+        "weakness_title": "技术基础还需要补强",
+        "practice_title": "梳理关键知识点",
+        "practice_action": "knowledge_review",
+        "resource_type": "knowledge",
+        "focus_title": "技术细节表达",
+    },
+    "problem_solving": {
+        "label": "问题解决",
+        "weakness_title": "题目拆解与实现稳定性偏弱",
+        "practice_title": "完成定向算法练习",
+        "practice_action": "coding_practice",
+        "resource_type": "interview_question",
+        "focus_title": "解题思路完整度",
+    },
+    "communication": {
+        "label": "沟通表达",
+        "weakness_title": "表达清晰度与说服力需提升",
+        "practice_title": "做一次结构化表达练习",
+        "practice_action": "communication_practice",
+        "resource_type": "communication",
+        "focus_title": "表达结构与自信度",
+    },
+    "soft_skills": {
+        "label": "综合素质",
+        "weakness_title": "岗位匹配表达不够充分",
+        "practice_title": "复盘项目经历亮点",
+        "practice_action": "experience_review",
+        "resource_type": "knowledge",
+        "focus_title": "项目复盘与岗位匹配",
+    },
+}
+COMMUNICATION_RESOURCE_LIBRARY = {
+    "communication": [
+        {
+            "title": "STAR 法则回答模板",
+            "summary": "围绕情境、任务、行动、结果组织回答，减少绕圈和信息缺失。",
+            "source_ref": "internal://communication/star-method",
+        },
+        {
+            "title": "高频追问下的结构化表达清单",
+            "summary": "练习先结论、后细节、再复盘的表达节奏，提升回答的条理性。",
+            "source_ref": "internal://communication/structured-answer-checklist",
+        },
+    ],
+    "soft_skills": [
+        {
+            "title": "项目亮点提炼指南",
+            "summary": "把项目经历拆成目标、挑战、动作、结果，便于展示岗位匹配度。",
+            "source_ref": "internal://communication/project-storytelling",
+        }
+    ],
+}
+LOW_SCORE_THRESHOLD = 75
+WEAKNESS_LIMIT = 3
+RESOURCE_LIMIT = 5
+PRACTICE_LIMIT = 3
+HISTORY_PROFILE_WINDOW = 5
 
 
 def _normalize_score_value(value: Any) -> int | None:
@@ -197,6 +258,120 @@ def _normalize_expression_analysis(value: Any) -> dict[str, Any] | None:
     if not any(normalized.get(key) for key in ("speech_rate", "pause_control", "clarity", "confidence")):
         return None
 
+    return normalized
+
+
+def _normalize_improvement_plan(value: Any) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        return None
+
+    def normalize_weaknesses(items: Any) -> list[dict[str, str]]:
+        if not isinstance(items, list):
+            return []
+        normalized: list[dict[str, str]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            dimension_key = _normalize_dimension_key(item.get("dimension_key"))
+            if dimension_key not in DIMENSION_DISPLAY_CONFIG:
+                continue
+            title = str(item.get("title") or "").strip()
+            reason = str(item.get("reason") or "").strip()
+            if not title or not reason:
+                continue
+            normalized.append(
+                {
+                    "dimension_key": dimension_key,
+                    "title": title,
+                    "reason": reason,
+                }
+            )
+        return normalized
+
+    def normalize_resources(items: Any) -> list[dict[str, str]]:
+        if not isinstance(items, list):
+            return []
+        normalized: list[dict[str, str]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            resource_type = str(item.get("resource_type") or "").strip()
+            if resource_type not in {"knowledge", "interview_question", "communication"}:
+                continue
+            title = str(item.get("title") or "").strip()
+            summary = str(item.get("summary") or "").strip()
+            if not title or not summary:
+                continue
+            normalized.append(
+                {
+                    "resource_type": resource_type,
+                    "title": title,
+                    "summary": summary,
+                    "source_type": str(item.get("source_type") or "internal").strip() or "internal",
+                    "source_id": str(item.get("source_id") or "").strip(),
+                    "source_ref": str(item.get("source_ref") or "").strip(),
+                }
+            )
+        return normalized
+
+    def normalize_practice_tasks(items: Any) -> list[dict[str, Any]]:
+        if not isinstance(items, list):
+            return []
+        normalized: list[dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title") or "").strip()
+            objective = str(item.get("objective") or "").strip()
+            action_type = str(item.get("action_type") or "").strip()
+            estimated_minutes = item.get("estimated_minutes")
+            if not title or not objective or not action_type:
+                continue
+            try:
+                estimated_value = max(5, int(estimated_minutes))
+            except (TypeError, ValueError):
+                estimated_value = 30
+            normalized.append(
+                {
+                    "title": title,
+                    "objective": objective,
+                    "action_type": action_type,
+                    "estimated_minutes": estimated_value,
+                }
+            )
+        return normalized
+
+    def normalize_focus(items: Any) -> list[dict[str, str]]:
+        if not isinstance(items, list):
+            return []
+        normalized: list[dict[str, str]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            dimension_key = _normalize_dimension_key(item.get("dimension_key"))
+            if dimension_key not in DIMENSION_DISPLAY_CONFIG:
+                continue
+            title = str(item.get("title") or "").strip()
+            focus = str(item.get("focus") or item.get("description") or "").strip()
+            if not title or not focus:
+                continue
+            normalized.append(
+                {
+                    "dimension_key": dimension_key,
+                    "title": title,
+                    "focus": focus,
+                }
+            )
+        return normalized
+
+    normalized = {
+        "weaknesses": normalize_weaknesses(value.get("weaknesses")),
+        "recommended_resources": normalize_resources(value.get("recommended_resources")),
+        "practice_tasks": normalize_practice_tasks(value.get("practice_tasks")),
+        "next_assessment_focus": normalize_focus(value.get("next_assessment_focus")),
+    }
+    if not any(normalized.values()):
+        return None
     return normalized
 
 
@@ -579,6 +754,7 @@ def _build_result_from_message(message, conversation, coding_session: dict[str, 
         "source_message_id": getattr(message, "id", None),
         "summary_markdown": _strip_scorecard_block(getattr(message, "content", "") or ""),
         "scorecard": scorecard,
+        "improvement_plan": None,
     }
 
 
@@ -603,6 +779,7 @@ def _normalize_result_payload(value: Any, *, conversation, coding_session: dict[
         "scorecard": scorecard,
         "error_message": str(value.get("error_message") or "").strip(),
         "expression_analysis": _normalize_expression_analysis(value.get("expression_analysis")),
+        "improvement_plan": _normalize_improvement_plan(value.get("improvement_plan")),
     }
 
     if payload["status"] == "completed" and payload["scorecard"]:
@@ -657,6 +834,380 @@ def _extract_dimension_scores(scorecard: dict[str, Any] | None) -> dict[str, int
         if score_bucket:
             values[key] = round(sum(score_bucket) / len(score_bucket))
     return values
+
+
+def _dimension_sort_key(item: tuple[str, int | None]) -> tuple[int, int]:
+    key, score = item
+    normalized = score if score is not None else -1
+    return (normalized, list(DIMENSION_DISPLAY_CONFIG.keys()).index(key))
+
+
+def _build_weakness_reason(
+    *,
+    dimension_key: str,
+    score: int | None,
+    scorecard: dict[str, Any] | None,
+    expression_analysis: dict[str, Any] | None,
+    coding_session: dict[str, Any] | None,
+) -> str:
+    config = DIMENSION_DISPLAY_CONFIG[dimension_key]
+    risks = _normalize_string_list((scorecard or {}).get("risks"))
+    suggestions = _normalize_string_list((scorecard or {}).get("suggestions"))
+    related_hint = next(
+        (
+            item
+            for item in [*risks, *suggestions]
+            if config["label"][:2] in item or dimension_key == _normalize_dimension_key(item)
+        ),
+        "",
+    )
+    if related_hint:
+        return related_hint
+    if dimension_key == "communication" and expression_analysis:
+        summary = str(expression_analysis.get("summary") or "").strip()
+        if summary:
+            return summary
+    if dimension_key == "problem_solving":
+        judge_status = str((coding_session or {}).get("judge_status") or "").strip()
+        judge_score = (coding_session or {}).get("judge_result") or {}
+        judge_numeric = _normalize_score_value(judge_score.get("score"))
+        if judge_status and judge_status != "ACCEPTED":
+            return f"代码考核当前判题结果为 {judge_status}，说明解题稳定性和实现完整度还有提升空间。"
+        if judge_numeric is not None and judge_numeric < 80:
+            return f"代码题得分为 {judge_numeric}，建议继续强化题目拆解、边界处理和实现细节。"
+    score_text = f"当前维度得分约为 {score} 分，" if score is not None else ""
+    return f"{score_text}在{config['label']}上的表现相对其他维度偏弱，建议优先安排专项练习。"
+
+
+async def _select_knowledge_resources(
+    *,
+    user_id: str,
+    keywords: list[str],
+) -> list[dict[str, str]]:
+    if not keywords:
+        return []
+
+    resources: list[dict[str, str]] = []
+    seen_refs: set[str] = set()
+    databases = (await knowledge_base.get_databases_by_user_id(user_id)).get("databases", [])
+    for database in databases:
+        db_id = str(database.get("db_id") or "").strip()
+        if not db_id:
+            continue
+        db_info = await knowledge_base.get_database_info(db_id)
+        if not db_info:
+            continue
+        sample_questions = [str(item).strip() for item in (db_info.get("sample_questions") or []) if str(item).strip()]
+        matches = [item for item in sample_questions if any(keyword.lower() in item.lower() for keyword in keywords)]
+        if not matches and sample_questions:
+            matches = sample_questions[:1]
+        for question in matches[:2]:
+            ref = f"knowledge://{db_id}#sample_question"
+            if ref in seen_refs:
+                continue
+            seen_refs.add(ref)
+            resources.append(
+                {
+                    "resource_type": "knowledge",
+                    "title": f"{db_info.get('name') or '知识库'} · 推荐知识点",
+                    "summary": question,
+                    "source_type": "knowledge_base",
+                    "source_id": db_id,
+                    "source_ref": ref,
+                }
+            )
+            if len(resources) >= RESOURCE_LIMIT:
+                return resources
+    return resources
+
+
+def _select_problem_resources(
+    *,
+    target_position: str,
+    difficulty_level: str | None,
+    keywords: list[str],
+) -> list[dict[str, str]]:
+    package_payload = list_imported_problem_packages()
+    problems = package_payload.get("problems") or []
+    normalized_position = str(target_position or "").strip().lower()
+    normalized_difficulty = str(difficulty_level or "").strip().lower()
+
+    ranked: list[dict[str, Any]] = []
+    for item in problems:
+        title = str(item.get("title") or "").strip()
+        summary = str(item.get("summary") or "").strip()
+        topic_tags = [str(tag).strip().lower() for tag in (item.get("topic_tags") or []) if str(tag).strip()]
+        position_tag = str(item.get("primary_position_tag") or "").strip().lower()
+        difficulty_tag = str(item.get("difficulty_tag") or "").strip().lower()
+        score = 0
+        if normalized_position:
+            if ("前端" in normalized_position and position_tag == "frontend") or (
+                "后端" in normalized_position and position_tag == "backend"
+            ):
+                score += 3
+        if normalized_difficulty and difficulty_tag == normalized_difficulty:
+            score += 2
+        if any(keyword.lower() in f"{title} {summary}".lower() for keyword in keywords):
+            score += 2
+        if any(keyword.lower() in topic_tags for keyword in keywords):
+            score += 1
+        if score <= 0:
+            continue
+        ranked.append({"score": score, "item": item})
+
+    ranked.sort(key=lambda entry: (-entry["score"], str(entry["item"].get("title") or "")))
+    selected: list[dict[str, str]] = []
+    for entry in ranked[:2]:
+        item = entry["item"]
+        selected.append(
+            {
+                "resource_type": "interview_question",
+                "title": str(item.get("title") or "推荐练习题").strip(),
+                "summary": str(item.get("summary") or "结合当前短板做一轮定向代码练习。").strip(),
+                "source_type": "problem_package",
+                "source_id": str(item.get("package_path") or "").strip(),
+                "source_ref": (
+                    f"problem-package://{str(item.get('package_path') or '').strip()}#problem-{int(item.get('problem_index') or 0)}"
+                ),
+            }
+        )
+    return selected
+
+
+def _select_communication_resources(dimension_key: str) -> list[dict[str, str]]:
+    items = COMMUNICATION_RESOURCE_LIBRARY.get(dimension_key) or []
+    return [
+        {
+            "resource_type": "communication",
+            "title": item["title"],
+            "summary": item["summary"],
+            "source_type": "internal_article",
+            "source_id": dimension_key,
+            "source_ref": item["source_ref"],
+        }
+        for item in items
+    ]
+
+
+def _build_practice_task(dimension_key: str, reason: str) -> dict[str, Any]:
+    config = DIMENSION_DISPLAY_CONFIG[dimension_key]
+    minute_map = {
+        "technical_competence": 35,
+        "problem_solving": 45,
+        "communication": 20,
+        "soft_skills": 25,
+    }
+    return {
+        "title": config["practice_title"],
+        "objective": reason,
+        "action_type": config["practice_action"],
+        "estimated_minutes": minute_map.get(dimension_key, 30),
+    }
+
+
+def _build_next_focus(dimension_key: str, score: int | None) -> dict[str, str]:
+    config = DIMENSION_DISPLAY_CONFIG[dimension_key]
+    if dimension_key == "communication":
+        focus = "下次评估重点观察回答是否先给结论、再补充细节，并保持稳定语速与停顿。"
+    elif dimension_key == "problem_solving":
+        focus = "下次评估重点观察题目拆解、边界覆盖和代码实现是否更加完整。"
+    elif dimension_key == "technical_competence":
+        focus = "下次评估重点观察是否能准确解释基础概念、原理差异与实际应用场景。"
+    else:
+        focus = "下次评估重点观察是否能用具体项目经历支撑岗位匹配和团队协作判断。"
+    if score is not None:
+        focus = f"{focus} 当前该维度约 {score} 分。"
+    return {
+        "dimension_key": dimension_key,
+        "title": config["focus_title"],
+        "focus": focus,
+    }
+
+
+async def _generate_improvement_plan(
+    *,
+    conversation,
+    scorecard: dict[str, Any] | None,
+    expression_analysis: dict[str, Any] | None,
+    coding_session: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not isinstance(scorecard, dict):
+        return None
+
+    dimension_scores = _extract_dimension_scores(scorecard)
+    ordered_scores = sorted(dimension_scores.items(), key=_dimension_sort_key)
+    weakness_candidates: list[tuple[str, int | None]] = []
+    for dimension_key, score in ordered_scores:
+        if score is None or score <= LOW_SCORE_THRESHOLD:
+            weakness_candidates.append((dimension_key, score))
+    if not weakness_candidates:
+        weakness_candidates = ordered_scores[:2]
+
+    weaknesses: list[dict[str, str]] = []
+    recommended_resources: list[dict[str, str]] = []
+    practice_tasks: list[dict[str, Any]] = []
+    next_focus: list[dict[str, str]] = []
+    seen_resource_refs: set[str] = set()
+
+    target_position = str(
+        (coding_session or {}).get("target_position")
+        or (scorecard or {}).get("role")
+        or (conversation.extra_metadata or {}).get("target_position")
+        or ""
+    ).strip()
+    difficulty_level = str((coding_session or {}).get("difficulty_level") or "").strip()
+    dimension_keywords = {
+        "technical_competence": ["基础", "原理", "技术", "知识点"],
+        "problem_solving": ["算法", "题解", "边界", "复杂度"],
+        "communication": ["表达", "沟通", "结构化"],
+        "soft_skills": ["项目", "协作", "亮点", "岗位"],
+    }
+
+    for dimension_key, score in weakness_candidates[:WEAKNESS_LIMIT]:
+        config = DIMENSION_DISPLAY_CONFIG[dimension_key]
+        reason = _build_weakness_reason(
+            dimension_key=dimension_key,
+            score=score,
+            scorecard=scorecard,
+            expression_analysis=expression_analysis,
+            coding_session=coding_session,
+        )
+        weaknesses.append(
+            {
+                "dimension_key": dimension_key,
+                "title": config["weakness_title"],
+                "reason": reason,
+            }
+        )
+        practice_tasks.append(_build_practice_task(dimension_key, reason))
+        next_focus.append(_build_next_focus(dimension_key, score))
+
+        resources: list[dict[str, str]]
+        if dimension_key == "technical_competence":
+            resources = await _select_knowledge_resources(
+                user_id=str(conversation.user_id),
+                keywords=dimension_keywords[dimension_key],
+            )
+        elif dimension_key == "problem_solving":
+            resources = _select_problem_resources(
+                target_position=target_position,
+                difficulty_level=difficulty_level,
+                keywords=dimension_keywords[dimension_key],
+            )
+        else:
+            resources = _select_communication_resources(dimension_key)
+
+        for resource in resources:
+            ref = str(resource.get("source_ref") or "").strip()
+            if ref and ref in seen_resource_refs:
+                continue
+            if ref:
+                seen_resource_refs.add(ref)
+            recommended_resources.append(resource)
+            if len(recommended_resources) >= RESOURCE_LIMIT:
+                break
+
+    return {
+        "weaknesses": weaknesses[:WEAKNESS_LIMIT],
+        "recommended_resources": recommended_resources[:RESOURCE_LIMIT],
+        "practice_tasks": practice_tasks[:PRACTICE_LIMIT],
+        "next_assessment_focus": next_focus[:WEAKNESS_LIMIT],
+    }
+
+
+async def _ensure_result_enrichment(
+    *,
+    db: AsyncSession,
+    thread_id: str,
+    current_user_id: str,
+    conversation,
+    result_payload: dict[str, Any] | None,
+    coding_session: dict[str, Any] | None,
+    messages: list[Any] | None,
+    persist_if_missing: bool,
+) -> dict[str, Any] | None:
+    if not isinstance(result_payload, dict):
+        return result_payload
+
+    enriched = dict(result_payload)
+    expression_analysis = _normalize_expression_analysis(enriched.get("expression_analysis")) or _build_expression_analysis(
+        conversation=conversation,
+        scorecard=enriched.get("scorecard"),
+        messages=messages,
+    )
+    if expression_analysis:
+        enriched["expression_analysis"] = expression_analysis
+
+    if not _normalize_improvement_plan(enriched.get("improvement_plan")) and enriched.get("status") == "completed":
+        improvement_plan = await _generate_improvement_plan(
+            conversation=conversation,
+            scorecard=enriched.get("scorecard"),
+            expression_analysis=expression_analysis,
+            coding_session=coding_session,
+        )
+        if improvement_plan:
+            enriched["improvement_plan"] = improvement_plan
+            if persist_if_missing:
+                await _save_interview_result_metadata(
+                    db,
+                    thread_id=thread_id,
+                    current_user_id=current_user_id,
+                    result_payload=enriched,
+                )
+    return enriched
+
+
+def _build_result_summary(scorecard: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(scorecard, dict):
+        return {}
+    return {
+        "overall": scorecard.get("overall"),
+        "role": str(scorecard.get("role") or "").strip(),
+        "round": str(scorecard.get("round") or "").strip(),
+        "summary": str(scorecard.get("summary") or "").strip(),
+        "dimensions": list(scorecard.get("dimensions") or []),
+    }
+
+
+def _build_history_profile(records: list[dict[str, Any]]) -> dict[str, Any]:
+    completed_records = [
+        item for item in records if item.get("has_result") and item.get("status") == "completed" and item.get("improvement_plan")
+    ][:HISTORY_PROFILE_WINDOW]
+    dimension_buckets: dict[str, list[int]] = {key: [] for key in DIMENSION_DISPLAY_CONFIG}
+    low_score_counts: dict[str, int] = {key: 0 for key in DIMENSION_DISPLAY_CONFIG}
+
+    for record in completed_records:
+        for dimension in record.get("dimensions") or []:
+            key = str(dimension.get("key") or "").strip()
+            score = _normalize_score_value(dimension.get("score"))
+            if key not in dimension_buckets or score is None:
+                continue
+            dimension_buckets[key].append(score)
+            if score <= LOW_SCORE_THRESHOLD:
+                low_score_counts[key] += 1
+
+    top_weakness_dimensions = sorted(
+        [
+            {
+                "dimension_key": key,
+                "label": DIMENSION_DISPLAY_CONFIG[key]["label"],
+                "average_score": round(sum(scores) / len(scores)),
+                "low_score_count": low_score_counts[key],
+            }
+            for key, scores in dimension_buckets.items()
+            if scores
+        ],
+        key=lambda item: (item["average_score"], -item["low_score_count"]),
+    )[:3]
+
+    latest_record = completed_records[0] if completed_records else {}
+    latest_plan = latest_record.get("improvement_plan") if isinstance(latest_record, dict) else {}
+
+    return {
+        "top_weakness_dimensions": top_weakness_dimensions,
+        "latest_focus": list((latest_plan or {}).get("next_assessment_focus") or []),
+        "pending_practice_count": len((latest_plan or {}).get("practice_tasks") or []),
+    }
 
 
 async def _resolve_target_user(
@@ -878,11 +1429,15 @@ async def get_interview_result(
         coding_session=coding_session,
     )
     if _is_result_complete_enough(stored_result):
-        result_payload = dict(stored_result or {})
-        result_payload["expression_analysis"] = _build_expression_analysis(
+        result_payload = await _ensure_result_enrichment(
+            db=db,
+            thread_id=thread_id,
+            current_user_id=current_user_id,
             conversation=conversation,
-            scorecard=result_payload.get("scorecard"),
+            result_payload=dict(stored_result or {}),
+            coding_session=coding_session,
             messages=messages,
+            persist_if_missing=True,
         )
         return {
             "thread_id": conversation.thread_id,
@@ -905,10 +1460,15 @@ async def get_interview_result(
             current_user_id=current_user_id,
             result_payload=derived,
         )
-        derived["expression_analysis"] = _build_expression_analysis(
+        derived = await _ensure_result_enrichment(
+            db=db,
+            thread_id=thread_id,
+            current_user_id=current_user_id,
             conversation=conversation,
-            scorecard=derived.get("scorecard"),
+            result_payload=derived,
+            coding_session=coding_session,
             messages=messages,
+            persist_if_missing=True,
         )
         return {
             "thread_id": conversation.thread_id,
@@ -919,11 +1479,15 @@ async def get_interview_result(
         }
 
     if stored_result:
-        stored_result = dict(stored_result)
-        stored_result["expression_analysis"] = _build_expression_analysis(
+        stored_result = await _ensure_result_enrichment(
+            db=db,
+            thread_id=thread_id,
+            current_user_id=current_user_id,
             conversation=conversation,
-            scorecard=stored_result.get("scorecard"),
+            result_payload=dict(stored_result),
+            coding_session=coding_session,
             messages=messages,
+            persist_if_missing=True,
         )
 
     return {
@@ -975,7 +1539,19 @@ async def get_interview_history(
             coding_session=coding_session,
             messages=messages,
         )
-        records.append(_build_history_record(conversation=conversation, result_payload=result_payload))
+        enriched_result = await _ensure_result_enrichment(
+            db=db,
+            thread_id=conversation.thread_id,
+            current_user_id=str(target_user.id),
+            conversation=conversation,
+            result_payload=result_payload,
+            coding_session=coding_session,
+            messages=messages,
+            persist_if_missing=False,
+        )
+        record = _build_history_record(conversation=conversation, result_payload=enriched_result)
+        record["improvement_plan"] = (enriched_result or {}).get("improvement_plan")
+        records.append(record)
 
     records.sort(
         key=lambda item: (str(item.get("updated_at") or ""), str(item.get("thread_id") or "")),
@@ -989,8 +1565,30 @@ async def get_interview_history(
             "username": target_user.username,
             "role": target_user.role,
         },
+        "profile": _build_history_profile(records),
         "chart": _build_history_chart(records),
         "records": records,
+    }
+
+
+async def get_interview_improvement_plan(
+    db: AsyncSession,
+    *,
+    thread_id: str,
+    current_user_id: str,
+) -> dict[str, Any]:
+    payload = await get_interview_result(
+        db,
+        thread_id=thread_id,
+        current_user_id=current_user_id,
+    )
+    result = payload.get("result") if isinstance(payload, dict) else {}
+    scorecard = result.get("scorecard") if isinstance(result, dict) else None
+    return {
+        "thread_id": thread_id,
+        "result_status": str((result or {}).get("status") or "").strip(),
+        "scorecard_summary": _build_result_summary(scorecard),
+        "improvement_plan": (result or {}).get("improvement_plan"),
     }
 
 

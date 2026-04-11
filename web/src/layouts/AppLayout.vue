@@ -258,12 +258,14 @@ provide('settingsModal', {
         <UserInfoComponent :show-role="true" />
       </div>
     </div>
-    <router-view v-slot="{ Component, route }" id="app-router-view">
-      <keep-alive v-if="route.meta.keepAlive !== false">
-        <component :is="Component" />
-      </keep-alive>
-      <component :is="Component" v-else />
-    </router-view>
+    <main id="app-router-view" class="app-router-view">
+      <router-view v-slot="{ Component, route }">
+        <keep-alive v-if="route.meta.keepAlive !== false">
+          <component :is="Component" />
+        </keep-alive>
+        <component :is="Component" v-else />
+      </router-view>
+    </main>
 
     <!-- Debug Modal -->
     <a-modal
@@ -285,7 +287,7 @@ provide('settingsModal', {
 
 <style lang="less" scoped>
 // Less 变量定义
-@header-width: 220px;
+@header-width: 236px;
 
 .app-layout {
   display: flex;
@@ -296,15 +298,18 @@ provide('settingsModal', {
 }
 
 div.header,
-#app-router-view {
+.app-router-view {
   height: 100%;
   max-width: 100%;
-  user-select: none;
 }
 
-#app-router-view {
+.app-router-view {
   flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 .header {
@@ -320,6 +325,7 @@ div.header,
   width: @header-width;
   padding: 12px 10px;
   border-right: 1px solid var(--main-40);
+  overflow-y: auto;
   transition:
     width 0.2s ease,
     flex-basis 0.2s ease,
@@ -439,6 +445,9 @@ div.header,
 
     .text {
       font-weight: 500;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
@@ -447,6 +456,7 @@ div.header,
       display: inline-flex;
       align-items: center;
       gap: 10px;
+      min-width: 0;
     }
 
     & > svg:focus {

@@ -23,8 +23,12 @@ from src.services.interview_coding_service import (
     submit_coding_session,
     update_coding_draft,
 )
-from src.services.interview_result_service import finalize_interview_result, get_interview_result
-from src.services.interview_result_service import get_interview_history
+from src.services.interview_result_service import (
+    finalize_interview_result,
+    get_interview_history,
+    get_interview_improvement_plan,
+    get_interview_result,
+)
 
 interview = APIRouter(prefix="/interview", tags=["interview"])
 
@@ -217,6 +221,19 @@ async def get_thread_interview_result(
     db: AsyncSession = Depends(get_db),
 ):
     return await get_interview_result(
+        db,
+        thread_id=thread_id,
+        current_user_id=str(current_user.id),
+    )
+
+
+@interview.get("/{thread_id}/improvement-plan")
+async def get_thread_interview_improvement_plan(
+    thread_id: str,
+    current_user: User = Depends(get_required_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_interview_improvement_plan(
         db,
         thread_id=thread_id,
         current_user_id=str(current_user.id),
