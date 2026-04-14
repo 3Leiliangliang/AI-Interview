@@ -46,13 +46,18 @@ docker compose up -d --build
 ### 3. 面试知识库初始化说明
 
 - `.knowledge/` 目录仅作为运行时缓存，**已加入 gitignore，不需要提交到 Git**。
-- 启用知识库自动导入后，`kb-import` 容器会先将以下 GitHub 仓库克隆或更新到 `.knowledge/`，再执行现有导入流程：
-  - `JavaGuide`
-  - `reactjs-interview-questions`
-  - `Waking-Up`
+- 启用知识库自动导入后，`kb-import` 容器会先同步精选的上游面试资料到 `.knowledge/interview_sources/`，再走现有 `/knowledge/*` 文件上传、解析、分块与索引流程：
+  - `Snailclimb/JavaGuide`：后端面试、Java 基础、数据库、系统设计，以及 `docs/ai` 下的 LLM/RAG/Agent/AI Coding 内容
+  - `sudheerj/reactjs-interview-questions`：React 问答与 coding exercise
+  - `yangshun/front-end-interview-handbook`：前端面试手册、行为面试、React playbook
+  - `yangshun/tech-interview-handbook`：行为面试、编码面试准备、系统设计准备、自我介绍与简历
+  - `donnemartin/system-design-primer`：系统设计基础与经典系统设计案例
+  - `TharunKumarReddyPolu/DSA-Handbook-for-Coding-Interviews`：算法与数据结构高频题型手册
+  - `aswanth6000/nodejs-interview-questions`：Node.js 一问一答题库与进阶问答
+  - `xoraus/CrackingTheSQLInterview`：SQL 基础、事务、索引与高频 SQL 问答
 - 若 `.env` 或 `.env.prod` 中开启了 `AUTO_IMPORT_INTERVIEW_KB=true`，启动后会自动：
-  1. 拉取 `.knowledge` 下的三份面试资料
-  2. 调用现有知识库 API 导入
+  1. 同步并清洗上游 Markdown/MDX 面试资料，生成本地精选知识源
+  2. 调用现有知识库 API 导入多个知识库（JavaGuide 后端面试、AI 应用开发面试、React 面试题库、前端面试手册、通用技术面试手册、系统设计面试题库、DSA 面试手册、Node.js 面试题库、SQL 面试题库）
   3. 导入完成后写入 sentinel，后续重启默认不重复导入
 - 首次启用或更新了导入镜像后，建议执行：
 

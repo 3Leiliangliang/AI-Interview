@@ -15,33 +15,6 @@ FORCE_REINDEX="${AUTO_IMPORT_INTERVIEW_KB_FORCE_REINDEX:-false}"
 BATCH_SIZE="${INTERVIEW_KB_IMPORT_BATCH_SIZE:-20}"
 USERNAME="${AI_INTERVIEW_SUPER_ADMIN_NAME:-admin}"
 PASSWORD="${AI_INTERVIEW_SUPER_ADMIN_PASSWORD:-admin123}"
-KNOWLEDGE_ROOT="${INTERVIEW_KB_CLONE_ROOT:-/app/.knowledge}"
-
-sync_repo() {
-  name="$1"
-  url="$2"
-  target="$KNOWLEDGE_ROOT/$name"
-
-  if [ -d "$target/.git" ]; then
-    echo "[kb-import] updating $name"
-    git -C "$target" fetch --depth 1 origin
-    git -C "$target" pull --ff-only
-    return
-  fi
-
-  if [ -e "$target" ]; then
-    echo "[kb-import] removing stale directory for $name"
-    rm -rf "$target"
-  fi
-
-  echo "[kb-import] cloning $name from $url"
-  git clone --depth 1 "$url" "$target"
-}
-
-mkdir -p "$KNOWLEDGE_ROOT"
-sync_repo "JavaGuide" "https://github.com/Snailclimb/JavaGuide.git"
-sync_repo "reactjs-interview-questions" "https://github.com/sudheerj/reactjs-interview-questions.git"
-sync_repo "Waking-Up" "https://github.com/wolverinn/Waking-Up.git"
 
 if [ -f "$SENTINEL" ] && [ "$FORCE_IMPORT" != "true" ]; then
   echo "[kb-import] sentinel exists: $SENTINEL, skip."
@@ -59,7 +32,7 @@ until curl -fsS "$BASE_URL/system/health" >/dev/null 2>&1; do
   sleep 2
 done
 
-echo "[kb-import] API is healthy, start import."
+echo "[kb-import] API is healthy, start syncing curated interview sources and import."
 
 FORCE_REINDEX_ARG=""
 if [ "$FORCE_REINDEX" = "true" ]; then
