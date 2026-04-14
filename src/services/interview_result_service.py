@@ -105,6 +105,25 @@ PRACTICE_LIMIT = 3
 HISTORY_PROFILE_WINDOW = 5
 
 
+async def _get_accessible_databases_for_learning(user_id: str) -> dict[str, Any]:
+    normalized_user_id = str(user_id or "").strip()
+    if not normalized_user_id:
+        return {"databases": []}
+
+    if normalized_user_id.isdigit():
+        return await knowledge_base.get_databases_by_raw_id(int(normalized_user_id))
+    return await knowledge_base.get_databases_by_user_id(normalized_user_id)
+
+
+def _summarize_learning_excerpt(content: str, limit: int = 140) -> str:
+    text = re.sub(r"\s+", " ", str(content or "")).strip()
+    if not text:
+        return "建议回看该知识点对应文档片段。"
+    if len(text) <= limit:
+        return text
+    return f"{text[: limit - 1].rstrip()}..."
+
+
 def _normalize_score_value(value: Any) -> int | None:
     try:
         score = round(float(value))
@@ -270,7 +289,7 @@ def _normalize_improvement_plan(value: Any) -> dict[str, Any] | None:
     def normalize_resources(items: Any) -> list[dict[str, str]]:
         if not isinstance(items, list):
             return []
-        normalized: list[dict[str, str]] = []
+        normalized: list[dict[str, Any]] = []
         for item in items:
             if not isinstance(item, dict):
                 continue
@@ -281,16 +300,36 @@ def _normalize_improvement_plan(value: Any) -> dict[str, Any] | None:
             summary = str(item.get("summary") or "").strip()
             if not title or not summary:
                 continue
-            normalized.append(
-                {
-                    "resource_type": resource_type,
-                    "title": title,
-                    "summary": summary,
-                    "source_type": str(item.get("source_type") or "internal").strip() or "internal",
-                    "source_id": str(item.get("source_id") or "").strip(),
-                    "source_ref": str(item.get("source_ref") or "").strip(),
-                }
-            )
+            resource = {
+                "resource_type": resource_type,
+                "title": title,
+                "summary": summary,
+                "source_type": str(item.get("source_type") or "internal").strip() or "internal",
+                "source_id": str(item.get("source_id") or "").strip(),
+                "source_ref": str(item.get("source_ref") or "").strip(),
+            }
+            locator = item.get("locator")
+            if isinstance(locator, dict):
+                db_id = str(locator.get("db_id") or "").strip()
+                file_id = str(locator.get("file_id") or "").strip()
+                chunk_id = str(locator.get("chunk_id") or "").strip()
+                keyword = str(locator.get("keyword") or "").strip()
+                query_text = str(locator.get("query_text") or "").strip()
+                chunk_index = locator.get("chunk_index")
+                try:
+                    normalized_chunk_index = int(chunk_index) if chunk_index not in {None, ""} else None
+                except (TypeError, ValueError):
+                    normalized_chunk_index = None
+                if db_id and file_id and (chunk_id or normalized_chunk_index is not None):
+                    resource["locator"] = {
+                        "db_id": db_id,
+                        "file_id": file_id,
+                        "chunk_id": chunk_id,
+                        "chunk_index": normalized_chunk_index,
+                        "keyword": keyword,
+                        "query_text": query_text,
+                    }
+            normalized.append(resource)
         return normalized
 
     def normalize_practice_tasks(items: Any) -> list[dict[str, Any]]:
@@ -438,7 +477,9 @@ def _normalize_scorecard(value: Any) -> dict[str, Any] | None:
             or candidate_info.get("target_position")
             or ""
         ).strip(),
-        "round": str(value.get("round") or value.get("interview_round") or candidate_info.get("interview_round") or "").strip(),
+        "round": str(
+            value.get("round") or value.get("interview_round") or candidate_info.get("interview_round") or ""
+        ).strip(),
         "dimensions": _normalize_dimensions(value.get("dimensions")) or fallback_dimensions,
         "strengths": _normalize_string_list(
             value.get("strengths")
@@ -737,7 +778,12 @@ def _build_result_from_message(message, conversation, coding_session: dict[str, 
     }
 
 
-def _normalize_result_payload(value: Any, *, conversation, coding_session: dict[str, Any] | None) -> dict[str, Any] | None:
+def _normalize_result_payload(
+    value: Any,
+    *,
+    conversation,
+    coding_session: dict[str, Any] | None,
+) -> dict[str, Any] | None:
     if not isinstance(value, dict):
         return None
 
@@ -862,41 +908,84 @@ async def _select_knowledge_resources(
     *,
     user_id: str,
     keywords: list[str],
+    query_text: str = "",
 ) -> list[dict[str, str]]:
     if not keywords:
         return []
 
     resources: list[dict[str, str]] = []
     seen_refs: set[str] = set()
-    databases = (await knowledge_base.get_databases_by_user_id(user_id)).get("databases", [])
+    databases = (await _get_accessible_databases_for_learning(user_id)).get("databases", [])
+    normalized_keywords = [keyword for keyword in (str(item).strip() for item in keywords) if keyword]
+    query_candidates = [query_text.strip()] if query_text.strip() else []
+    query_candidates.extend(normalized_keywords)
+    if normalized_keywords:
+        query_candidates.append(" ".join(normalized_keywords))
+
     for database in databases:
         db_id = str(database.get("db_id") or "").strip()
         if not db_id:
             continue
-        db_info = await knowledge_base.get_database_info(db_id)
-        if not db_info:
-            continue
-        sample_questions = [str(item).strip() for item in (db_info.get("sample_questions") or []) if str(item).strip()]
-        matches = [item for item in sample_questions if any(keyword.lower() in item.lower() for keyword in keywords)]
-        if not matches and sample_questions:
-            matches = sample_questions[:1]
-        for question in matches[:2]:
-            ref = f"knowledge://{db_id}#sample_question"
-            if ref in seen_refs:
+        for candidate in query_candidates:
+            if not candidate:
                 continue
-            seen_refs.add(ref)
-            resources.append(
-                {
-        "resource_type": "knowledge",
-        "title": f"{db_info.get('name') or '知识库'} · 推荐 QA",
-        "summary": question,
-        "source_type": "knowledge_base",
-        "source_id": db_id,
-        "source_ref": ref,
-                }
-            )
-            if len(resources) >= RESOURCE_LIMIT:
-                return resources
+            try:
+                query_results = await knowledge_base.aquery(candidate, db_id=db_id, final_top_k=3)
+            except Exception as exc:
+                logger.warning("Failed to query knowledge base %s for learning resource: %s", db_id, exc)
+                continue
+
+            if not isinstance(query_results, list):
+                continue
+
+            for result in query_results:
+                if not isinstance(result, dict):
+                    continue
+                metadata = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}
+                file_id = str(metadata.get("file_id") or "").strip()
+                chunk_id = str(metadata.get("chunk_id") or "").strip()
+                chunk_index = metadata.get("chunk_index")
+                try:
+                    normalized_chunk_index = int(chunk_index) if chunk_index not in {None, ""} else None
+                except (TypeError, ValueError):
+                    normalized_chunk_index = None
+                if not file_id or (not chunk_id and normalized_chunk_index is None):
+                    continue
+
+                matched_keyword = next(
+                    (
+                        keyword
+                        for keyword in normalized_keywords
+                        if keyword.lower() in str(result.get("content") or "").lower()
+                    ),
+                    normalized_keywords[0] if normalized_keywords else candidate,
+                )
+                ref_anchor = chunk_id or normalized_chunk_index
+                ref = f"knowledge-chunk://{db_id}/{file_id}#{ref_anchor}"
+                if ref in seen_refs:
+                    continue
+
+                seen_refs.add(ref)
+                resources.append(
+                    {
+                        "resource_type": "knowledge",
+                        "title": f"{database.get('name') or '知识库'} · 精准学习",
+                        "summary": _summarize_learning_excerpt(str(result.get("content") or "").strip()),
+                        "source_type": "knowledge_chunk",
+                        "source_id": db_id,
+                        "source_ref": ref,
+                        "locator": {
+                            "db_id": db_id,
+                            "file_id": file_id,
+                            "chunk_id": chunk_id,
+                            "chunk_index": normalized_chunk_index,
+                            "keyword": matched_keyword,
+                            "query_text": candidate,
+                        },
+                    }
+                )
+                if len(resources) >= RESOURCE_LIMIT:
+                    return resources
     return resources
 
 
@@ -946,11 +1035,15 @@ def _select_problem_resources(
                 "source_type": "problem_package",
                 "source_id": str(item.get("package_path") or "").strip(),
                 "source_ref": (
-                    f"problem-package://{str(item.get('package_path') or '').strip()}#problem-{int(item.get('problem_index') or 0)}"
+                    "problem-package://"
+                    f"{str(item.get('package_path') or '').strip()}#problem-"
+                    f"{int(item.get('problem_index') or 0)}"
                 ),
             }
         )
     return selected
+
+
 def _build_practice_task(dimension_key: str, reason: str) -> dict[str, Any]:
     config = DIMENSION_DISPLAY_CONFIG[dimension_key]
     minute_map = {
@@ -1049,6 +1142,7 @@ async def _generate_improvement_plan(
             resources = await _select_knowledge_resources(
                 user_id=str(conversation.user_id),
                 keywords=dimension_keywords[dimension_key],
+                query_text=reason,
             )
         elif dimension_key == "problem_solving":
             resources = _select_problem_resources(
@@ -1060,6 +1154,7 @@ async def _generate_improvement_plan(
             resources = await _select_knowledge_resources(
                 user_id=str(conversation.user_id),
                 keywords=dimension_keywords[dimension_key],
+                query_text=reason,
             )
 
         for resource in resources:
@@ -1095,10 +1190,12 @@ async def _ensure_result_enrichment(
         return result_payload
 
     enriched = dict(result_payload)
-    expression_analysis = _normalize_expression_analysis(enriched.get("expression_analysis")) or _build_expression_analysis(
-        conversation=conversation,
-        scorecard=enriched.get("scorecard"),
-        messages=messages,
+    expression_analysis = _normalize_expression_analysis(enriched.get("expression_analysis")) or (
+        _build_expression_analysis(
+            conversation=conversation,
+            scorecard=enriched.get("scorecard"),
+            messages=messages,
+        )
     )
     if expression_analysis:
         enriched["expression_analysis"] = expression_analysis
@@ -1136,7 +1233,9 @@ def _build_result_summary(scorecard: dict[str, Any] | None) -> dict[str, Any]:
 
 def _build_history_profile(records: list[dict[str, Any]]) -> dict[str, Any]:
     completed_records = [
-        item for item in records if item.get("has_result") and item.get("status") == "completed" and item.get("improvement_plan")
+        item
+        for item in records
+        if item.get("has_result") and item.get("status") == "completed" and item.get("improvement_plan")
     ][:HISTORY_PROFILE_WINDOW]
     dimension_buckets: dict[str, list[int]] = {key: [] for key in DIMENSION_DISPLAY_CONFIG}
     low_score_counts: dict[str, int] = {key: 0 for key in DIMENSION_DISPLAY_CONFIG}
@@ -1384,7 +1483,11 @@ async def get_interview_result(
     thread_id: str,
     current_user_id: str,
 ) -> dict[str, Any]:
-    conv_repo, conversation = await _require_interview_conversation(db, thread_id=thread_id, current_user_id=current_user_id)
+    conv_repo, conversation = await _require_interview_conversation(
+        db,
+        thread_id=thread_id,
+        current_user_id=current_user_id,
+    )
     coding_session = get_coding_session_from_metadata(conversation.extra_metadata)
     messages = await conv_repo.get_messages_by_thread_id(thread_id)
 
@@ -1557,6 +1660,41 @@ async def get_interview_improvement_plan(
     }
 
 
+async def get_interview_learning_document(
+    *,
+    db_id: str,
+    file_id: str,
+    current_user: User,
+) -> dict[str, Any]:
+    _ = current_user
+    accessible = await knowledge_base.check_accessible({"role": current_user.role}, db_id)
+    if not accessible:
+        raise HTTPException(status_code=403, detail="无权访问该知识库文档")
+
+    database = await knowledge_base.get_database_info(db_id)
+    if not isinstance(database, dict):
+        raise HTTPException(status_code=404, detail="知识库不存在")
+
+    files = database.get("files") if isinstance(database.get("files"), dict) else {}
+    file_meta = files.get(file_id)
+    if not isinstance(file_meta, dict):
+        raise HTTPException(status_code=404, detail="文档不存在")
+    if file_meta.get("is_folder"):
+        raise HTTPException(status_code=400, detail="当前目标不是可学习文档")
+
+    file_info = await knowledge_base.get_file_info(db_id, file_id)
+    meta = file_info.get("meta") if isinstance(file_info.get("meta"), dict) else file_meta
+    return {
+        "db_id": db_id,
+        "db_name": str(database.get("name") or "").strip(),
+        "file_id": file_id,
+        "file_name": str(meta.get("filename") or meta.get("original_filename") or file_id).strip(),
+        "meta": meta,
+        "content": str(file_info.get("content") or ""),
+        "lines": file_info.get("lines") or [],
+    }
+
+
 def _build_finalize_prompt(
     *,
     target_position: str,
@@ -1697,7 +1835,10 @@ async def finalize_interview_result(
         raise HTTPException(status_code=409, detail="代码考核仍在判题中，请稍后再生成面试结果")
 
     title_position, title_round = _parse_thread_context(conversation.title)
-    effective_position = str(target_position or (coding_session or {}).get("target_position") or title_position or "").strip() or "后端工程师"
+    effective_position = (
+        str(target_position or (coding_session or {}).get("target_position") or title_position or "").strip()
+        or "后端工程师"
+    )
     effective_round = str(interview_round or title_round or "").strip() or "初试"
 
     await _save_interview_result_metadata(

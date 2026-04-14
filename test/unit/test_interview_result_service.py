@@ -13,18 +13,29 @@ from src.services import interview_result_service as service  # noqa: E402
 
 
 def test_generate_improvement_plan_builds_structured_sections(monkeypatch):
+    async def fake_get_databases_by_raw_id(_user_id: int):
+        return {"databases": [{"db_id": "kb-1", "name": "后端知识库"}]}
+
     async def fake_get_databases_by_user_id(_user_id: str):
         return {"databases": [{"db_id": "kb-1", "name": "后端知识库"}]}
 
-    async def fake_get_database_info(_db_id: str):
-        return {
-            "db_id": "kb-1",
-            "name": "后端知识库",
-            "sample_questions": ["请解释索引失效的常见原因", "Redis 持久化方案对比"],
-        }
+    async def fake_aquery(_query_text: str, db_id: str, **_kwargs):
+        return [
+            {
+                "content": "JVM 垃圾回收机制需要从分代回收、可达性分析和典型收集器角度解释。",
+                "score": 0.91,
+                "metadata": {
+                    "source": "jvm-guide.md",
+                    "file_id": "file-1",
+                    "chunk_id": "chunk-1",
+                    "chunk_index": 3,
+                },
+            }
+        ]
 
+    monkeypatch.setattr(service.knowledge_base, "get_databases_by_raw_id", fake_get_databases_by_raw_id)
     monkeypatch.setattr(service.knowledge_base, "get_databases_by_user_id", fake_get_databases_by_user_id)
-    monkeypatch.setattr(service.knowledge_base, "get_database_info", fake_get_database_info)
+    monkeypatch.setattr(service.knowledge_base, "aquery", fake_aquery)
     monkeypatch.setattr(
         service,
         "list_imported_problem_packages",
@@ -81,6 +92,16 @@ def test_generate_improvement_plan_builds_structured_sections(monkeypatch):
     assert len(plan["practice_tasks"]) >= 2
     assert len(plan["next_assessment_focus"]) >= 2
     assert {item["resource_type"] for item in plan["recommended_resources"]} >= {"knowledge", "interview_question"}
+    knowledge_resource = next(item for item in plan["recommended_resources"] if item["resource_type"] == "knowledge")
+    assert knowledge_resource["source_type"] == "knowledge_chunk"
+    assert knowledge_resource["locator"] == {
+        "db_id": "kb-1",
+        "file_id": "file-1",
+        "chunk_id": "chunk-1",
+        "chunk_index": 3,
+        "keyword": "基础",
+        "query_text": "技术基础回答不够扎实",
+    }
 
 
 def test_build_history_profile_aggregates_recent_completed_records():
@@ -94,7 +115,13 @@ def test_build_history_profile_aggregates_recent_completed_records():
             ],
             "improvement_plan": {
                 "practice_tasks": [{"title": "task-1"}],
-                "next_assessment_focus": [{"dimension_key": "technical_competence", "title": "技术细节表达", "focus": "关注原理说明"}],
+                "next_assessment_focus": [
+                    {
+                        "dimension_key": "technical_competence",
+                        "title": "技术细节表达",
+                        "focus": "关注原理说明",
+                    }
+                ],
             },
         },
         {
@@ -106,7 +133,13 @@ def test_build_history_profile_aggregates_recent_completed_records():
             ],
             "improvement_plan": {
                 "practice_tasks": [{"title": "task-2"}, {"title": "task-3"}],
-                "next_assessment_focus": [{"dimension_key": "problem_solving", "title": "解题思路完整度", "focus": "关注边界覆盖"}],
+                "next_assessment_focus": [
+                    {
+                        "dimension_key": "problem_solving",
+                        "title": "解题思路完整度",
+                        "focus": "关注边界覆盖",
+                    }
+                ],
             },
         },
     ]
@@ -116,3 +149,107 @@ def test_build_history_profile_aggregates_recent_completed_records():
     assert profile["pending_practice_count"] == 1
     assert profile["latest_focus"][0]["dimension_key"] == "technical_competence"
     assert profile["top_weakness_dimensions"][0]["dimension_key"] == "technical_competence"
+
+
+def test_normalize_improvement_plan_keeps_learning_locator():
+    payload = {
+        "recommended_resources": [
+            {
+                "resource_type": "knowledge",
+                "title": "JVM 精准学习",
+                "summary": "回看垃圾回收机制相关片段。",
+                "source_type": "knowledge_chunk",
+                "source_id": "kb-1",
+                "source_ref": "knowledge-chunk://kb-1/file-1#chunk-1",
+                "locator": {
+                    "db_id": "kb-1",
+                    "file_id": "file-1",
+                    "chunk_id": "chunk-1",
+                    "chunk_index": 2,
+                    "keyword": "JVM",
+                    "query_text": "JVM 垃圾回收机制",
+                },
+            }
+        ]
+    }
+
+    normalized = service._normalize_improvement_plan(payload)
+
+    assert normalized is not None
+    assert normalized["recommended_resources"][0]["locator"]["file_id"] == "file-1"
+    assert normalized["recommended_resources"][0]["locator"]["chunk_index"] == 2
+
+
+def test_normalize_improvement_plan_skips_invalid_learning_locator():
+    payload = {
+        "recommended_resources": [
+            {
+                "resource_type": "knowledge",
+                "title": "无效资源",
+                "summary": "缺少 file_id",
+                "source_type": "knowledge_chunk",
+                "locator": {"db_id": "kb-1", "chunk_id": "chunk-1"},
+            }
+        ]
+    }
+
+    normalized = service._normalize_improvement_plan(payload)
+
+    assert normalized is not None
+    assert "locator" not in normalized["recommended_resources"][0]
+
+
+def test_get_accessible_databases_for_learning_prefers_raw_id(monkeypatch):
+    captured = {}
+
+    async def fake_get_databases_by_raw_id(user_id: int):
+        captured["user_id"] = user_id
+        return {"databases": []}
+
+    monkeypatch.setattr(service.knowledge_base, "get_databases_by_raw_id", fake_get_databases_by_raw_id)
+
+    result = asyncio.run(service._get_accessible_databases_for_learning("42"))
+
+    assert result == {"databases": []}
+    assert captured["user_id"] == 42
+
+
+def test_get_interview_learning_document_returns_readonly_payload(monkeypatch):
+    async def fake_check_accessible(_user, _db_id: str):
+        return True
+
+    async def fake_get_database_info(_db_id: str):
+        return {
+            "db_id": "kb-1",
+            "name": "后端知识库",
+            "files": {
+                "file-1": {
+                    "file_id": "file-1",
+                    "filename": "jvm-guide.md",
+                    "is_folder": False,
+                }
+            },
+        }
+
+    async def fake_get_file_info(_db_id: str, _file_id: str):
+        return {
+            "meta": {"filename": "jvm-guide.md", "is_folder": False},
+            "content": "# JVM",
+            "lines": [{"id": "chunk-1", "content": "垃圾回收机制", "chunk_order_index": 1}],
+        }
+
+    monkeypatch.setattr(service.knowledge_base, "check_accessible", fake_check_accessible)
+    monkeypatch.setattr(service.knowledge_base, "get_database_info", fake_get_database_info)
+    monkeypatch.setattr(service.knowledge_base, "get_file_info", fake_get_file_info)
+
+    payload = asyncio.run(
+        service.get_interview_learning_document(
+            db_id="kb-1",
+            file_id="file-1",
+            current_user=SimpleNamespace(role="user"),
+        )
+    )
+
+    assert payload["db_name"] == "后端知识库"
+    assert payload["file_name"] == "jvm-guide.md"
+    assert payload["lines"][0]["id"] == "chunk-1"

@@ -14,7 +14,6 @@ from src.storage.postgres.models_business import User
 from src.services.interview_coding_service import (
     find_coding_session,
     get_problem_package_detail,
-    get_coding_session,
     get_submission_result,
     list_imported_problem_packages,
     request_coding_hint,
@@ -25,6 +24,7 @@ from src.services.interview_coding_service import (
 )
 from src.services.interview_result_service import (
     finalize_interview_result,
+    get_interview_learning_document,
     get_interview_history,
     get_interview_improvement_plan,
     get_interview_result,
@@ -238,6 +238,27 @@ async def get_thread_interview_improvement_plan(
         thread_id=thread_id,
         current_user_id=str(current_user.id),
     )
+
+
+@interview.get("/knowledge/{db_id}/documents/{file_id}")
+async def get_learning_document(
+    db_id: str,
+    file_id: str,
+    target_chunk_id: str | None = Query(default=None),
+    target_chunk_index: int | None = Query(default=None),
+    keyword: str | None = Query(default=None),
+    current_user: User = Depends(get_required_user),
+    db: AsyncSession = Depends(get_db),
+):
+    payload = await get_interview_learning_document(
+        db_id=db_id,
+        file_id=file_id,
+        current_user=current_user,
+    )
+    payload["target_chunk_id"] = str(target_chunk_id or "").strip()
+    payload["target_chunk_index"] = target_chunk_index
+    payload["keyword"] = str(keyword or "").strip()
+    return payload
 
 
 @interview.get("/history")

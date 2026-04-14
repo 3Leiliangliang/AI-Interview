@@ -119,10 +119,23 @@
                   class="resource-item"
                 >
                   <div class="resource-item__top">
-                    <span class="resource-item__title">{{ item.title }}</span>
-                    <a-tag :color="getResourceTagColor(item.resource_type)">
-                      {{ getResourceTypeLabel(item.resource_type) }}
-                    </a-tag>
+                    <div class="resource-item__title-group">
+                      <span class="resource-item__title">{{ item.title }}</span>
+                      <div class="resource-item__actions">
+                        <a-tag :color="getResourceTagColor(item.resource_type)">
+                          {{ getResourceTypeLabel(item.resource_type) }}
+                        </a-tag>
+                        <a-button
+                          v-if="canLearnResource(item)"
+                          size="small"
+                          type="link"
+                          class="resource-item__learn-btn"
+                          @click="openLearningResource(item)"
+                        >
+                          一键学习
+                        </a-button>
+                      </div>
+                    </div>
                   </div>
                   <div class="resource-item__summary">{{ item.summary }}</div>
                 </div>
@@ -230,6 +243,8 @@
         </div>
       </aside>
     </div>
+
+    <InterviewKnowledgeLearnModal v-model:open="learningModalVisible" :resource="activeLearningResource" />
   </div>
 </template>
 
@@ -241,6 +256,7 @@ import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 
 import InterviewScorePanel from '@/components/InterviewScorePanel.vue'
+import InterviewKnowledgeLearnModal from '@/components/interview/InterviewKnowledgeLearnModal.vue'
 import { interviewCodeApi } from '@/apis/interview_code'
 import { useThemeStore } from '@/stores/theme'
 import { formatDateTime } from '@/utils/time'
@@ -253,6 +269,8 @@ const loading = ref(false)
 const finalizing = ref(false)
 const payload = ref(null)
 const improvementPlanPayload = ref(null)
+const learningModalVisible = ref(false)
+const activeLearningResource = ref(null)
 
 const threadId = computed(() => String(route.query.threadId || '').trim())
 const selectedPosition = computed(() => String(route.query.position || '').trim() || '后端工程师')
@@ -377,6 +395,21 @@ const getResourceTagColor = (type) => {
     communication: 'green'
   }
   return colorMap[type] || 'default'
+}
+
+const canLearnResource = (resource) => {
+  const locator = resource?.locator
+  return (
+    resource?.resource_type === 'knowledge' &&
+    locator &&
+    String(locator.db_id || '').trim() &&
+    String(locator.file_id || '').trim()
+  )
+}
+
+const openLearningResource = (resource) => {
+  activeLearningResource.value = resource
+  learningModalVisible.value = true
 }
 
 const loadImprovementPlan = async () => {
@@ -626,6 +659,24 @@ onMounted(async () => {
   color: var(--gray-900);
 }
 
+.resource-item__title-group,
+.resource-item__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+}
+
+.resource-item__actions {
+  width: auto;
+  flex-wrap: wrap;
+}
+
+.resource-item__learn-btn {
+  padding-inline: 0;
+}
+
 .improvement-card__desc,
 .resource-item__summary,
 .task-item__objective,
@@ -754,6 +805,7 @@ onMounted(async () => {
 
   .improvement-card__top,
   .resource-item__top,
+  .resource-item__title-group,
   .task-item {
     flex-direction: column;
   }

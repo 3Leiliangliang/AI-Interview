@@ -7,7 +7,6 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from server.routers.resume_router import _build_structured_resume
 from src.storage.postgres.models_business import UserResume
 
 MAX_RESUME_MARKDOWN_EXCERPT_CHARS = 1200
@@ -85,6 +84,10 @@ def _build_markdown_excerpt(markdown_content: str) -> str:
 
 def build_selected_resume_context_payload(resume_record: UserResume) -> dict[str, Any]:
     markdown_content = resume_record.markdown_content or ""
+    # Delay importing resume parsing helpers to avoid pulling router initialization
+    # into service imports during application startup and tests.
+    from server.routers.resume_router import _build_structured_resume
+
     structured_resume = _compact_structured_resume(
         _build_structured_resume(markdown_content, resume_record.filename)
     )
