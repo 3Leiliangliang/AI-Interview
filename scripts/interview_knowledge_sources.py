@@ -423,7 +423,11 @@ def _materialize_repo(
         for source_path in source_paths:
             output_path = _resolve_output_path(selection, source_path)
             output_path = _dedupe_output_path(output_path, reserved_output_paths)
-            raw_content = _run_git(repo_dir, "show", f"{git_ref}:{source_path}")
+            try:
+                raw_content = _run_git(repo_dir, "show", f"{git_ref}:{source_path}")
+            except subprocess.CalledProcessError:
+                print(f"[knowledge-sync] skip missing source in {repo.key}: {source_path}")
+                continue
             normalized = normalize_source_text(
                 raw_content,
                 repo_name=repo.key,
@@ -441,7 +445,10 @@ def _materialize_repo(
 
 def _resolve_source_paths(repo_dir: Path, git_ref: str, selection: SourceSelection) -> list[str]:
     if not selection.recursive:
-        return [selection.source_path]
+        if _git_path_exists(repo_dir, git_ref, selection.source_path):
+            return [selection.source_path]
+        print(f"[knowledge-sync] skip missing selection: {selection.source_path}")
+        return []
 
     output = _run_git(repo_dir, "ls-tree", "-r", "--name-only", git_ref, selection.source_path)
     return [
@@ -462,6 +469,18 @@ def _resolve_output_path(selection: SourceSelection, source_path: str) -> Path:
     if relative_path.suffix.lower() == ".mdx":
         relative_path = relative_path.with_suffix(".md")
     return output_root / relative_path
+
+
+def _git_path_exists(repo_dir: Path, git_ref: str, source_path: str) -> bool:
+    completed = subprocess.run(
+        ["git", "cat-file", "-e", f"{git_ref}:{source_path}"],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return completed.returncode == 0
 
 
 def _dedupe_output_path(output_path: Path, reserved_output_paths: dict[str, Path]) -> Path:
