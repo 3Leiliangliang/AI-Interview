@@ -57,6 +57,9 @@ services:
         condition: service_healthy
 
   worker:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
     image: bole-api:0.5.dev
     container_name: worker-dev
     working_dir: /app
@@ -103,6 +106,9 @@ services:
         condition: service_healthy
 
   kb-import:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
     image: bole-api:0.5.dev
     container_name: kb-import-dev
     working_dir: /app
@@ -324,6 +330,9 @@ services:
     restart: unless-stopped
 
   oj-problem-seed:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
     image: bole-api:0.5.dev
     container_name: oj-problem-seed
     working_dir: /app
@@ -352,6 +361,9 @@ services:
         condition: service_healthy
 
   oj-freeproblemset-import:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
     image: bole-api:0.5.dev
     container_name: oj-freeproblemset-import
     working_dir: /app
