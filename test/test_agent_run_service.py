@@ -153,7 +153,7 @@ async def test_create_agent_run_commits_before_enqueue(monkeypatch: pytest.Monke
     monkeypatch.setattr(agent_run_service, "get_arq_pool", fake_get_arq_pool)
 
     result = await agent_run_service.create_agent_run_view(
-        agent_id="ChatbotAgent",
+        agent_id="InterviewAgent",
         query="hello",
         config={"thread_id": "thread-1", "request_id": "req-1"},
         image_content=None,
@@ -228,7 +228,7 @@ async def test_create_agent_run_handles_integrity_error_with_same_user_existing(
     monkeypatch.setattr(agent_run_service, "get_arq_pool", fake_get_arq_pool)
 
     result = await agent_run_service.create_agent_run_view(
-        agent_id="ChatbotAgent",
+        agent_id="InterviewAgent",
         query="hello",
         config={"thread_id": "thread-1", "request_id": "req-1"},
         image_content=None,
@@ -296,7 +296,7 @@ async def test_create_agent_run_integrity_error_returns_409_for_other_user(monke
 
     with pytest.raises(agent_run_service.HTTPException) as exc:
         await agent_run_service.create_agent_run_view(
-            agent_id="ChatbotAgent",
+            agent_id="InterviewAgent",
             query="hello",
             config={"thread_id": "thread-1", "request_id": "req-1"},
             image_content=None,

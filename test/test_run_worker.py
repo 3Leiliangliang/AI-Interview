@@ -42,7 +42,7 @@ def _build_run() -> SimpleNamespace:
         input_payload={
             "query": "hello",
             "config": {"thread_id": "thread-1"},
-            "agent_id": "ChatbotAgent",
+            "agent_id": "InterviewAgent",
             "image_content": None,
             "user_id": "1",
             "request_id": "req-1",

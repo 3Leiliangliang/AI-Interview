@@ -34,7 +34,7 @@ USERNAME = os.getenv("AI_INTERVIEW_SUPER_ADMIN_NAME", "zwj")
 PASSWORD = os.getenv("AI_INTERVIEW_SUPER_ADMIN_PASSWORD", "zwj12138")
 
 # 默认 Agent ID (需要根据实际情况修改，使用类名)
-DEFAULT_AGENT_ID = "ChatbotAgent"
+DEFAULT_AGENT_ID = "InterviewAgent"
 
 
 class APITester:

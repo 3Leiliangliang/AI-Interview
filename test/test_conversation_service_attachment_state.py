@@ -72,7 +72,7 @@ async def test_sync_thread_attachment_state_updates_graph(monkeypatch: pytest.Mo
     await svc._sync_thread_attachment_state(
         thread_id="thread-1",
         user_id="u1",
-        agent_id="ChatbotAgent",
+        agent_id="InterviewAgent",
         attachments=attachments,
     )
 
