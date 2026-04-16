@@ -10,6 +10,7 @@ from typing import Any
 
 import httpx
 from dotenv import dotenv_values
+from src.services.position_types import get_position_type
 
 try:
     from interview_knowledge_sources import (
@@ -44,12 +45,20 @@ class FolderImportPlan:
 class KnowledgeImportPlan:
     name: str
     description: str
+    position: str
     chunk_preset_id: str
     folders: tuple[FolderImportPlan, ...] = ()
     root_files: tuple[Path, ...] = ()
 
 
 def build_import_plan() -> tuple[KnowledgeImportPlan, ...]:
+    backend_position = get_position_type("backend")["label"]
+    frontend_position = get_position_type("frontend")["label"]
+    algorithm_position = get_position_type("algorithm")["label"]
+    system_design_position = get_position_type("system_design")["label"]
+    ai_app_position = get_position_type("ai_app")["label"]
+    unclassified_position = get_position_type("unclassified")["label"]
+
     javaguide_backend_root = CURATED_KNOWLEDGE_ROOT / "javaguide-backend"
     javaguide_ai_root = CURATED_KNOWLEDGE_ROOT / "javaguide-ai"
     react_root = CURATED_KNOWLEDGE_ROOT / "react-interview"
@@ -67,6 +76,7 @@ def build_import_plan() -> tuple[KnowledgeImportPlan, ...]:
         KnowledgeImportPlan(
             name="JavaGuide 后端面试",
             description="Java 后端面试核心知识库，覆盖 Java 基础、数据库、计算机基础、分布式与系统设计等高频主题。",
+            position=backend_position,
             chunk_preset_id="qa",
             folders=(
                 FolderImportPlan("interview-preparation", md_files(javaguide_backend_root / "interview-preparation")),
@@ -82,6 +92,7 @@ def build_import_plan() -> tuple[KnowledgeImportPlan, ...]:
         KnowledgeImportPlan(
             name="AI 应用开发面试",
             description="AI 应用开发面试知识库，覆盖 LLM 基础、RAG、Agent、MCP 与 AI Coding 等内容。",
+            position=ai_app_position,
             chunk_preset_id="book",
             folders=(
                 FolderImportPlan("llm-basis", md_files(javaguide_ai_root / "llm-basis")),
@@ -94,6 +105,7 @@ def build_import_plan() -> tuple[KnowledgeImportPlan, ...]:
         KnowledgeImportPlan(
             name="React 面试题库",
             description="React 问答与代码题知识库，适合以问答形式进行检索和面试问答。",
+            position=frontend_position,
             chunk_preset_id="qa",
             root_files=(
                 react_root / "react-interview-questions.md",
@@ -103,6 +115,7 @@ def build_import_plan() -> tuple[KnowledgeImportPlan, ...]:
         KnowledgeImportPlan(
             name="前端面试手册",
             description="前端面试知识库，覆盖前端基础、前端系统设计、React Playbook 和行为面试问题。",
+            position=frontend_position,
             chunk_preset_id="book",
             folders=(
                 FolderImportPlan("frontend-guide", md_files(frontend_root / "frontend-guide")),
@@ -113,6 +126,7 @@ def build_import_plan() -> tuple[KnowledgeImportPlan, ...]:
         KnowledgeImportPlan(
             name="通用技术面试手册",
             description="通用软件工程面试知识库，覆盖行为面试、编码面试准备、简历、自我介绍与系统设计准备等内容。",
+            position=unclassified_position,
             chunk_preset_id="book",
             folders=(
                 FolderImportPlan("behavioral", md_files(tech_handbook_root / "behavioral")),
@@ -123,6 +137,7 @@ def build_import_plan() -> tuple[KnowledgeImportPlan, ...]:
         KnowledgeImportPlan(
             name="系统设计面试题库",
             description="系统设计面试知识库，覆盖系统设计基础框架与 Twitter、Pastebin、网页爬虫等经典案例。",
+            position=system_design_position,
             chunk_preset_id="book",
             folders=(
                 FolderImportPlan("cases", md_files(system_design_primer_root / "cases")),
@@ -132,6 +147,7 @@ def build_import_plan() -> tuple[KnowledgeImportPlan, ...]:
         KnowledgeImportPlan(
             name="DSA 面试手册",
             description="算法与数据结构面试知识库，覆盖数组、图、树、动态规划、贪心等高频题型与面试要点。",
+            position=algorithm_position,
             chunk_preset_id="book",
             folders=(
                 FolderImportPlan("topics", md_files(dsa_handbook_root / "topics")),
@@ -141,6 +157,7 @@ def build_import_plan() -> tuple[KnowledgeImportPlan, ...]:
         KnowledgeImportPlan(
             name="Node.js 面试题库",
             description="Node.js 一问一答面试知识库，覆盖事件循环、中间件、流、模块系统与高阶后端问题。",
+            position=backend_position,
             chunk_preset_id="qa",
             root_files=(
                 nodejs_root / "nodejs-interview-questions.md",
@@ -150,6 +167,7 @@ def build_import_plan() -> tuple[KnowledgeImportPlan, ...]:
         KnowledgeImportPlan(
             name="SQL 面试题库",
             description="SQL 面试知识库，覆盖 SQL 基础、查询、连接、事务、索引、安全与高频问答。",
+            position=backend_position,
             chunk_preset_id="book",
             root_files=(sql_root / "sql-interview-guide.md",),
         ),
@@ -219,7 +237,7 @@ class ApiClient:
         return await self.get(f"/knowledge/databases/{db_id}")
 
     async def ensure_database(self, plan: KnowledgeImportPlan) -> dict[str, Any]:
-        desired_params = build_index_params(plan.chunk_preset_id)
+        desired_params = build_index_params(plan.chunk_preset_id, plan.position)
         for database in await self.list_databases():
             if database.get("name") != plan.name:
                 continue
@@ -365,8 +383,8 @@ def build_ingest_params(
     return params
 
 
-def build_index_params(chunk_preset_id: str) -> dict[str, Any]:
-    params: dict[str, Any] = {"chunk_preset_id": chunk_preset_id}
+def build_index_params(chunk_preset_id: str, position: str) -> dict[str, Any]:
+    params: dict[str, Any] = {"chunk_preset_id": chunk_preset_id, "position": position}
     if chunk_preset_id == "qa":
         params["qa_separator"] = QA_SEPARATOR
     return params
@@ -392,6 +410,7 @@ async def repair_file_states(
     expected_files: dict[tuple[str, str], Path],
     parent_id: str | None,
     chunk_preset_id: str,
+    position: str,
     force_reindex: bool,
 ) -> dict[str, Any]:
     db_info = await api.get_database_info(db_id)
@@ -437,7 +456,7 @@ async def repair_file_states(
         if all_index_ids:
             await wait_for_queued_result(
                 api,
-                await api.index_documents(db_id, all_index_ids, build_index_params(chunk_preset_id)),
+                await api.index_documents(db_id, all_index_ids, build_index_params(chunk_preset_id, position)),
             )
 
     return {"missing_paths": missing_paths}
@@ -450,6 +469,7 @@ async def import_batch(
     parent_id: str | None,
     file_paths: list[Path],
     chunk_preset_id: str,
+    position: str,
     force_reindex: bool,
 ) -> dict[str, Any]:
     db_info = await api.get_database_info(db_id)
@@ -491,6 +511,7 @@ async def import_batch(
         expected_map,
         parent_id,
         chunk_preset_id,
+        position,
         force_reindex,
     )
 
@@ -553,6 +574,7 @@ async def import_knowledge_plan(
                 parent_id=parent_id,
                 file_paths=batch,
                 chunk_preset_id=plan.chunk_preset_id,
+                position=plan.position,
                 force_reindex=force_reindex,
             )
             batches_report.append({"scope": folder.name, "result": result})
@@ -567,6 +589,7 @@ async def import_knowledge_plan(
             parent_id=None,
             file_paths=batch,
             chunk_preset_id=plan.chunk_preset_id,
+            position=plan.position,
             force_reindex=force_reindex,
         )
         batches_report.append({"scope": "root", "result": result})

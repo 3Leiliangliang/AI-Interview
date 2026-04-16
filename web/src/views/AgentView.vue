@@ -149,16 +149,21 @@ import { Sparkles, Clock, ChevronRight, LoaderCircle } from 'lucide-vue-next'
 import { useAgentStore } from '@/stores/agent'
 import { threadApi } from '@/apis/agent_api'
 import { resumeApi } from '@/apis/resume_api'
+import { usePositionTypes } from '@/composables/usePositionTypes'
+import { normalizePositionType } from '@/utils/position_utils'
 import { parseToShanghai } from '@/utils/time'
 
 const route = useRoute()
 const router = useRouter()
 const agentStore = useAgentStore()
+const { positionTypes, positionTypeOptions, defaultPositionType, loadPositionTypes } = usePositionTypes()
 
-const positionOptions = [
-  { label: '前端', value: '前端工程师' },
-  { label: '后端', value: '后端工程师' }
-]
+const positionOptions = computed(() =>
+  positionTypeOptions.value.map((item) => ({
+    label: item.shortLabel,
+    value: item.value
+  }))
+)
 
 const interviewModeOptions = [
   { label: '文本面试', value: 'text' },
@@ -172,7 +177,7 @@ const roundOptions = [
 ]
 
 const selectedInterviewMode = ref(String(route.query.mode || 'text'))
-const selectedPosition = ref(String(route.query.position || '后端工程师'))
+const selectedPosition = ref(String(route.query.position || defaultPositionType.value.label))
 const selectedRound = ref(String(route.query.round || '初试'))
 const selectedResumeId = ref(route.query.resumeId ? Number(route.query.resumeId) : null)
 const resumeOptions = ref([])
@@ -258,6 +263,8 @@ onMounted(async () => {
   loadingHistory.value = true
   loadingResumes.value = true
   try {
+    await loadPositionTypes()
+    selectedPosition.value = normalizePositionType(selectedPosition.value, positionTypes.value).label
     if (!agentStore.isInitialized) {
       await agentStore.initialize()
     }
@@ -284,7 +291,7 @@ const continueInterview = (thread) => {
     name: isVoiceThread ? 'AgentVoiceInterviewComp' : 'AgentInterviewComp',
     query: {
       mode: isVoiceThread ? 'voice' : 'text',
-      position: pos ? pos.trim() : '后端工程师',
+      position: normalizePositionType(pos ? pos.trim() : '', positionTypes.value).label,
       round: rnd ? rnd.trim() : '初试',
       threadId: thread.id,
       ...(thread?.metadata?.resume_id ? { resumeId: String(thread.metadata.resume_id) } : {})

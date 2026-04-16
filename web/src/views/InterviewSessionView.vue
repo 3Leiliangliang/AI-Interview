@@ -54,8 +54,9 @@ import { useAgentStore } from '@/stores/agent'
 import { useVideoEventStream } from '@/composables/useVideoEventStream'
 import { ChatExporter } from '@/utils/chatExporter'
 import { handleChatError } from '@/utils/errorHandler'
+import { getDefaultPositionType, getFallbackPositionTypes } from '@/utils/position_utils'
 
-const DEFAULT_POSITION = '后端工程师'
+const DEFAULT_POSITION = getDefaultPositionType(getFallbackPositionTypes()).label
 const DEFAULT_ROUND = '初试'
 
 const route = useRoute()

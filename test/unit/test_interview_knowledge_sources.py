@@ -13,6 +13,7 @@ from scripts.interview_knowledge_sources import (  # noqa: E402
     normalize_source_text,
     split_frontmatter,
 )
+from src.services import position_types as position_service  # noqa: E402
 
 
 def test_split_frontmatter_extracts_title() -> None:
@@ -229,6 +230,29 @@ def test_build_import_plan_reads_curated_root(monkeypatch, tmp_path: Path) -> No
 
     plans = import_interview_knowledge.build_import_plan()
     plan_counts = [len(plan.root_files) + sum(len(folder.files) for folder in plan.folders) for plan in plans]
+    plan_positions = [plan.position for plan in plans]
 
     assert len(plans) == 9
     assert plan_counts == [8, 5, 2, 3, 3, 2, 2, 2, 1]
+    assert plan_positions == [
+        position_service.get_position_type("backend")["label"],
+        position_service.get_position_type("ai_app")["label"],
+        position_service.get_position_type("frontend")["label"],
+        position_service.get_position_type("frontend")["label"],
+        position_service.get_position_type("unclassified")["label"],
+        position_service.get_position_type("system_design")["label"],
+        position_service.get_position_type("algorithm")["label"],
+        position_service.get_position_type("backend")["label"],
+        position_service.get_position_type("backend")["label"],
+    ]
+
+
+def test_build_index_params_includes_position() -> None:
+    params = import_interview_knowledge.build_index_params(
+        "qa",
+        position_service.get_position_type("backend")["label"],
+    )
+
+    assert params["chunk_preset_id"] == "qa"
+    assert params["position"] == position_service.get_position_type("backend")["label"]
+    assert params["qa_separator"] == import_interview_knowledge.QA_SEPARATOR

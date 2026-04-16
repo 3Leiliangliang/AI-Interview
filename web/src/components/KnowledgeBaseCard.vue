@@ -36,9 +36,6 @@
 
       <!-- Tags -->
       <div class="tags-section">
-        <a-tag :color="getKbTypeColor(database.kb_type || 'openviking')" size="small">
-          {{ getKbTypeLabel(database.kb_type || 'openviking') }}
-        </a-tag>
         <a-tag color="blue" size="small">{{ database.embed_info?.name || 'N/A' }}</a-tag>
         <a-tag color="cyan" size="small" class="chunk-tag">{{
           `分块：${chunkPresetLabelMap[database.additional_params?.chunk_preset_id || 'general'] || 'General'}`
@@ -132,7 +129,6 @@ import { ref, reactive, computed, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDatabaseStore } from '@/stores/database'
 import { useUserStore } from '@/stores/user'
-import { getKbTypeLabel, getKbTypeColor } from '@/utils/kb_utils'
 import {
   CHUNK_PRESET_OPTIONS,
   CHUNK_PRESET_LABEL_MAP,

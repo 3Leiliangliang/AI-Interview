@@ -3,8 +3,9 @@ from typing import Annotated
 
 from src.agents.common.context import BaseContext
 from src.services.interview_resume_service import build_selected_resume_prompt_block
+from src.services.position_types import get_default_position_label
 
-DEFAULT_TARGET_POSITION = "后端工程师"
+DEFAULT_TARGET_POSITION = get_default_position_label()
 DEFAULT_INTERVIEW_ROUND = "初试"
 DEFAULT_DELIVERY_MODE = "chat"
 

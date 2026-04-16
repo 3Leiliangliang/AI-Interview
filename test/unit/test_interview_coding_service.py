@@ -36,3 +36,10 @@ def test_build_seed_problem_sample_source_wraps_function_solution():
     assert "Promise.resolve(maxSubArray(...__sampleArgs))" in wrapped
     assert "__sampleParseArgs" in wrapped
     assert "require('fs').readFileSync(0, 'utf8')" in wrapped
+
+
+def test_normalize_position_tag_maps_extended_categories():
+    assert service._normalize_position_tag("数据库") == "backend"
+    assert service._normalize_position_tag("系统设计") == "backend"
+    assert service._normalize_position_tag("AI 应用开发") == "backend"
+    assert service._normalize_position_tag("算法与数据结构") == service.GENERAL_POSITION_TAG

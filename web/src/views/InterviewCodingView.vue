@@ -214,6 +214,9 @@ import { message } from 'ant-design-vue'
 import { threadApi } from '@/apis'
 import { interviewCodeApi } from '@/apis/interview_code'
 import { useAgentStore } from '@/stores/agent'
+import { getDefaultPositionType, getFallbackPositionTypes } from '@/utils/position_utils'
+
+const DEFAULT_POSITION = getDefaultPositionType(getFallbackPositionTypes()).label
 
 const route = useRoute()
 const router = useRouter()
@@ -221,7 +224,7 @@ const agentStore = useAgentStore()
 
 const threadId = computed(() => String(route.query.threadId || '').trim())
 const activeThreadId = ref('')
-const selectedPosition = computed(() => String(route.query.position || '').trim() || '后端工程师')
+const selectedPosition = computed(() => String(route.query.position || '').trim() || DEFAULT_POSITION)
 const selectedRound = computed(() => String(route.query.round || '').trim() || '初试')
 
 const loading = ref(false)
@@ -267,7 +270,7 @@ const currentJudgeStatus = computed(
 const canOpenResult = computed(
   () => Boolean(session.value?.submission_id) && !!currentJudgeStatus.value && !pendingJudgeStatuses.has(currentJudgeStatus.value)
 )
-const effectivePosition = computed(() => String(session.value?.target_position || selectedPosition.value || '后端工程师').trim())
+const effectivePosition = computed(() => String(session.value?.target_position || selectedPosition.value || DEFAULT_POSITION).trim())
 const effectiveRound = computed(() => String(route.query.round || selectedRound.value || '初试').trim() || '初试')
 
 const getStatusColor = (status) => {

@@ -20,6 +20,7 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models import select_model
+from src.services.position_types import get_problemset_tag_for_position
 from src.repositories.conversation_repository import ConversationRepository
 from src.storage.postgres.manager import pg_manager
 from src.utils.logging_config import logger
@@ -954,13 +955,9 @@ def get_problem_package_detail(package_path: str) -> dict[str, Any]:
 
 
 def _normalize_position_tag(target_position: str | None) -> str:
-    position = str(target_position or "").strip().lower()
-    if not position:
-        return GENERAL_POSITION_TAG
-    if "前端" in position or "frontend" in position:
-        return "frontend"
-    if "后端" in position or "backend" in position:
-        return "backend"
+    normalized = str(get_problemset_tag_for_position(target_position) or "").strip().lower()
+    if normalized in {"frontend", "backend"}:
+        return normalized
     return GENERAL_POSITION_TAG
 
 

@@ -18,6 +18,7 @@ from src.services.chat_stream_service import (
     save_messages_from_langgraph_state,
 )
 from src.services.interview_coding_service import get_coding_session_from_metadata, list_imported_problem_packages
+from src.services.position_types import get_default_position_label, get_problemset_tag_for_position
 from src.storage.postgres.models_business import User
 from src.utils.datetime_utils import format_utc_datetime
 from src.utils.logging_config import logger
@@ -997,7 +998,7 @@ def _select_problem_resources(
 ) -> list[dict[str, str]]:
     package_payload = list_imported_problem_packages()
     problems = package_payload.get("problems") or []
-    normalized_position = str(target_position or "").strip().lower()
+    normalized_position_tag = str(get_problemset_tag_for_position(target_position) or "").strip().lower()
     normalized_difficulty = str(difficulty_level or "").strip().lower()
 
     ranked: list[dict[str, Any]] = []
@@ -1008,11 +1009,8 @@ def _select_problem_resources(
         position_tag = str(item.get("primary_position_tag") or "").strip().lower()
         difficulty_tag = str(item.get("difficulty_tag") or "").strip().lower()
         score = 0
-        if normalized_position:
-            if ("前端" in normalized_position and position_tag == "frontend") or (
-                "后端" in normalized_position and position_tag == "backend"
-            ):
-                score += 3
+        if normalized_position_tag and position_tag == normalized_position_tag:
+            score += 3
         if normalized_difficulty and difficulty_tag == normalized_difficulty:
             score += 2
         if any(keyword.lower() in f"{title} {summary}".lower() for keyword in keywords):
@@ -1358,7 +1356,7 @@ def _build_history_record(*, conversation, result_payload: dict[str, Any] | None
         "created_at": format_utc_datetime(conversation.created_at),
         "updated_at": format_utc_datetime(conversation.updated_at),
         "interview_mode": interview_mode,
-        "position": position or "后端工程师",
+        "position": position or get_default_position_label(),
         "round": round_name or "初试",
         "status": status,
         "overall_score": (scorecard or {}).get("overall"),
@@ -1710,7 +1708,7 @@ def _build_finalize_prompt(
 
     lines = [
         "代码考核已经结束，请你现在直接完成第 6、7 阶段，不要继续追问用户，也不要要求用户再返回聊天作答。",
-        f"目标岗位：{target_position or '后端工程师'}",
+        f"目标岗位：{target_position or get_default_position_label()}",
         f"面试轮次：{interview_round or '初试'}",
     ]
     if problem_title:
@@ -1837,7 +1835,7 @@ async def finalize_interview_result(
     title_position, title_round = _parse_thread_context(conversation.title)
     effective_position = (
         str(target_position or (coding_session or {}).get("target_position") or title_position or "").strip()
-        or "后端工程师"
+        or get_default_position_label()
     )
     effective_round = str(interview_round or title_round or "").strip() or "初试"
 

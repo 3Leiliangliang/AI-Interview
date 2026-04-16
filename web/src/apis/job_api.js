@@ -15,6 +15,14 @@ export const jobApi = {
   },
 
   /**
+   * 获取岗位类型配置
+   * @returns {Promise<{position_types: Array, default_position_key: string}>}
+   */
+  getPositionTypes: async () => {
+    return apiGet('/api/job/position-types')
+  },
+
+  /**
    * 获取单个岗位详情
    * @param {number} jobId - 岗位ID
    * @returns {Promise<{job: Object}>}

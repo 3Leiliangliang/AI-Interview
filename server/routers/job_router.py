@@ -1,4 +1,4 @@
-"""职位描述 API - 内置三种校招岗位（前端、后端、算法工程师）"""
+"""职位描述 API 与岗位类型配置。"""
 
 from typing import Any
 
@@ -6,7 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from server.utils.auth_middleware import get_required_user
-from src.services.builtin_jobs import get_all_builtin_jobs, get_builtin_job
+from src.services.builtin_jobs import (
+    DEFAULT_POSITION_KEY,
+    get_all_builtin_jobs,
+    get_builtin_job,
+    get_default_position_config,
+    get_public_position_types,
+)
 from src.services.match_service import match_service
 from src.storage.postgres.models_business import User
 
@@ -23,14 +29,31 @@ class MatchRequest(BaseModel):
 async def list_job_descriptions(
     current_user: User = Depends(get_required_user),
 ):
-    """获取内置岗位列表"""
+    """获取内置岗位列表与岗位类型配置"""
     jobs = get_all_builtin_jobs()
     return {
         "message": "success",
         "jobs": jobs,
+        "position_types": get_public_position_types(),
+        "default_position_key": DEFAULT_POSITION_KEY,
+        "default_position": get_default_position_config(),
         "total": len(jobs),
         "skip": 0,
         "limit": len(jobs),
+    }
+
+
+@job.get("/position-types")
+async def list_position_types(
+    current_user: User = Depends(get_required_user),
+):
+    """获取统一岗位类型配置"""
+    _ = current_user
+    return {
+        "message": "success",
+        "position_types": get_public_position_types(),
+        "default_position_key": DEFAULT_POSITION_KEY,
+        "default_position": get_default_position_config(),
     }
 
 

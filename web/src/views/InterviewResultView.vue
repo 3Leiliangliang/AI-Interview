@@ -260,6 +260,9 @@ import InterviewKnowledgeLearnModal from '@/components/interview/InterviewKnowle
 import { interviewCodeApi } from '@/apis/interview_code'
 import { useThemeStore } from '@/stores/theme'
 import { formatDateTime } from '@/utils/time'
+import { getDefaultPositionType, getFallbackPositionTypes } from '@/utils/position_utils'
+
+const DEFAULT_POSITION = getDefaultPositionType(getFallbackPositionTypes()).label
 
 const route = useRoute()
 const router = useRouter()
@@ -273,7 +276,7 @@ const learningModalVisible = ref(false)
 const activeLearningResource = ref(null)
 
 const threadId = computed(() => String(route.query.threadId || '').trim())
-const selectedPosition = computed(() => String(route.query.position || '').trim() || '后端工程师')
+const selectedPosition = computed(() => String(route.query.position || '').trim() || DEFAULT_POSITION)
 const selectedRound = computed(() => String(route.query.round || '').trim() || '初试')
 const theme = computed(() => (themeStore.isDark ? 'dark' : 'light'))
 

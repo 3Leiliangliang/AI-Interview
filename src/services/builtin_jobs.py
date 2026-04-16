@@ -1,53 +1,33 @@
-"""内置岗位数据 - 三种校招级别岗位（前端、后端、算法工程师）"""
+"""内置岗位数据与统一岗位类型配置。"""
+
+from __future__ import annotations
 
 import copy
+
+from src.services.position_types import (
+    DEFAULT_POSITION_KEY,
+    get_all_position_types,
+    get_default_position_label,
+    get_default_position_type,
+    get_position_type,
+    normalize_position_key,
+)
 
 BUILTIN_JOBS = [
     {
         "id": 1,
+        "position_key": "frontend",
         "title": "前端开发工程师",
         "department": "技术部",
-        "description": (
-            "负责 Web 前端开发与维护，参与前端架构设计与性能优化，"
-            "与设计师和后端工程师协作完成产品功能开发。"
-        ),
+        "description": "负责 Web 前端开发与维护，参与前端架构设计与性能优化。",
         "requirements": (
-            "1. 熟练掌握 HTML/CSS/JavaScript 前端基础技术；\n"
-            "2. 掌握至少一种主流前端框架（Vue.js / React）；\n"
-            "3. 了解前端工程化和模块化开发（Webpack / Vite）；\n"
-            "4. 计算机基础扎实（数据结构、算法、网络）；\n"
-            "5. 具备良好的编程习惯和代码质量意识；\n"
-            "6. 学习能力强，对新技术保持热情和好奇心。"
+            "1. 熟练掌握 HTML/CSS/JavaScript；\n"
+            "2. 熟悉 Vue.js 或 React 等主流前端框架；\n"
+            "3. 了解前端工程化、性能优化和组件化开发；\n"
+            "4. 具备良好的编码习惯和协作意识。"
         ),
-        "required_skills": [
-            "HTML5",
-            "CSS3",
-            "JavaScript",
-            "Vue.js",
-            "React",
-            "Git",
-            "HTTP",
-            "Webpack",
-            "Vite",
-            "ES6",
-            "Flex布局",
-            "响应式设计",
-        ],
-        "preferred_skills": [
-            "TypeScript",
-            "Node.js",
-            "小程序",
-            "React Native",
-            "Less",
-            "Sass",
-            "前端性能优化",
-            "Element UI",
-            "Ant Design",
-            "XSS防护",
-            "CSRF防护",
-            "Jest",
-            "Cypress",
-        ],
+        "required_skills": ["HTML5", "CSS3", "JavaScript", "Vue.js", "React", "TypeScript", "Vite"],
+        "preferred_skills": ["Node.js", "Jest", "Cypress", "Ant Design Vue", "性能优化"],
         "min_experience_years": 0,
         "education_level": "本科及以上",
         "salary_range": "15K-30K",
@@ -55,51 +35,18 @@ BUILTIN_JOBS = [
     },
     {
         "id": 2,
+        "position_key": "backend",
         "title": "后端开发工程师",
         "department": "技术部",
-        "description": (
-            "负责后端服务开发与维护，参与系统架构设计与数据库设计，"
-            "编写高质量的 RESTful API，保障线上系统稳定性。"
-        ),
+        "description": "负责后端服务开发与维护，参与系统架构设计与数据库设计。",
         "requirements": (
-            "1. 熟练掌握至少一种后端开发语言（Java / Python / Go）及常用框架；\n"
-            "2. 扎实的计算机基础（数据结构与算法、操作系统、计算机网络）；\n"
-            "3. 熟悉关系型数据库（MySQL / PostgreSQL）设计和 SQL 优化；\n"
-            "4. 了解 Redis 等缓存技术；\n"
-            "5. 熟悉常用网络协议（HTTP / TCP/IP）和 Linux 基础；\n"
-            "6. 良好的编码习惯、沟通协作能力和责任心。"
+            "1. 熟练掌握 Java / Python / Go 中至少一种语言及其常用框架；\n"
+            "2. 熟悉关系型数据库设计、SQL 优化与缓存技术；\n"
+            "3. 扎实掌握操作系统、网络、数据结构等计算机基础；\n"
+            "4. 具备服务治理与线上问题排查能力。"
         ),
-        "required_skills": [
-            "Java",
-            "Python",
-            "Go",
-            "MySQL",
-            "PostgreSQL",
-            "SQL",
-            "Redis",
-            "Spring Boot",
-            "Django",
-            "FastAPI",
-            "Gin",
-            "Git",
-            "Linux",
-            "数据结构与算法",
-            "计算机网络",
-        ],
-        "preferred_skills": [
-            "微服务",
-            "Spring Cloud",
-            "Dubbo",
-            "Kafka",
-            "RabbitMQ",
-            "Docker",
-            "CI/CD",
-            "分布式系统",
-            "Nginx",
-            "单元测试",
-            "MyBatis",
-            "JPA",
-        ],
+        "required_skills": ["Java", "Python", "Go", "MySQL", "PostgreSQL", "Redis", "FastAPI", "Spring Boot"],
+        "preferred_skills": ["Kafka", "Docker", "分布式系统", "CI/CD", "Linux"],
         "min_experience_years": 0,
         "education_level": "本科及以上",
         "salary_range": "18K-35K",
@@ -107,70 +54,123 @@ BUILTIN_JOBS = [
     },
     {
         "id": 3,
-        "title": "算法工程师",
-        "department": "AI 研究院",
-        "description": (
-            "负责机器学习 / 深度学习算法研究与落地，参与模型训练与调优，"
-            "阅读和复现前沿论文算法，与工程团队配合实现算法产品化。"
-        ),
+        "position_key": "backend",
+        "title": "数据库工程师",
+        "department": "基础架构部",
+        "description": "负责数据库设计、SQL 优化、索引治理与高可用架构落地。",
         "requirements": (
-            "1. 硕士及以上学历，计算机 / 数学 / 统计 / AI 相关专业；\n"
-            "2. 扎实的编程能力（Python / C++）和数学基础（线性代数、概率论、优化）；\n"
-            "3. 熟悉机器学习和深度学习算法原理与实战；\n"
-            "4. 熟练使用 PyTorch 或 TensorFlow 等深度学习框架；\n"
-            "5. 有论文发表或竞赛获奖经验优先；\n"
-            "6. 良好的英文文献阅读能力和创新意识。"
+            "1. 熟悉 MySQL / PostgreSQL 等数据库原理；\n"
+            "2. 理解事务、索引、锁、日志和主从复制；\n"
+            "3. 能定位慢查询并完成数据库性能优化；\n"
+            "4. 具备数据库容量规划和稳定性治理经验。"
         ),
-        "required_skills": [
-            "Python",
-            "PyTorch",
-            "TensorFlow",
-            "机器学习",
-            "深度学习",
-            "CNN",
-            "RNN",
-            "Transformer",
-            "NumPy",
-            "Pandas",
-            "Scikit-learn",
-            "线性代数",
-            "概率论",
-            "Linux",
-        ],
-        "preferred_skills": [
-            "C++",
-            "BERT",
-            "GPT",
-            "LLM",
-            "YOLO",
-            "目标检测",
-            "图像分割",
-            "推荐系统",
-            "DeepSpeed",
-            "HuggingFace",
-            "NLP",
-            "计算机视觉",
-            "Kaggle",
-            "ACM",
-            "论文发表",
-        ],
+        "required_skills": ["SQL", "MySQL", "PostgreSQL", "索引", "事务", "锁机制", "慢查询优化"],
+        "preferred_skills": ["主从复制", "高可用", "备份恢复", "监控告警"],
         "min_experience_years": 0,
-        "education_level": "硕士及以上",
-        "salary_range": "25K-50K",
+        "education_level": "本科及以上",
+        "salary_range": "18K-32K",
+        "status": "active",
+    },
+    {
+        "id": 4,
+        "position_key": "algorithm",
+        "title": "算法工程师",
+        "department": "技术部",
+        "description": "负责算法题设计、数据结构分析与复杂度优化相关能力建设。",
+        "requirements": (
+            "1. 熟练掌握常见数据结构与基础算法；\n"
+            "2. 能独立完成复杂度分析和边界条件设计；\n"
+            "3. 熟悉树、图、动态规划、搜索等常见题型；\n"
+            "4. 具备良好的代码实现与调试能力。"
+        ),
+        "required_skills": ["数组", "链表", "树", "图", "动态规划", "贪心", "搜索", "复杂度分析"],
+        "preferred_skills": ["LeetCode", "竞赛经验", "数学建模"],
+        "min_experience_years": 0,
+        "education_level": "本科及以上",
+        "salary_range": "18K-35K",
+        "status": "active",
+    },
+    {
+        "id": 5,
+        "position_key": "system_design",
+        "title": "系统架构师",
+        "department": "架构部",
+        "description": "负责高并发系统方案设计、容量评估与关键模块架构拆解。",
+        "requirements": (
+            "1. 熟悉缓存、消息队列、数据库分库分表等常见架构组件；\n"
+            "2. 能完成系统建模、流量估算与瓶颈分析；\n"
+            "3. 理解一致性、可用性与扩展性之间的权衡；\n"
+            "4. 具备服务容灾与监控治理意识。"
+        ),
+        "required_skills": ["系统设计", "高并发", "缓存", "消息队列", "分布式系统", "一致性"],
+        "preferred_skills": ["限流熔断", "可观测性", "容灾演练"],
+        "min_experience_years": 0,
+        "education_level": "本科及以上",
+        "salary_range": "22K-40K",
+        "status": "active",
+    },
+    {
+        "id": 6,
+        "position_key": "ai_app",
+        "title": "AI 应用开发工程师",
+        "department": "AI 平台部",
+        "description": "负责 LLM、RAG、Agent 等 AI 应用能力的产品化与工程落地。",
+        "requirements": (
+            "1. 熟悉 LLM 应用开发、Prompt 设计与工具调用链路；\n"
+            "2. 理解 RAG、Embedding、向量检索与知识库构建流程；\n"
+            "3. 能基于 LangChain / LangGraph 等框架完成应用编排；\n"
+            "4. 关注模型效果评估、延迟与成本优化。"
+        ),
+        "required_skills": ["LLM", "RAG", "Agent", "Prompt Engineering", "Embedding", "LangGraph"],
+        "preferred_skills": ["MCP", "多模态", "模型评测", "FastAPI"],
+        "min_experience_years": 0,
+        "education_level": "本科及以上",
+        "salary_range": "20K-40K",
         "status": "active",
     },
 ]
 
-# 按 ID 索引的查找字典
 _BUILTIN_JOBS_MAP = {job["id"]: job for job in BUILTIN_JOBS}
 
 
+def _enrich_job(job: dict) -> dict:
+    position_type = get_position_type(job.get("position_key")) or get_default_position_type()
+    enriched = copy.deepcopy(job)
+    enriched["position_key"] = position_type["key"]
+    enriched["position_label"] = position_type["label"]
+    return enriched
+
+
 def get_builtin_job(job_id: int) -> dict | None:
-    """根据 ID 获取内置岗位数据（返回深拷贝），未找到返回 None"""
     job = _BUILTIN_JOBS_MAP.get(job_id)
-    return copy.deepcopy(job) if job else None
+    return _enrich_job(job) if job else None
 
 
 def get_all_builtin_jobs() -> list[dict]:
-    """获取所有内置岗位数据（返回深拷贝）"""
-    return copy.deepcopy(BUILTIN_JOBS)
+    return [_enrich_job(job) for job in BUILTIN_JOBS]
+
+
+def get_public_position_types() -> list[dict]:
+    return get_all_position_types()
+
+
+def get_default_position_config() -> dict:
+    return get_default_position_type()
+
+
+def normalize_job_position(value: str | None) -> dict:
+    key = normalize_position_key(value, fallback_to_default=True)
+    return get_position_type(key) or get_default_position_type()
+
+
+__all__ = [
+    "DEFAULT_POSITION_KEY",
+    "BUILTIN_JOBS",
+    "get_all_builtin_jobs",
+    "get_builtin_job",
+    "get_default_position_config",
+    "get_default_position_label",
+    "get_position_type",
+    "get_public_position_types",
+    "normalize_job_position",
+]

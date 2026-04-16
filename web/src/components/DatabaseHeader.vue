@@ -27,14 +27,6 @@
           >{{ database.files ? Object.keys(database.files).length : 0 }} 文件</span
         >
         <a-tag color="blue">{{ database.embed_info?.name }}</a-tag>
-        <a-tag
-          :color="getKbTypeColor(database.kb_type || 'openviking')"
-          class="kb-type-tag"
-          size="small"
-        >
-          <component :is="getKbTypeIcon(database.kb_type || 'openviking')" class="type-icon" />
-          {{ getKbTypeLabel(database.kb_type || 'openviking') }}
-        </a-tag>
       </div>
     </template>
   </HeaderComponent>
@@ -68,10 +60,8 @@
 import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDatabaseStore } from '@/stores/database'
-import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor } from '@/utils/kb_utils'
 import { LeftOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import HeaderComponent from '@/components/HeaderComponent.vue'
-import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'
 import AiTextarea from '@/components/AiTextarea.vue'
 import { h } from 'vue'
 
@@ -124,28 +114,6 @@ const handleEditSubmit = () => {
     })
 }
 
-// LLM 模型选择处理
-const llmModelSpec = computed(() => {
-  const provider = editForm.llm_info?.provider || ''
-  const modelName = editForm.llm_info?.model_name || ''
-  if (provider && modelName) {
-    return `${provider}/${modelName}`
-  }
-  return ''
-})
-
-const handleLLMSelect = (spec) => {
-  console.log('LLM选择:', spec)
-  if (typeof spec !== 'string' || !spec) return
-
-  const index = spec.indexOf('/')
-  const provider = index !== -1 ? spec.slice(0, index) : ''
-  const modelName = index !== -1 ? spec.slice(index + 1) : ''
-
-  editForm.llm_info.provider = provider
-  editForm.llm_info.model_name = modelName
-}
-
 const deleteDatabase = () => {
   store.deleteDatabase()
 }
@@ -171,16 +139,5 @@ const deleteDatabase = () => {
 .file-count {
   font-size: 12px;
   color: var(--gray-500);
-}
-
-.kb-type-tag {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.type-icon {
-  width: 14px;
-  height: 14px;
 }
 </style>

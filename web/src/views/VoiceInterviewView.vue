@@ -377,8 +377,9 @@ import { useVideoEventStream } from '@/composables/useVideoEventStream'
 import { useVoiceInterviewSession } from '@/composables/useVoiceInterviewSession'
 import { useAgentStore } from '@/stores/agent'
 import { useUserStore } from '@/stores/user'
+import { getDefaultPositionType, getFallbackPositionTypes } from '@/utils/position_utils'
 
-const DEFAULT_POSITION = '后端工程师'
+const DEFAULT_POSITION = getDefaultPositionType(getFallbackPositionTypes()).label
 const DEFAULT_ROUND = '初试'
 const VIDEO_STATUS_POLL_INTERVAL = 1200
 

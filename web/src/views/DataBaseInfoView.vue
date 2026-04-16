@@ -75,7 +75,7 @@
             <template #tab>
               <span :style="{ color: !isEvaluationSupported ? 'var(--gray-400)' : '' }">
                 RAG评估
-                <a-tooltip v-if="!isEvaluationSupported" title="仅支持 OpenViking 类型的知识库">
+                <a-tooltip v-if="!isEvaluationSupported" title="当前知识库暂不支持评估">
                   <Info :size="14" style="margin-left: 4px; vertical-align: middle" />
                 </a-tooltip>
               </span>
@@ -94,7 +94,7 @@
             <template #tab>
               <span :style="{ color: !isEvaluationSupported ? 'var(--gray-400)' : '' }">
                 评估基准
-                <a-tooltip v-if="!isEvaluationSupported" title="仅支持 OpenViking 类型的知识库">
+                <a-tooltip v-if="!isEvaluationSupported" title="当前知识库暂不支持评估">
                   <Info :size="14" style="margin-left: 4px; vertical-align: middle" />
                 </a-tooltip>
               </span>
