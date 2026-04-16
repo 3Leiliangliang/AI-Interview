@@ -4,12 +4,19 @@ import argparse
 import asyncio
 import json
 import mimetypes
+import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import httpx
 from dotenv import dotenv_values
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from src.services.position_types import get_position_type
 
 try:
@@ -25,8 +32,6 @@ except ModuleNotFoundError:
         ensure_interview_knowledge_sources,
     )
 
-
-ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BASE_URL = "http://127.0.0.1:5050/api"
 DEFAULT_EMBED_MODEL = "siliconflow/Pro/BAAI/bge-m3"
 REPORT_PATH = ROOT / "scripts" / "tmp" / "import_interview_knowledge_report.json"
@@ -42,140 +47,267 @@ class FolderImportPlan:
 
 
 @dataclass(frozen=True)
+class KnowledgeDocumentPlan:
+    source_path: Path
+    target_filename: str
+    chunk_preset_id: str
+    topic_name: str
+
+
+@dataclass(frozen=True)
 class KnowledgeImportPlan:
     name: str
     description: str
     position: str
-    chunk_preset_id: str
+    documents: tuple[KnowledgeDocumentPlan, ...]
     folders: tuple[FolderImportPlan, ...] = ()
     root_files: tuple[Path, ...] = ()
 
 
-def build_import_plan() -> tuple[KnowledgeImportPlan, ...]:
-    backend_position = get_position_type("backend")["label"]
-    frontend_position = get_position_type("frontend")["label"]
-    algorithm_position = get_position_type("algorithm")["label"]
-    system_design_position = get_position_type("system_design")["label"]
-    ai_app_position = get_position_type("ai_app")["label"]
-    unclassified_position = get_position_type("unclassified")["label"]
-
-    javaguide_backend_root = CURATED_KNOWLEDGE_ROOT / "javaguide-backend"
-    javaguide_ai_root = CURATED_KNOWLEDGE_ROOT / "javaguide-ai"
-    react_root = CURATED_KNOWLEDGE_ROOT / "react-interview"
-    frontend_root = CURATED_KNOWLEDGE_ROOT / "frontend-handbook"
-    tech_handbook_root = CURATED_KNOWLEDGE_ROOT / "tech-interview-handbook"
-    system_design_primer_root = CURATED_KNOWLEDGE_ROOT / "system-design-primer"
-    dsa_handbook_root = CURATED_KNOWLEDGE_ROOT / "dsa-handbook"
-    nodejs_root = CURATED_KNOWLEDGE_ROOT / "nodejs-interview"
-    sql_root = CURATED_KNOWLEDGE_ROOT / "sql-interview"
-
-    def md_files(path: Path) -> tuple[Path, ...]:
-        return tuple(sorted(path.rglob("*.md")))
-
-    return (
-        KnowledgeImportPlan(
-            name="JavaGuide 后端面试",
-            description="Java 后端面试核心知识库，覆盖 Java 基础、数据库、计算机基础、分布式与系统设计等高频主题。",
-            position=backend_position,
-            chunk_preset_id="qa",
-            folders=(
-                FolderImportPlan("interview-preparation", md_files(javaguide_backend_root / "interview-preparation")),
-                FolderImportPlan("java", md_files(javaguide_backend_root / "java")),
-                FolderImportPlan("database", md_files(javaguide_backend_root / "database")),
-                FolderImportPlan("cs-basics", md_files(javaguide_backend_root / "cs-basics")),
-                FolderImportPlan("distributed-system", md_files(javaguide_backend_root / "distributed-system")),
-                FolderImportPlan("system-design", md_files(javaguide_backend_root / "system-design")),
-                FolderImportPlan("high-availability", md_files(javaguide_backend_root / "high-availability")),
-                FolderImportPlan("high-performance", md_files(javaguide_backend_root / "high-performance")),
-            ),
-        ),
-        KnowledgeImportPlan(
-            name="AI 应用开发面试",
-            description="AI 应用开发面试知识库，覆盖 LLM 基础、RAG、Agent、MCP 与 AI Coding 等内容。",
-            position=ai_app_position,
-            chunk_preset_id="book",
-            folders=(
-                FolderImportPlan("llm-basis", md_files(javaguide_ai_root / "llm-basis")),
-                FolderImportPlan("rag", md_files(javaguide_ai_root / "rag")),
-                FolderImportPlan("agent", md_files(javaguide_ai_root / "agent")),
-                FolderImportPlan("ai-coding", md_files(javaguide_ai_root / "ai-coding")),
-            ),
-            root_files=(javaguide_ai_root / "README.md",),
-        ),
-        KnowledgeImportPlan(
-            name="React 面试题库",
-            description="React 问答与代码题知识库，适合以问答形式进行检索和面试问答。",
-            position=frontend_position,
-            chunk_preset_id="qa",
-            root_files=(
-                react_root / "react-interview-questions.md",
-                react_root / "react-coding-exercise.md",
-            ),
-        ),
-        KnowledgeImportPlan(
-            name="前端面试手册",
-            description="前端面试知识库，覆盖前端基础、前端系统设计、React Playbook 和行为面试问题。",
-            position=frontend_position,
-            chunk_preset_id="book",
-            folders=(
-                FolderImportPlan("frontend-guide", md_files(frontend_root / "frontend-guide")),
-                FolderImportPlan("behavioral", md_files(frontend_root / "behavioral")),
-                FolderImportPlan("react-playbook", md_files(frontend_root / "react-playbook")),
-            ),
-        ),
-        KnowledgeImportPlan(
-            name="通用技术面试手册",
-            description="通用软件工程面试知识库，覆盖行为面试、编码面试准备、简历、自我介绍与系统设计准备等内容。",
-            position=unclassified_position,
-            chunk_preset_id="book",
-            folders=(
-                FolderImportPlan("behavioral", md_files(tech_handbook_root / "behavioral")),
-                FolderImportPlan("coding", md_files(tech_handbook_root / "coding")),
-                FolderImportPlan("general", md_files(tech_handbook_root / "general")),
-            ),
-        ),
-        KnowledgeImportPlan(
-            name="系统设计面试题库",
-            description="系统设计面试知识库，覆盖系统设计基础框架与 Twitter、Pastebin、网页爬虫等经典案例。",
-            position=system_design_position,
-            chunk_preset_id="book",
-            folders=(
-                FolderImportPlan("cases", md_files(system_design_primer_root / "cases")),
-            ),
-            root_files=(system_design_primer_root / "overview" / "system-design-primer.md",),
-        ),
-        KnowledgeImportPlan(
-            name="DSA 面试手册",
-            description="算法与数据结构面试知识库，覆盖数组、图、树、动态规划、贪心等高频题型与面试要点。",
-            position=algorithm_position,
-            chunk_preset_id="book",
-            folders=(
-                FolderImportPlan("topics", md_files(dsa_handbook_root / "topics")),
-            ),
-            root_files=(dsa_handbook_root / "README.md",),
-        ),
-        KnowledgeImportPlan(
-            name="Node.js 面试题库",
-            description="Node.js 一问一答面试知识库，覆盖事件循环、中间件、流、模块系统与高阶后端问题。",
-            position=backend_position,
-            chunk_preset_id="qa",
-            root_files=(
-                nodejs_root / "nodejs-interview-questions.md",
-                nodejs_root / "nodejs-advanced-questions.md",
-            ),
-        ),
-        KnowledgeImportPlan(
-            name="SQL 面试题库",
-            description="SQL 面试知识库，覆盖 SQL 基础、查询、连接、事务、索引、安全与高频问答。",
-            position=backend_position,
-            chunk_preset_id="book",
-            root_files=(sql_root / "sql-interview-guide.md",),
-        ),
-    )
-
-
 class ImportError(RuntimeError):
     pass
+
+
+def _position_label(key: str) -> str:
+    return get_position_type(key)["label"]
+
+
+POSITION_DATABASE_DESCRIPTIONS = {
+    "frontend": "前端岗位面试知识库，覆盖前端基础、框架、工程化与常见面试主题。",
+    "backend": "后端岗位面试知识库，覆盖后端基础、数据库、分布式与高频面试主题。",
+    "algorithm": "算法岗位面试知识库，覆盖数据结构、算法题型与编码思路。",
+    "system_design": "系统架构岗位知识库，覆盖系统设计方法、经典案例与架构权衡。",
+    "ai_app": "AI 应用开发知识库，覆盖 LLM、RAG、Agent、MCP 与 AI Coding。",
+}
+
+ALL_SELECTABLE_POSITION_KEYS = ("frontend", "backend", "algorithm", "system_design", "ai_app")
+LEGACY_PACKAGE_DATABASE_NAMES = (
+    "JavaGuide 后端面试",
+    "AI 应用开发面试",
+    "React 面试题库",
+    "前端面试手册",
+    "通用技术面试手册",
+    "系统设计面试题库",
+    "DSA 面试手册",
+    "Node.js 面试题库",
+    "SQL 面试题库",
+)
+
+
+def get_legacy_package_database_names() -> list[str]:
+    return list(LEGACY_PACKAGE_DATABASE_NAMES)
+
+
+def get_managed_interview_database_names() -> list[str]:
+    return get_legacy_package_database_names() + [_position_label(key) for key in ALL_SELECTABLE_POSITION_KEYS]
+
+
+def _sanitize_filename_segment(value: str) -> str:
+    cleaned = re.sub(r'[<>:"/\\\\|?*]+', " ", str(value or "")).strip()
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned.strip(". ") or "untitled"
+
+
+def extract_markdown_title(source_path: Path) -> str:
+    content = source_path.read_text(encoding="utf-8")
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if line.startswith("# "):
+            return line[2:].strip()
+    return source_path.stem
+
+
+def build_target_filename(
+    source_path: Path,
+    curated_root: Path = CURATED_KNOWLEDGE_ROOT,
+    *,
+    used_filenames: set[str] | None = None,
+) -> str:
+    base_name = _sanitize_filename_segment(extract_markdown_title(source_path))
+    extension = source_path.suffix or ".md"
+    candidate = f"{base_name}{extension}"
+    if used_filenames is None:
+        return candidate
+
+    index = 2
+    while candidate.lower() in used_filenames:
+        candidate = f"{base_name}__{index}{extension}"
+        index += 1
+    used_filenames.add(candidate.lower())
+    return candidate
+
+
+def infer_chunk_preset_id(source_path: Path, curated_root: Path = CURATED_KNOWLEDGE_ROOT) -> str:
+    return "qa"
+
+
+def infer_position_keys_for_file(source_path: Path, curated_root: Path = CURATED_KNOWLEDGE_ROOT) -> tuple[str, ...]:
+    relative_path = source_path.relative_to(curated_root)
+    top_level = relative_path.parts[0]
+    relative_text = relative_path.as_posix()
+
+    if top_level == "javaguide-backend":
+        if "/cs-basics/" in f"/{relative_text}":
+            return ("backend", "algorithm")
+        if "/system-design/" in f"/{relative_text}":
+            return ("backend", "system_design")
+        return ("backend",)
+
+    if top_level == "javaguide-ai":
+        return ("ai_app",)
+
+    if top_level in {"react-interview", "frontend-handbook"}:
+        return ("frontend",)
+
+    if top_level == "system-design-primer":
+        return ("system_design",)
+
+    if top_level == "dsa-handbook":
+        return ("algorithm",)
+
+    if top_level in {"nodejs-interview", "sql-interview"}:
+        return ("backend",)
+
+    if top_level == "tech-interview-handbook":
+        return ALL_SELECTABLE_POSITION_KEYS
+
+    return ()
+
+
+def infer_topic_names_for_file(
+    source_path: Path,
+    position_keys: tuple[str, ...],
+    curated_root: Path = CURATED_KNOWLEDGE_ROOT,
+) -> dict[str, str]:
+    relative_path = source_path.relative_to(curated_root)
+    top_level = relative_path.parts[0]
+    path_parts = relative_path.parts[1:]
+
+    if top_level == "javaguide-backend":
+        first_part = path_parts[0] if path_parts else ""
+        if first_part == "interview-preparation":
+            return {"backend": "面试准备"}
+        if first_part == "java":
+            return {"backend": "Java"}
+        if first_part == "database":
+            return {"backend": "数据库"}
+        if first_part == "cs-basics":
+            return {
+                "backend": "计算机基础",
+                "algorithm": "算法与数据结构",
+            }
+        if first_part == "distributed-system":
+            return {"backend": "分布式"}
+        if first_part == "system-design":
+            return {
+                "backend": "系统设计",
+                "system_design": "系统设计",
+            }
+        if first_part == "high-availability":
+            return {"backend": "高可用"}
+        if first_part == "high-performance":
+            return {"backend": "高性能"}
+
+    if top_level == "javaguide-ai":
+        first_part = path_parts[0] if path_parts else ""
+        topic_map = {
+            "README.md": "AI 总览",
+            "llm-basis": "LLM基础",
+            "rag": "RAG",
+            "agent": "Agent",
+            "ai-coding": "AI Coding",
+        }
+        topic = topic_map.get(first_part or relative_path.name, "AI 应用开发")
+        return {"ai_app": topic}
+
+    if top_level == "react-interview":
+        return {"frontend": "React"}
+
+    if top_level == "frontend-handbook":
+        first_part = path_parts[0] if path_parts else ""
+        topic_map = {
+            "frontend-guide": "前端基础",
+            "behavioral": "行为面试",
+            "react-playbook": "React",
+        }
+        return {"frontend": topic_map.get(first_part, "前端基础")}
+
+    if top_level == "tech-interview-handbook":
+        first_part = path_parts[0] if path_parts else ""
+        topic_map = {
+            "behavioral": "行为面试",
+            "coding": "编程面试",
+            "general": "通用基础",
+        }
+        topic = topic_map.get(first_part, "通用基础")
+        return {position_key: topic for position_key in position_keys}
+
+    if top_level == "system-design-primer":
+        return {"system_design": "系统设计"}
+
+    if top_level == "dsa-handbook":
+        return {"algorithm": "算法与数据结构"}
+
+    if top_level == "nodejs-interview":
+        return {"backend": "Node.js"}
+
+    if top_level == "sql-interview":
+        return {"backend": "数据库"}
+
+    return {position_key: "未分类" for position_key in position_keys}
+
+
+def build_import_plan() -> tuple[KnowledgeImportPlan, ...]:
+    source_documents: list[tuple[tuple[str, ...], Path, str, dict[str, str]]] = []
+
+    for source_path in sorted(CURATED_KNOWLEDGE_ROOT.rglob("*.md")):
+        position_keys = infer_position_keys_for_file(source_path, CURATED_KNOWLEDGE_ROOT)
+        if not position_keys:
+            continue
+        topic_names = infer_topic_names_for_file(source_path, position_keys, CURATED_KNOWLEDGE_ROOT)
+        source_documents.append(
+            (
+                position_keys,
+                source_path,
+                infer_chunk_preset_id(source_path, CURATED_KNOWLEDGE_ROOT),
+                topic_names,
+            )
+        )
+
+    plans: list[KnowledgeImportPlan] = []
+    for position_key in ALL_SELECTABLE_POSITION_KEYS:
+        used_filenames_by_topic: dict[str, set[str]] = {}
+        documents_list: list[KnowledgeDocumentPlan] = []
+        for position_keys, source_path, chunk_preset_id, topic_names in source_documents:
+            if position_key not in position_keys:
+                continue
+            topic_name = topic_names[position_key]
+            used_filenames = used_filenames_by_topic.setdefault(topic_name, set())
+            documents_list.append(
+                KnowledgeDocumentPlan(
+                    source_path=source_path,
+                    target_filename=build_target_filename(
+                        source_path,
+                        CURATED_KNOWLEDGE_ROOT,
+                        used_filenames=used_filenames,
+                    ),
+                    chunk_preset_id=chunk_preset_id,
+                    topic_name=topic_name,
+                )
+            )
+        documents = tuple(documents_list)
+        if not documents:
+            continue
+        plans.append(
+            KnowledgeImportPlan(
+                name=_position_label(position_key),
+                description=POSITION_DATABASE_DESCRIPTIONS[position_key],
+                position=_position_label(position_key),
+                documents=documents,
+            )
+        )
+
+    return tuple(plans)
 
 
 class ApiClient:
@@ -229,15 +361,24 @@ class ApiClient:
             raise ImportError(f"PUT {path} failed: {response.status_code} {response.text}")
         return response.json()
 
+    async def delete(self, path: str) -> dict[str, Any]:
+        response = await self.client.delete(f"{self.base_url}{path}")
+        if response.status_code >= 400:
+            raise ImportError(f"DELETE {path} failed: {response.status_code} {response.text}")
+        return response.json()
+
     async def list_databases(self) -> list[dict[str, Any]]:
         data = await self.get("/knowledge/databases")
         return data.get("databases", [])
+
+    async def delete_database(self, db_id: str) -> dict[str, Any]:
+        return await self.delete(f"/knowledge/databases/{db_id}")
 
     async def get_database_info(self, db_id: str) -> dict[str, Any]:
         return await self.get(f"/knowledge/databases/{db_id}")
 
     async def ensure_database(self, plan: KnowledgeImportPlan) -> dict[str, Any]:
-        desired_params = build_index_params(plan.chunk_preset_id, plan.position)
+        desired_params = build_index_params("qa", plan.position)
         for database in await self.list_databases():
             if database.get("name") != plan.name:
                 continue
@@ -297,11 +438,11 @@ class ApiClient:
             raise ImportError(f"Failed to create folder {folder_name} in {db_id}")
         return folder_id
 
-    async def upload_file(self, db_id: str, file_path: Path) -> dict[str, Any]:
-        mime_type, _ = mimetypes.guess_type(file_path.name)
+    async def upload_file(self, db_id: str, file_path: Path, upload_name: str) -> dict[str, Any]:
+        mime_type, _ = mimetypes.guess_type(upload_name)
         mime_type = mime_type or "text/markdown"
         with file_path.open("rb") as handle:
-            files = {"file": (file_path.name, handle, mime_type)}
+            files = {"file": (upload_name, handle, mime_type)}
             return await self.post("/knowledge/files/upload", files=files, params={"db_id": db_id})
 
     async def add_documents(self, db_id: str, items: list[str], params: dict[str, Any]) -> dict[str, Any]:
@@ -350,8 +491,11 @@ def file_key(filename: str, parent_id: str | None) -> tuple[str, str]:
     return filename.lower(), parent_id or ""
 
 
-def build_expected_file_map(file_paths: list[Path], parent_id: str | None) -> dict[tuple[str, str], Path]:
-    return {file_key(path.name, parent_id): path for path in file_paths}
+def build_expected_file_map(
+    documents: list[KnowledgeDocumentPlan],
+    parent_id: str | None,
+) -> dict[tuple[str, str], KnowledgeDocumentPlan]:
+    return {file_key(document.target_filename, parent_id): document for document in documents}
 
 
 def extract_current_file_map(db_info: dict[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
@@ -407,7 +551,7 @@ async def wait_for_queued_result(api: ApiClient, response: dict[str, Any]) -> di
 async def repair_file_states(
     api: ApiClient,
     db_id: str,
-    expected_files: dict[tuple[str, str], Path],
+    expected_files: dict[tuple[str, str], KnowledgeDocumentPlan],
     parent_id: str | None,
     chunk_preset_id: str,
     position: str,
@@ -418,12 +562,12 @@ async def repair_file_states(
 
     parse_ids: list[str] = []
     index_ids: list[str] = []
-    missing_paths: list[Path] = []
+    missing_documents: list[KnowledgeDocumentPlan] = []
 
-    for key, source_path in expected_files.items():
+    for key, document in expected_files.items():
         file_info = current_files.get(key)
         if not file_info:
-            missing_paths.append(source_path)
+            missing_documents.append(document)
             continue
 
         status = file_info.get("status")
@@ -441,8 +585,8 @@ async def repair_file_states(
         refreshed = await api.get_database_info(db_id)
         refreshed_files = extract_current_file_map(refreshed)
         parse_repaired_ids = []
-        for key, source_path in expected_files.items():
-            if source_path in missing_paths:
+        for key, document in expected_files.items():
+            if document in missing_documents:
                 continue
 
             file_info = refreshed_files.get(key)
@@ -459,43 +603,43 @@ async def repair_file_states(
                 await api.index_documents(db_id, all_index_ids, build_index_params(chunk_preset_id, position)),
             )
 
-    return {"missing_paths": missing_paths}
+    return {"missing_documents": missing_documents}
 
 
 async def import_batch(
     api: ApiClient,
     db_id: str,
     *,
+    documents: list[KnowledgeDocumentPlan],
     parent_id: str | None,
-    file_paths: list[Path],
     chunk_preset_id: str,
     position: str,
     force_reindex: bool,
 ) -> dict[str, Any]:
     db_info = await api.get_database_info(db_id)
     current_files = extract_current_file_map(db_info)
-    expected_map = build_expected_file_map(file_paths, parent_id)
+    expected_map = build_expected_file_map(documents, parent_id)
 
-    missing_to_upload: list[Path] = []
+    missing_to_upload: list[KnowledgeDocumentPlan] = []
     existing_ready = 0
-    for key, path in expected_map.items():
+    for key, document in expected_map.items():
         existing = current_files.get(key)
         if existing and existing.get("status") in INDEXED_STATUSES and not force_reindex:
             existing_ready += 1
             continue
         if existing:
             continue
-        missing_to_upload.append(path)
+        missing_to_upload.append(document)
 
     upload_items: list[str] = []
     content_hashes: dict[str, str] = {}
     uploaded_names: list[str] = []
 
-    for file_path in missing_to_upload:
-        upload_result = await api.upload_file(db_id, file_path)
+    for document in missing_to_upload:
+        upload_result = await api.upload_file(db_id, document.source_path, document.target_filename)
         upload_items.append(upload_result["file_path"])
         content_hashes[upload_result["file_path"]] = upload_result["content_hash"]
-        uploaded_names.append(file_path.name)
+        uploaded_names.append(document.target_filename)
 
     if upload_items:
         params = build_ingest_params(
@@ -515,11 +659,11 @@ async def import_batch(
         force_reindex,
     )
 
-    if repair_result["missing_paths"]:
+    if repair_result["missing_documents"]:
         retry_items: list[str] = []
         retry_hashes: dict[str, str] = {}
-        for file_path in repair_result["missing_paths"]:
-            upload_result = await api.upload_file(db_id, file_path)
+        for document in repair_result["missing_documents"]:
+            upload_result = await api.upload_file(db_id, document.source_path, document.target_filename)
             retry_items.append(upload_result["file_path"])
             retry_hashes[upload_result["file_path"]] = upload_result["content_hash"]
 
@@ -534,8 +678,8 @@ async def import_batch(
     final_db_info = await api.get_database_info(db_id)
     final_files = extract_current_file_map(final_db_info)
     unresolved = [
-        str(source_path)
-        for key, source_path in expected_map.items()
+        str(document.source_path)
+        for key, document in expected_map.items()
         if (final_files.get(key) or {}).get("status") not in INDEXED_STATUSES
     ]
 
@@ -557,42 +701,29 @@ async def import_knowledge_plan(
     db_id = database["db_id"]
     print(f"[{plan.name}] using database {db_id}")
 
-    folder_ids: dict[str, str] = {}
-    for folder in plan.folders:
-        folder_ids[folder.name] = await api.ensure_folder(db_id, folder.name)
+    topic_folder_ids: dict[str, str] = {}
+    for topic_name in sorted({document.topic_name for document in plan.documents}):
+        topic_folder_ids[topic_name] = await api.ensure_folder(db_id, topic_name)
+
+    grouped_documents: dict[tuple[str, str], list[KnowledgeDocumentPlan]] = {}
+    for document in plan.documents:
+        grouped_documents.setdefault((document.chunk_preset_id, document.topic_name), []).append(document)
 
     batches_report: list[dict[str, Any]] = []
-    for folder in plan.folders:
-        folder_files = list(folder.files)
-        parent_id = folder_ids[folder.name]
-        for index in range(0, len(folder_files), batch_size):
-            batch = folder_files[index : index + batch_size]
-            print(f"[{plan.name}] importing folder {folder.name} batch {index // batch_size + 1}")
+    for (chunk_preset_id, topic_name), documents in grouped_documents.items():
+        for index in range(0, len(documents), batch_size):
+            batch = documents[index : index + batch_size]
+            print(f"[{plan.name}] importing {topic_name}/{chunk_preset_id} batch {index // batch_size + 1}")
             result = await import_batch(
                 api,
                 db_id,
-                parent_id=parent_id,
-                file_paths=batch,
-                chunk_preset_id=plan.chunk_preset_id,
+                documents=batch,
+                parent_id=topic_folder_ids[topic_name],
+                chunk_preset_id=chunk_preset_id,
                 position=plan.position,
                 force_reindex=force_reindex,
             )
-            batches_report.append({"scope": folder.name, "result": result})
-
-    root_file_list = list(plan.root_files)
-    for index in range(0, len(root_file_list), batch_size):
-        batch = root_file_list[index : index + batch_size]
-        print(f"[{plan.name}] importing root batch {index // batch_size + 1}")
-        result = await import_batch(
-            api,
-            db_id,
-            parent_id=None,
-            file_paths=batch,
-            chunk_preset_id=plan.chunk_preset_id,
-            position=plan.position,
-            force_reindex=force_reindex,
-        )
-        batches_report.append({"scope": "root", "result": result})
+            batches_report.append({"scope": topic_name, "chunk_preset_id": chunk_preset_id, "result": result})
 
     final_info = await api.get_database_info(db_id)
     status_counts: dict[str, int] = {}
@@ -620,15 +751,11 @@ async def import_knowledge_plan(
 
 async def verify_queries(api: ApiClient, reports: list[dict[str, Any]]) -> list[dict[str, Any]]:
     queries = {
-        "JavaGuide 后端面试": "什么是 CAS",
-        "AI 应用开发面试": "什么是 RAG",
-        "React 面试题库": "What is React Fiber?",
-        "前端面试手册": "如何准备行为面试",
-        "通用技术面试手册": "How to prepare for behavioral interviews",
-        "系统设计面试题库": "如何设计 Twitter 时间线",
-        "DSA 面试手册": "When to use dynamic programming",
-        "Node.js 面试题库": "What is middleware in Node.js?",
-        "SQL 面试题库": "什么是 ACID",
+        _position_label("frontend"): "What is React Fiber?",
+        _position_label("backend"): "什么是 CAS",
+        _position_label("algorithm"): "When to use dynamic programming",
+        _position_label("system_design"): "如何设计 Twitter 时间线",
+        _position_label("ai_app"): "什么是 RAG",
     }
     results: list[dict[str, Any]] = []
     for report in reports:
@@ -649,11 +776,7 @@ async def verify_queries(api: ApiClient, reports: list[dict[str, Any]]) -> list[
 
 
 def count_expected_files(plans: tuple[KnowledgeImportPlan, ...]) -> int:
-    expected_total = 0
-    for plan in plans:
-        expected_total += len(plan.root_files)
-        expected_total += sum(len(folder.files) for folder in plan.folders)
-    return expected_total
+    return sum(len(plan.documents) for plan in plans)
 
 
 async def run_import(
@@ -663,6 +786,7 @@ async def run_import(
     batch_size: int,
     force_reindex: bool,
     force_sync: bool,
+    delete_legacy_package_databases: bool,
 ) -> dict[str, Any]:
     if force_sync or not CURATED_MANIFEST_PATH.exists():
         source_manifest = ensure_interview_knowledge_sources(force=force_sync)
@@ -671,6 +795,18 @@ async def run_import(
     plans = build_import_plan()
 
     async with ApiClient(base_url, username, password) as api:
+        deleted_databases: list[str] = []
+        if delete_legacy_package_databases:
+            legacy_names = set(get_managed_interview_database_names())
+            for database in await api.list_databases():
+                if str(database.get("name") or "").strip() not in legacy_names:
+                    continue
+                db_id = str(database.get("db_id") or "").strip()
+                if not db_id:
+                    continue
+                await api.delete_database(db_id)
+                deleted_databases.append(database["name"])
+
         database_reports = []
         for plan in plans:
             database_reports.append(
@@ -685,6 +821,7 @@ async def run_import(
 
         return {
             "source_manifest": source_manifest,
+            "deleted_legacy_databases": deleted_databases,
             "database_count": len(all_databases),
             "expected_database_count": len(plans),
             "total_file_count": total_files,
@@ -712,6 +849,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Re-clone upstream repositories before syncing local knowledge sources.",
     )
+    parser.add_argument(
+        "--delete-legacy-package-databases",
+        action="store_true",
+        help="Delete managed interview knowledge bases before importing the new position/topic-based ones.",
+    )
     return parser.parse_args()
 
 
@@ -730,6 +872,7 @@ def main() -> None:
             args.batch_size,
             args.force_reindex,
             args.force_sync,
+            args.delete_legacy_package_databases,
         )
     )
 

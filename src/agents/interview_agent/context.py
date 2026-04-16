@@ -3,7 +3,7 @@ from typing import Annotated
 
 from src.agents.common.context import BaseContext
 from src.services.interview_resume_service import build_selected_resume_prompt_block
-from src.services.position_types import get_default_position_label
+from src.services.position_types import get_default_position_label, normalize_position_label
 
 DEFAULT_TARGET_POSITION = get_default_position_label()
 DEFAULT_INTERVIEW_ROUND = "初试"
@@ -87,6 +87,10 @@ class InterviewContext(BaseContext):
         default="",
         metadata={"name": "选中简历正文摘录", "configurable": False, "hide": True},
     )
+
+    @staticmethod
+    def get_position_technical_kb_names(target_position: str | None) -> list[str]:
+        return [normalize_position_label(target_position)]
 
     @staticmethod
     def normalize_runtime_values(target_position: str | None, interview_round: str | None) -> tuple[str, str]:

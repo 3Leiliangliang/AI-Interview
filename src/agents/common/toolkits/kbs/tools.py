@@ -13,6 +13,7 @@ from sqlalchemy import select
 from src import knowledge_base
 from src.agents.common.runtime_request_context import get_agent_request_context
 from src.services.openviking_service import openviking_service
+from src.services.position_types import normalize_position_label
 from src.storage.postgres.manager import pg_manager
 from src.storage.postgres.models_business import UserResume
 from src.utils import logger
@@ -43,12 +44,6 @@ BACKEND_KB_KEYWORDS = (
 )
 FRONTEND_KB_KEYWORDS = ("前端", "frontend", "react", "vue", "javascript", "typescript", "css", "html")
 QUESTION_FILE_KEYWORDS = ("question", "questions", "interview", "面试", "题")
-INTERVIEW_POSITION_TO_KB_NAMES = {
-    "backend": ["JavaGuide", "Waking-Up"],
-    "frontend": ["React Interview Questions"],
-}
-
-
 def _normalize_runtime_user_id(runtime: ToolRuntime) -> int | None:
     runtime_context = getattr(runtime, "context", None)
     user_id = getattr(runtime_context, "user_id", None)
@@ -315,15 +310,11 @@ def _match_role_based_kbs(requested_name: str, all_kbs: list[dict[str, Any]]) ->
     ]
 
 
-def _normalize_interview_position_tag(target_position: str | None) -> str:
-    position = str(target_position or "").strip().lower()
-    if not position:
-        return ""
-    if "前端" in position or "frontend" in position:
-        return "frontend"
-    if "后端" in position or "backend" in position:
-        return "backend"
-    return ""
+def _get_position_kb_names(target_position: str | None) -> list[str]:
+    normalized = str(target_position or "").strip()
+    if not normalized:
+        return []
+    return [normalize_position_label(normalized)]
 
 
 def _get_interview_kb_names_from_runtime(runtime: ToolRuntime | None) -> list[str]:
@@ -333,8 +324,7 @@ def _get_interview_kb_names_from_runtime(runtime: ToolRuntime | None) -> list[st
         getattr(runtime_context, "target_position", "")
         or str(request_context.get("target_position") or "")
     )
-    position_tag = _normalize_interview_position_tag(target_position)
-    return INTERVIEW_POSITION_TO_KB_NAMES.get(position_tag, [])
+    return _get_position_kb_names(target_position)
 
 
 async def _resolve_candidate_kbs(kb_names: list[str]) -> list[dict[str, Any]]:
@@ -362,6 +352,13 @@ async def _resolve_candidate_kbs(kb_names: list[str]) -> list[dict[str, Any]]:
                 if normalized_name in _build_kb_search_text(kb_info)
                 or _build_kb_search_text(kb_info) in normalized_name
             ]
+            if not matched_kbs:
+                matched_kbs = [
+                    kb_info
+                    for kb_info in all_kbs
+                    if normalize_position_label((kb_info.get("additional_params") or {}).get("position", ""))
+                    == normalize_position_label(kb_name)
+                ]
             if not matched_kbs:
                 matched_kbs = _match_role_based_kbs(kb_name, all_kbs)
 

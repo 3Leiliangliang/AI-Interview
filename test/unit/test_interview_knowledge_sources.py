@@ -88,6 +88,45 @@ React is a library.
     assert "### What is React?" in normalized
 
 
+def test_normalize_source_text_rewrites_relative_markdown_images_to_raw_urls() -> None:
+    content = """# Example
+
+![Architecture](./images/arch.png)
+"""
+
+    normalized = normalize_source_text(
+        content,
+        repo_name="javaguide",
+        repo_url="https://github.com/Snailclimb/JavaGuide",
+        source_path="docs/system-design/example.md",
+        license_name="Apache-2.0",
+        commit="abcdef1234567890",
+    )
+
+    assert "![Architecture](https://raw.githubusercontent.com/Snailclimb/JavaGuide/abcdef1234567890/docs/system-design/images/arch.png)" in normalized
+
+
+def test_normalize_source_text_converts_html_images_to_markdown_with_absolute_urls() -> None:
+    content = """# Example
+
+<p align="center">
+  <img src="../assets/demo.png" alt="demo image" />
+</p>
+"""
+
+    normalized = normalize_source_text(
+        content,
+        repo_name="front-end-interview-handbook",
+        repo_url="https://github.com/yangshun/front-end-interview-handbook",
+        source_path="packages/react-interview-playbook/contents/react-hooks/zh-CN.mdx",
+        license_name="MIT",
+        commit="abcdef1234567890",
+    )
+
+    assert "![demo image](https://raw.githubusercontent.com/yangshun/front-end-interview-handbook/abcdef1234567890/packages/react-interview-playbook/contents/react-hooks/../assets/demo.png)" not in normalized
+    assert "![demo image](https://raw.githubusercontent.com/yangshun/front-end-interview-handbook/abcdef1234567890/packages/react-interview-playbook/contents/assets/demo.png)" in normalized
+
+
 def test_normalize_source_text_trims_nodejs_readme_noise() -> None:
     content = """# Nodejs Interview Questions and Answers
 
@@ -229,22 +268,54 @@ def test_build_import_plan_reads_curated_root(monkeypatch, tmp_path: Path) -> No
     monkeypatch.setattr(import_interview_knowledge, "CURATED_KNOWLEDGE_ROOT", curated_root)
 
     plans = import_interview_knowledge.build_import_plan()
-    plan_counts = [len(plan.root_files) + sum(len(folder.files) for folder in plan.folders) for plan in plans]
+    plan_counts = [len(plan.documents) for plan in plans]
     plan_positions = [plan.position for plan in plans]
+    plan_names = [plan.name for plan in plans]
+    plan_batches = {plan.name: {document.chunk_preset_id for document in plan.documents} for plan in plans}
+    backend_plan = next(plan for plan in plans if plan.name == position_service.get_position_type("backend")["label"])
+    system_plan = next(
+        plan for plan in plans if plan.name == position_service.get_position_type("system_design")["label"]
+    )
+    frontend_plan = next(plan for plan in plans if plan.name == position_service.get_position_type("frontend")["label"])
+    ai_plan = next(plan for plan in plans if plan.name == position_service.get_position_type("ai_app")["label"])
 
-    assert len(plans) == 9
-    assert plan_counts == [8, 5, 2, 3, 3, 2, 2, 2, 1]
-    assert plan_positions == [
+    assert len(plans) == 5
+    assert plan_names == [
+        position_service.get_position_type("frontend")["label"],
         position_service.get_position_type("backend")["label"],
-        position_service.get_position_type("ai_app")["label"],
-        position_service.get_position_type("frontend")["label"],
-        position_service.get_position_type("frontend")["label"],
-        position_service.get_position_type("unclassified")["label"],
-        position_service.get_position_type("system_design")["label"],
         position_service.get_position_type("algorithm")["label"],
-        position_service.get_position_type("backend")["label"],
-        position_service.get_position_type("backend")["label"],
+        position_service.get_position_type("system_design")["label"],
+        position_service.get_position_type("ai_app")["label"],
     ]
+    assert plan_counts == [8, 14, 6, 6, 8]
+    assert plan_positions == [
+        position_service.get_position_type("frontend")["label"],
+        position_service.get_position_type("backend")["label"],
+        position_service.get_position_type("algorithm")["label"],
+        position_service.get_position_type("system_design")["label"],
+        position_service.get_position_type("ai_app")["label"],
+    ]
+    assert plan_batches[position_service.get_position_type("frontend")["label"]] == {"qa"}
+    assert plan_batches[position_service.get_position_type("backend")["label"]] == {"qa"}
+    assert any(
+        document.source_path == curated_root / "javaguide-backend" / "system-design" / "a.md"
+        and document.topic_name == "系统设计"
+        for document in backend_plan.documents
+    )
+    assert any(
+        document.source_path == curated_root / "javaguide-backend" / "system-design" / "a.md"
+        and document.topic_name == "系统设计"
+        for document in system_plan.documents
+    )
+    assert {document.topic_name for document in frontend_plan.documents} == {"React", "前端基础", "行为面试", "编程面试", "通用基础"}
+    assert {"AI 总览", "LLM基础", "RAG", "Agent", "AI Coding"} <= {
+        document.topic_name for document in ai_plan.documents
+    }
+    backend_topics = {document.topic_name for document in backend_plan.documents}
+    assert {"面试准备", "Java", "数据库", "计算机基础", "分布式", "系统设计", "高可用", "高性能", "Node.js"} <= backend_topics
+    assert len({(document.topic_name, document.target_filename) for document in backend_plan.documents}) == len(
+        backend_plan.documents
+    )
 
 
 def test_build_index_params_includes_position() -> None:
@@ -256,3 +327,62 @@ def test_build_index_params_includes_position() -> None:
     assert params["chunk_preset_id"] == "qa"
     assert params["position"] == position_service.get_position_type("backend")["label"]
     assert params["qa_separator"] == import_interview_knowledge.QA_SEPARATOR
+
+
+def test_build_flattened_target_filename_is_unique_and_readable() -> None:
+    curated_root = Path("/tmp/interview_sources")
+    source_path = curated_root / "javaguide-backend" / "system-design" / "basis" / "a.md"
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    source_path.write_text("# 系统设计基础\n\ncontent\n", encoding="utf-8")
+
+    target_filename = import_interview_knowledge.build_target_filename(source_path, curated_root)
+
+    assert target_filename == "系统设计基础.md"
+
+
+def test_build_target_filename_deduplicates_duplicate_titles() -> None:
+    curated_root = Path("/tmp/interview_sources")
+    first_path = curated_root / "repo-a" / "first.md"
+    second_path = curated_root / "repo-b" / "second.md"
+    first_path.parent.mkdir(parents=True, exist_ok=True)
+    second_path.parent.mkdir(parents=True, exist_ok=True)
+    first_path.write_text("# 重复标题\n\nA\n", encoding="utf-8")
+    second_path.write_text("# 重复标题\n\nB\n", encoding="utf-8")
+
+    used_filenames: set[str] = set()
+    first_name = import_interview_knowledge.build_target_filename(
+        first_path,
+        curated_root,
+        used_filenames=used_filenames,
+    )
+    second_name = import_interview_knowledge.build_target_filename(
+        second_path,
+        curated_root,
+        used_filenames=used_filenames,
+    )
+
+    assert first_name == "重复标题.md"
+    assert second_name == "重复标题__2.md"
+
+
+def test_get_legacy_package_database_names_returns_old_seed_names() -> None:
+    assert import_interview_knowledge.get_legacy_package_database_names() == [
+        "JavaGuide 后端面试",
+        "AI 应用开发面试",
+        "React 面试题库",
+        "前端面试手册",
+        "通用技术面试手册",
+        "系统设计面试题库",
+        "DSA 面试手册",
+        "Node.js 面试题库",
+        "SQL 面试题库",
+    ]
+def test_get_managed_interview_database_names_includes_legacy_and_position_names() -> None:
+    names = import_interview_knowledge.get_managed_interview_database_names()
+
+    assert import_interview_knowledge.get_legacy_package_database_names()[0] in names
+    assert position_service.get_position_type("frontend")["label"] in names
+    assert position_service.get_position_type("backend")["label"] in names
+    assert position_service.get_position_type("algorithm")["label"] in names
+    assert position_service.get_position_type("system_design")["label"] in names
+    assert position_service.get_position_type("ai_app")["label"] in names

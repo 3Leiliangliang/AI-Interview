@@ -126,54 +126,46 @@
     </div>
 
     <!-- 数据库列表 -->
-    <div v-else class="database-groups">
-      <section v-for="group in databaseGroups" :key="group.key" class="database-group">
-        <div class="database-group-header">
-          <h3 class="database-group-title">{{ group.label }}</h3>
-          <span class="database-group-count">{{ group.items.length }} 个知识库</span>
-        </div>
-        <div class="databases">
-          <div
-            v-for="database in group.items"
-            :key="database.db_id"
-            class="database dbcard"
-            @click="navigateToDatabase(database.db_id)"
-          >
-            <LockOutlined
-              v-if="database.metadata?.is_private"
-              class="private-lock-icon"
-              title="私有知识库"
-            />
-            <div class="top">
-              <div class="icon">
-                <component :is="getKbTypeIcon(database.kb_type || 'openviking')" />
-              </div>
-              <div class="info">
-                <h3>{{ database.name }}</h3>
-                <p>
-                  <span>{{ database.files ? Object.keys(database.files).length : 0 }} 文件</span>
-                  <span class="created-time-inline" v-if="database.created_at">
-                    {{ formatCreatedTime(database.created_at) }}
-                  </span>
-                </p>
-              </div>
-            </div>
-            <p class="description">{{ database.description || '暂无描述' }}</p>
-            <div class="tags">
-              <a-tag color="blue" v-if="database.embed_info?.name">{{
-                database.embed_info.name
-              }}</a-tag>
-              <a-tag color="geekblue">岗位：{{ getDatabasePositionLabel(database) }}</a-tag>
-              <a-tag color="purple" v-if="getDatabaseVlmModel(database)">
-                VLM：{{ getDatabaseVlmModel(database) }}
-              </a-tag>
-              <a-tag color="cyan" class="chunk-tag">
-                分块：{{ chunkPresetLabelMap[database.additional_params?.chunk_preset_id || 'general'] || 'General' }}
-              </a-tag>
-            </div>
+    <div v-else class="databases">
+      <div
+        v-for="database in sortedDatabases"
+        :key="database.db_id"
+        class="database dbcard"
+        @click="navigateToDatabase(database.db_id)"
+      >
+        <LockOutlined
+          v-if="database.metadata?.is_private"
+          class="private-lock-icon"
+          title="私有知识库"
+        />
+        <div class="top">
+          <div class="icon">
+            <component :is="getKbTypeIcon(database.kb_type || 'openviking')" />
+          </div>
+          <div class="info">
+            <h3>{{ database.name }}</h3>
+            <p>
+              <span>{{ database.files ? Object.keys(database.files).length : 0 }} 文件</span>
+              <span class="created-time-inline" v-if="database.created_at">
+                {{ formatCreatedTime(database.created_at) }}
+              </span>
+            </p>
           </div>
         </div>
-      </section>
+        <p class="description">{{ database.description || '暂无描述' }}</p>
+        <div class="tags">
+          <a-tag color="blue" v-if="database.embed_info?.name">{{
+            database.embed_info.name
+          }}</a-tag>
+          <a-tag color="geekblue">岗位：{{ getDatabasePositionLabel(database) }}</a-tag>
+          <a-tag color="purple" v-if="getDatabaseVlmModel(database)">
+            VLM：{{ getDatabaseVlmModel(database) }}
+          </a-tag>
+          <a-tag color="cyan" class="chunk-tag">
+            分块：{{ chunkPresetLabelMap[database.additional_params?.chunk_preset_id || 'general'] || 'General' }}
+          </a-tag>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -245,11 +237,6 @@ const positionOptions = computed(() =>
     value: item.label
   }))
 )
-
-const positionOrder = computed(() => [
-  ...getSelectablePositionTypes(positionTypes.value).map((item) => item.label),
-  getUnclassifiedPositionType(positionTypes.value).label
-])
 
 const parseModelSpec = (spec = '') => {
   if (typeof spec !== 'string' || !spec) {
@@ -328,25 +315,33 @@ const getDatabaseVlmModel = (database) => {
   return ''
 }
 
-const databaseGroups = computed(() => {
-  const groups = new Map(positionOrder.value.map((key) => [key, []]))
+const positionOrder = computed(
+  () =>
+    new Map(
+      [
+        ...getSelectablePositionTypes(positionTypes.value).map((item) => item.label),
+        getUnclassifiedPositionType(positionTypes.value).label
+      ].map((label, index) => [label, index])
+    )
+)
 
-  for (const database of databases.value || []) {
-    const position = inferDatabasePosition(database)
-    if (!groups.has(position)) {
-      groups.set(position, [])
+const sortedDatabases = computed(() =>
+  [...(databases.value || [])].sort((left, right) => {
+    const leftOrder = positionOrder.value.get(inferDatabasePosition(left)) ?? Number.MAX_SAFE_INTEGER
+    const rightOrder = positionOrder.value.get(inferDatabasePosition(right)) ?? Number.MAX_SAFE_INTEGER
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder
     }
-    groups.get(position).push(database)
-  }
 
-  return Array.from(groups.entries())
-    .filter(([, items]) => items.length > 0)
-    .map(([key, items]) => ({
-      key,
-      label: key,
-      items
-    }))
-})
+    const leftTime = dayjs(parseToShanghai(left?.created_at) || 0).valueOf()
+    const rightTime = dayjs(parseToShanghai(right?.created_at) || 0).valueOf()
+    if (leftTime !== rightTime) {
+      return rightTime - leftTime
+    }
+
+    return String(left?.name || '').localeCompare(String(right?.name || ''), 'zh-CN')
+  })
+)
 
 const resetNewDatabase = () => {
   Object.assign(newDatabase, createEmptyDatabaseForm())
@@ -543,41 +538,7 @@ onMounted(() => {
 }
 
 .database-container {
-  .database-groups {
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-  }
-
-  .database-group {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .database-group-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .database-group-title {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--gray-900);
-  }
-
-  .database-group-count {
-    font-size: 13px;
-    color: var(--gray-600);
-  }
-
   .databases {
-    padding: 0;
-
     .database {
       .top {
         .info {

@@ -152,6 +152,10 @@ def get_default_position_label() -> str:
     return _POSITION_TYPE_MAP[DEFAULT_POSITION_KEY]["label"]
 
 
+def get_selectable_position_labels() -> list[str]:
+    return [item["label"] for item in get_all_position_types(selectable_only=True)]
+
+
 def get_unclassified_position_type() -> dict[str, Any]:
     return copy.deepcopy(_public_position_type(_POSITION_TYPE_MAP[UNCLASSIFIED_POSITION_KEY]))
 
