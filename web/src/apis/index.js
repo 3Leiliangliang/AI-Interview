@@ -15,6 +15,7 @@ export * from './tool_api'
 export * from './problemset_api'
 export * from './interview_voice'
 export * from './interview_history'
+export * from './learn_api'
 
 export {
   apiGet,

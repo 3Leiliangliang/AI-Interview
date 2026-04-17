@@ -93,6 +93,31 @@ const router = createRouter({
       ]
     },
     {
+      path: '/learn',
+      name: 'learn',
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'LearnHomePage',
+          component: () => import('../views/LearnHomeView.vue'),
+          meta: { keepAlive: false, requiresAuth: true }
+        },
+        {
+          path: ':db_id',
+          name: 'LearnDatabasePage',
+          component: () => import('../views/LearnDatabaseView.vue'),
+          meta: { keepAlive: false, requiresAuth: true }
+        },
+        {
+          path: ':db_id/doc/:file_id',
+          name: 'LearnDocumentPage',
+          component: () => import('../views/LearnDocumentView.vue'),
+          meta: { keepAlive: false, requiresAuth: true }
+        }
+      ]
+    },
+    {
       path: '/oj',
       name: 'oj',
       component: AppLayout,

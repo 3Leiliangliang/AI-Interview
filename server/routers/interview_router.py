@@ -24,10 +24,12 @@ from src.services.interview_coding_service import (
 )
 from src.services.interview_result_service import (
     finalize_interview_result,
+    get_learning_database_detail,
     get_interview_learning_document,
     get_interview_history,
     get_interview_improvement_plan,
     get_interview_result,
+    list_learning_databases,
 )
 
 interview = APIRouter(prefix="/interview", tags=["interview"])
@@ -238,6 +240,19 @@ async def get_thread_interview_improvement_plan(
         thread_id=thread_id,
         current_user_id=str(current_user.id),
     )
+
+
+@interview.get("/knowledge/databases")
+async def get_user_learning_databases(current_user: User = Depends(get_required_user)):
+    return await list_learning_databases(current_user=current_user)
+
+
+@interview.get("/knowledge/databases/{db_id}")
+async def get_user_learning_database_detail(
+    db_id: str,
+    current_user: User = Depends(get_required_user),
+):
+    return await get_learning_database_detail(db_id=db_id, current_user=current_user)
 
 
 @interview.get("/knowledge/{db_id}/documents/{file_id}")

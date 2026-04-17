@@ -8,7 +8,8 @@ import {
   CircleCheck,
   Blocks,
   FileText,
-  History
+  History,
+  BookOpen
 } from 'lucide-vue-next'
 
 import { useConfigStore } from '@/stores/config'
@@ -142,6 +143,13 @@ const mainList = computed(() => {
       matchNames: ['InterviewRecordsPage'],
       icon: History,
       activeIcon: History
+    },
+    {
+      name: '知识学习',
+      path: '/learn',
+      matchNames: ['LearnHomePage', 'LearnDatabasePage', 'LearnDocumentPage'],
+      icon: BookOpen,
+      activeIcon: BookOpen
     },
     {
       name: '我的简历',

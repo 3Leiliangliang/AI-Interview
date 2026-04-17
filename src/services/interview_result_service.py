@@ -1693,6 +1693,128 @@ async def get_interview_learning_document(
     }
 
 
+def _resolve_learning_file_name(file_meta: dict[str, Any]) -> str:
+    return str(
+        file_meta.get("filename")
+        or file_meta.get("original_filename")
+        or file_meta.get("file_name")
+        or file_meta.get("name")
+        or file_meta.get("file_id")
+        or ""
+    ).strip()
+
+
+def _resolve_learning_position(database: dict[str, Any]) -> str:
+    additional_params = database.get("additional_params") if isinstance(database, dict) else {}
+    metadata = database.get("metadata") if isinstance(database, dict) else {}
+    return str(
+        (additional_params or {}).get("position")
+        or (metadata or {}).get("position")
+        or ""
+    ).strip()
+
+
+def _build_learning_parent_path(
+    file_meta: dict[str, Any],
+    files: dict[str, dict[str, Any]],
+) -> str:
+    parent_segments: list[str] = []
+    current_parent_id = file_meta.get("parent_id")
+    visited: set[str] = set()
+
+    while current_parent_id:
+        normalized_parent_id = str(current_parent_id).strip()
+        if not normalized_parent_id or normalized_parent_id in visited:
+            break
+        visited.add(normalized_parent_id)
+
+        parent = files.get(normalized_parent_id)
+        if not isinstance(parent, dict):
+            break
+
+        parent_name = _resolve_learning_file_name(parent)
+        if parent_name:
+            parent_segments.append(parent_name)
+        current_parent_id = parent.get("parent_id")
+
+    parent_segments.reverse()
+    return " / ".join(parent_segments)
+
+
+def _serialize_learning_document(
+    file_meta: dict[str, Any],
+    files: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    file_name = _resolve_learning_file_name(file_meta)
+    parent_path = _build_learning_parent_path(file_meta, files)
+    full_path = " / ".join(part for part in [parent_path, file_name] if part)
+    return {
+        "file_id": str(file_meta.get("file_id") or "").strip(),
+        "filename": file_name,
+        "parent_id": str(file_meta.get("parent_id") or "").strip(),
+        "path": full_path or file_name,
+        "folder_path": parent_path,
+        "summary": _summarize_learning_excerpt(
+            file_meta.get("description") or file_meta.get("summary") or file_name
+        ),
+        "status": str(file_meta.get("status") or "").strip(),
+        "updated_at": file_meta.get("updated_at") or file_meta.get("modified_at") or file_meta.get("created_at"),
+        "created_at": file_meta.get("created_at"),
+    }
+
+
+async def list_learning_databases(*, current_user: User) -> dict[str, Any]:
+    accessible = await _get_accessible_databases_for_learning(str(current_user.user_id or current_user.id))
+    databases = accessible.get("databases") if isinstance(accessible, dict) else []
+
+    result: list[dict[str, Any]] = []
+    for database in databases:
+        if not isinstance(database, dict):
+            continue
+
+        files = database.get("files") if isinstance(database.get("files"), dict) else {}
+        file_count = sum(1 for item in files.values() if isinstance(item, dict) and not item.get("is_folder"))
+        result.append(
+            {
+                "db_id": str(database.get("db_id") or "").strip(),
+                "name": str(database.get("name") or "").strip(),
+                "description": str(database.get("description") or "").strip(),
+                "position": _resolve_learning_position(database),
+                "file_count": file_count,
+            }
+        )
+
+    result.sort(key=lambda item: (item["position"], item["name"]))
+    return {"databases": result}
+
+
+async def get_learning_database_detail(*, db_id: str, current_user: User) -> dict[str, Any]:
+    accessible = await knowledge_base.check_accessible({"role": current_user.role}, db_id)
+    if not accessible:
+        raise HTTPException(status_code=403, detail="鏃犳潈璁块棶璇ョ煡璇嗗簱。")
+
+    database = await knowledge_base.get_database_info(db_id)
+    if not isinstance(database, dict):
+        raise HTTPException(status_code=404, detail="鐭ヨ瘑搴撲笉瀛樺湪")
+
+    files = database.get("files") if isinstance(database.get("files"), dict) else {}
+    documents = [
+        _serialize_learning_document(file_meta, files)
+        for file_meta in files.values()
+        if isinstance(file_meta, dict) and not file_meta.get("is_folder")
+    ]
+    documents.sort(key=lambda item: (item["folder_path"], item["filename"]))
+
+    return {
+        "db_id": str(database.get("db_id") or db_id).strip(),
+        "name": str(database.get("name") or "").strip(),
+        "description": str(database.get("description") or "").strip(),
+        "position": _resolve_learning_position(database),
+        "file_count": len(documents),
+        "documents": documents,
+    }
+
+
 def _build_finalize_prompt(
     *,
     target_position: str,
