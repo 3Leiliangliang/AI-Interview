@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import ast
+import base64
 import hashlib
 import html
 import json
@@ -26,8 +27,11 @@ from src.storage.postgres.manager import pg_manager
 from src.utils.logging_config import logger
 
 CODING_SESSION_METADATA_KEY = "coding_session"
+PRACTICE_SESSION_METADATA_KEY = "practice_session"
 DEFAULT_CODING_LANGUAGE = "javascript"
 CODING_WORKBENCH_ROUTE = "/agent/interview/code"
+PRACTICE_WORKBENCH_ROUTE = "/practice/problem"
+PRACTICE_AGENT_ID = "PracticeWorkbench"
 OJ_API_BASE_URL = os.getenv("OJ_API_BASE_URL", "http://oj-backend.local:8000/api").rstrip("/")
 OJ_APPKEY = os.getenv("OJ_APPKEY", "").strip()
 OJ_USERNAME = os.getenv("OJ_USERNAME", "root").strip()
@@ -954,6 +958,173 @@ def get_problem_package_detail(package_path: str) -> dict[str, Any]:
     }
 
 
+def _build_practice_problem_ref(package_path: str, problem_index: int) -> str:
+    raw = f"{_normalize_repo_package_path(package_path)}::{int(problem_index)}"
+    return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii").rstrip("=")
+
+
+def _parse_practice_problem_ref(problem_ref: str) -> tuple[str, int]:
+    normalized_ref = str(problem_ref or "").strip()
+    if not normalized_ref:
+        raise HTTPException(status_code=404, detail="Problem not found")
+
+    padding = "=" * (-len(normalized_ref) % 4)
+    try:
+        decoded = base64.urlsafe_b64decode((normalized_ref + padding).encode("ascii")).decode("utf-8")
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise HTTPException(status_code=404, detail="Problem not found") from exc
+
+    package_path, separator, problem_index_text = decoded.rpartition("::")
+    if not separator or not package_path.strip():
+        raise HTTPException(status_code=404, detail="Problem not found")
+    try:
+        problem_index = int(problem_index_text)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Problem not found") from exc
+    if problem_index <= 0:
+        raise HTTPException(status_code=404, detail="Problem not found")
+    return _normalize_repo_package_path(package_path), problem_index
+
+
+def _normalize_practice_topic_key(value: str | None) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "other"
+    normalized = re.sub(r"[^\w\u4e00-\u9fff]+", "-", text.lower()).strip("-")
+    return normalized or "other"
+
+
+def _resolve_primary_topic_tag(topic_tags: list[str] | None) -> str:
+    for tag in topic_tags or []:
+        normalized = str(tag or "").strip()
+        if normalized:
+            return normalized
+    return "其他"
+
+
+def _serialize_practice_problem_summary(item: dict[str, Any]) -> dict[str, Any]:
+    package_path = _normalize_repo_package_path(item.get("package_path") or "")
+    problem_index = int(item.get("problem_index") or 0)
+    title = str(item.get("title") or f"Problem {problem_index}").strip() or f"Problem {problem_index}"
+    topic_tags = [str(tag).strip() for tag in (item.get("topic_tags") or []) if str(tag).strip()]
+    primary_topic_tag = _resolve_primary_topic_tag(topic_tags)
+    oj_problem_ids = [problem_id for problem_id in (item.get("oj_problem_ids") or []) if problem_id]
+    return {
+        "problem_ref": _build_practice_problem_ref(package_path, problem_index),
+        "problem_index": problem_index,
+        "package_path": package_path,
+        "title": title,
+        "summary": str(item.get("summary") or "").strip(),
+        "difficulty_tag": _normalize_difficulty_tag(item.get("difficulty_tag")),
+        "statement_language": str(item.get("statement_language") or "").strip() or "zh",
+        "topic_tags": topic_tags,
+        "primary_topic_tag": primary_topic_tag,
+        "primary_topic_key": _normalize_practice_topic_key(primary_topic_tag),
+        "allowed_languages": list(item.get("allowed_languages") or []),
+        "oj_problem_ids": oj_problem_ids,
+        "supports_online_judge": bool(oj_problem_ids),
+    }
+
+
+def get_practice_plan() -> dict[str, Any]:
+    imported = list_imported_problem_packages()
+    raw_problems = imported.get("problems") or []
+    problems = [
+        summary
+        for item in raw_problems
+        if (summary := _serialize_practice_problem_summary(item)).get("supports_online_judge")
+    ]
+
+    topic_groups: dict[str, dict[str, Any]] = {}
+    for item in problems:
+        topic_key = item["primary_topic_key"]
+        topic_name = item["primary_topic_tag"]
+        group = topic_groups.setdefault(
+            topic_key,
+            {
+                "topic_key": topic_key,
+                "topic_name": topic_name,
+                "problem_count": 0,
+                "problems": [],
+            },
+        )
+        group["problem_count"] += 1
+        group["problems"].append(item)
+
+    topics = sorted(
+        topic_groups.values(),
+        key=lambda item: (-int(item["problem_count"]), str(item["topic_name"])),
+    )
+    for item in topics:
+        item["problems"] = sorted(
+            item["problems"],
+            key=lambda problem: (
+                {"easy": 0, "medium": 1, "hard": 2}.get(problem.get("difficulty_tag"), 1),
+                str(problem.get("title") or ""),
+                int(problem.get("problem_index") or 0),
+            ),
+        )
+
+    return {
+        "plan": {
+            "key": "default",
+            "title": "代码练习",
+            "description": "从已导入题库中按专题分段练习，支持样例运行与在线判题。",
+            "problem_count": len(problems),
+            "topic_count": len(topics),
+        },
+        "topics": topics,
+    }
+
+
+def get_practice_problem_detail(problem_ref: str) -> dict[str, Any]:
+    package_path, problem_index = _parse_practice_problem_ref(problem_ref)
+    detail = get_problem_package_detail(package_path)
+    problem = next(
+        (item for item in (detail.get("problems") or []) if int(item.get("problem_index") or 0) == problem_index),
+        None,
+    )
+    if not problem:
+        raise HTTPException(status_code=404, detail="Problem not found")
+
+    summary = _serialize_practice_problem_summary(
+        {
+            **problem,
+            "package_path": package_path,
+            "problem_index": problem_index,
+        }
+    )
+    return {
+        "problem_ref": summary["problem_ref"],
+        "problem_index": problem_index,
+        "package_path": package_path,
+        "package_name": Path(package_path).name,
+        "title": summary["title"],
+        "summary": str(problem.get("summary") or "").strip(),
+        "description": str(problem.get("description") or "").strip(),
+        "input_description": str(problem.get("input_description") or "").strip(),
+        "output_description": str(problem.get("output_description") or "").strip(),
+        "examples": list(problem.get("examples") or []),
+        "allowed_languages": [
+            language
+            for language in (problem.get("allowed_languages") or [])
+            if language in SUPPORTED_FRONTEND_LANGUAGES
+        ],
+        "starter_code": {
+            language: str(code or "")
+            for language, code in (problem.get("starter_code") or {}).items()
+            if language in SUPPORTED_FRONTEND_LANGUAGES
+        },
+        "difficulty_tag": summary["difficulty_tag"],
+        "statement_language": summary["statement_language"],
+        "topic_tags": summary["topic_tags"],
+        "primary_topic_tag": summary["primary_topic_tag"],
+        "primary_topic_key": summary["primary_topic_key"],
+        "oj_problem_ids": summary["oj_problem_ids"],
+        "supports_online_judge": summary["supports_online_judge"],
+    }
+
+
 def _normalize_position_tag(target_position: str | None) -> str:
     normalized = str(get_problemset_tag_for_position(target_position) or "").strip().lower()
     if normalized in {"frontend", "backend"}:
@@ -1647,6 +1818,381 @@ async def get_submission_result(
         "judge_status": coding_session.get("judge_status", ""),
         "judge_result": coding_session.get("judge_result") or {},
         "submitted_at": coding_session.get("submitted_at", ""),
+    }
+
+
+def get_practice_session_from_metadata(metadata: dict | None) -> dict[str, Any] | None:
+    if not isinstance(metadata, dict):
+        return None
+    practice_session = metadata.get(PRACTICE_SESSION_METADATA_KEY)
+    if not isinstance(practice_session, dict):
+        return None
+    return _normalize_coding_session_state(practice_session)
+
+
+async def _find_practice_conversation(
+    db: AsyncSession,
+    *,
+    current_user_id: str,
+    problem_ref: str,
+):
+    conv_repo = ConversationRepository(db)
+    conversations = await conv_repo.list_conversations(user_id=current_user_id, agent_id=PRACTICE_AGENT_ID)
+    for conversation in conversations:
+        if conversation.status == "deleted":
+            continue
+        session = get_practice_session_from_metadata(conversation.extra_metadata)
+        if session and str(session.get("problem_ref") or "").strip() == problem_ref:
+            return conv_repo, conversation, session
+    return conv_repo, None, None
+
+
+async def _get_practice_conversation_or_404(
+    db: AsyncSession,
+    *,
+    session_id: str,
+    current_user_id: str,
+):
+    conv_repo = ConversationRepository(db)
+    conversation = await conv_repo.get_conversation_by_thread_id(session_id)
+    if (
+        not conversation
+        or conversation.user_id != str(current_user_id)
+        or conversation.status == "deleted"
+        or conversation.agent_id != PRACTICE_AGENT_ID
+    ):
+        raise HTTPException(status_code=404, detail="Practice session not found")
+    return conv_repo, conversation
+
+
+async def save_practice_session(
+    db: AsyncSession,
+    *,
+    session_id: str,
+    current_user_id: str,
+    practice_session: dict[str, Any],
+) -> dict[str, Any]:
+    conv_repo, conversation = await _get_practice_conversation_or_404(
+        db,
+        session_id=session_id,
+        current_user_id=current_user_id,
+    )
+    normalized_session = _normalize_coding_session_state(practice_session)
+    normalized_session["session_id"] = session_id
+    metadata = dict(conversation.extra_metadata or {})
+    metadata[PRACTICE_SESSION_METADATA_KEY] = normalized_session
+    metadata["practice_problem_ref"] = normalized_session.get("problem_ref") or ""
+    await conv_repo.update_conversation(session_id, metadata=metadata)
+    return normalized_session
+
+
+async def _refresh_practice_submission_if_needed(
+    db: AsyncSession,
+    *,
+    session_id: str,
+    current_user_id: str,
+    practice_session: dict[str, Any],
+    force: bool = False,
+) -> dict[str, Any]:
+    submission_id = str(practice_session.get("submission_id") or "").strip()
+    if not submission_id:
+        normalized = _normalize_coding_session_state(practice_session)
+        normalized["session_id"] = session_id
+        return normalized
+
+    judge_status = str(practice_session.get("judge_status") or "").strip()
+    if not force and judge_status and judge_status not in PENDING_OJ_STATUSES:
+        normalized = _normalize_coding_session_state(practice_session)
+        normalized["session_id"] = session_id
+        return normalized
+
+    submission_data = await _fetch_submission_data(submission_id)
+    next_session = dict(practice_session)
+    next_status = _result_code_to_status(submission_data.get("result"))
+    next_session["judge_status"] = next_status
+    next_session["judge_result"] = _build_judge_result(submission_data)
+    next_session["submitted_at"] = submission_data.get("create_time") or next_session.get("submitted_at") or ""
+    if next_status not in PENDING_OJ_STATUSES:
+        next_session["status"] = "submitted"
+    return await save_practice_session(
+        db,
+        session_id=session_id,
+        current_user_id=current_user_id,
+        practice_session=next_session,
+    )
+
+
+async def get_practice_session(
+    db: AsyncSession,
+    *,
+    session_id: str,
+    current_user_id: str,
+) -> dict[str, Any]:
+    _, conversation = await _get_practice_conversation_or_404(
+        db,
+        session_id=session_id,
+        current_user_id=current_user_id,
+    )
+    practice_session = get_practice_session_from_metadata(conversation.extra_metadata)
+    if not practice_session:
+        raise HTTPException(status_code=404, detail="Practice session not found")
+    return await _refresh_practice_submission_if_needed(
+        db,
+        session_id=session_id,
+        current_user_id=current_user_id,
+        practice_session=practice_session,
+        force=False,
+    )
+
+
+async def start_practice_session(
+    db: AsyncSession,
+    *,
+    problem_ref: str,
+    current_user_id: str,
+) -> dict[str, Any]:
+    problem_detail = get_practice_problem_detail(problem_ref)
+    conv_repo, conversation, existing_session = await _find_practice_conversation(
+        db,
+        current_user_id=current_user_id,
+        problem_ref=problem_ref,
+    )
+    if conversation and existing_session:
+        return await _refresh_practice_submission_if_needed(
+            db,
+            session_id=conversation.thread_id,
+            current_user_id=current_user_id,
+            practice_session=existing_session,
+            force=False,
+        )
+
+    problem = OJProblem(
+        id=int((problem_detail.get("problem_index") or 0)),
+        display_id=str(problem_ref),
+        title=str(problem_detail.get("title") or ""),
+        source=str(problem_detail.get("package_name") or problem_detail.get("package_path") or ""),
+        summary=str(problem_detail.get("summary") or ""),
+        description=str(problem_detail.get("description") or ""),
+        input_description=str(problem_detail.get("input_description") or ""),
+        output_description=str(problem_detail.get("output_description") or ""),
+        examples=list(problem_detail.get("examples") or []),
+        starter_code=dict(problem_detail.get("starter_code") or {}),
+        allowed_languages=list(problem_detail.get("allowed_languages") or []),
+        statement_language=str(problem_detail.get("statement_language") or "zh"),
+        difficulty_tag=str(problem_detail.get("difficulty_tag") or "medium"),
+    )
+    language = _resolve_default_language(problem)
+    drafts = _build_initial_drafts(problem)
+    conversation = await conv_repo.create_conversation(
+        user_id=current_user_id,
+        agent_id=PRACTICE_AGENT_ID,
+        title=f"代码练习 · {problem.title}",
+        metadata={"practice_problem_ref": problem_ref},
+    )
+    practice_session = {
+        "session_id": conversation.thread_id,
+        "status": "ready",
+        "problem_ref": problem_ref,
+        "problem_id": problem_ref,
+        "problem_title": problem.title,
+        "source": problem.source,
+        "difficulty_level": problem.difficulty_tag,
+        "language": language,
+        "draft_code": drafts.get(language, ""),
+        "drafts": drafts,
+        "submission_id": "",
+        "judge_status": "",
+        "judge_result": {},
+        "workbench_path": f"{PRACTICE_WORKBENCH_ROUTE}/{problem_ref}",
+        "started_at": _utc_now(),
+        "submitted_at": "",
+        "requested_hints": [],
+        "sample_run": _build_sample_run_state(),
+        "problem": {
+            **_serialize_problem(problem),
+            "package_path": problem_detail.get("package_path") or "",
+            "package_name": problem_detail.get("package_name") or "",
+            "problem_index": int(problem_detail.get("problem_index") or 0),
+            "topic_tags": list(problem_detail.get("topic_tags") or []),
+            "primary_topic_key": str(problem_detail.get("primary_topic_key") or ""),
+        },
+        "oj_problem_pk": next(iter(problem_detail.get("oj_problem_ids") or []), None),
+    }
+    if not practice_session["oj_problem_pk"]:
+        raise HTTPException(status_code=400, detail="Current problem is not linked to an OJ problem")
+    return await save_practice_session(
+        db,
+        session_id=conversation.thread_id,
+        current_user_id=current_user_id,
+        practice_session=practice_session,
+    )
+
+
+async def update_practice_draft(
+    db: AsyncSession,
+    *,
+    session_id: str,
+    current_user_id: str,
+    language: str,
+    draft_code: str,
+) -> dict[str, Any]:
+    practice_session = await get_practice_session(db, session_id=session_id, current_user_id=current_user_id)
+    allowed_languages = (practice_session.get("problem") or {}).get("allowed_languages") or SUPPORTED_FRONTEND_LANGUAGES
+    if language not in SUPPORTED_FRONTEND_LANGUAGES or language not in allowed_languages:
+        raise HTTPException(status_code=400, detail=f"Unsupported language: {language}")
+    practice_session["status"] = "coding"
+    practice_session["language"] = language
+    practice_session["draft_code"] = draft_code
+    drafts = dict(practice_session.get("drafts") or {})
+    drafts[language] = draft_code
+    practice_session["drafts"] = drafts
+    return await save_practice_session(
+        db,
+        session_id=session_id,
+        current_user_id=current_user_id,
+        practice_session=practice_session,
+    )
+
+
+async def run_sample_practice_session(
+    db: AsyncSession,
+    *,
+    session_id: str,
+    current_user_id: str,
+    language: str,
+    code: str,
+) -> dict[str, Any]:
+    practice_session = await get_practice_session(db, session_id=session_id, current_user_id=current_user_id)
+    problem = practice_session.get("problem") or {}
+    allowed_languages = problem.get("allowed_languages") or SUPPORTED_FRONTEND_LANGUAGES
+    if language not in SUPPORTED_FRONTEND_LANGUAGES or language not in allowed_languages:
+        raise HTTPException(status_code=400, detail=f"Unsupported language: {language}")
+
+    examples = [
+        {"input": str(item.get("input") or ""), "output": str(item.get("output") or "")}
+        for item in (problem.get("examples") or [])
+        if str(item.get("input") or "").strip() or str(item.get("output") or "").strip()
+    ]
+    if not examples:
+        raise HTTPException(status_code=400, detail="Current problem has no sample cases")
+
+    language_config = JUDGE_SERVER_LANGUAGE_CONFIGS.get(language)
+    if not language_config:
+        raise HTTPException(status_code=400, detail=f"Unsupported language: {language}")
+
+    max_cpu_time, max_memory = _get_sample_run_limits(language)
+    sample_source = _build_seed_problem_sample_source(problem, language, code)
+    judge_response = await _judge_server_request(
+        {
+            "language_config": language_config,
+            "src": sample_source,
+            "max_cpu_time": max_cpu_time,
+            "max_memory": max_memory,
+            "test_case": examples,
+            "output": True,
+            "io_mode": {"io_mode": "Standard IO"},
+        }
+    )
+    sample_run = _build_sample_run_result(examples, judge_response)
+
+    drafts = dict(practice_session.get("drafts") or {})
+    drafts[language] = code
+    practice_session.update(
+        {
+            "status": "coding",
+            "language": language,
+            "draft_code": code,
+            "drafts": drafts,
+            "sample_run": sample_run,
+        }
+    )
+    return await save_practice_session(
+        db,
+        session_id=session_id,
+        current_user_id=current_user_id,
+        practice_session=practice_session,
+    )
+
+
+async def submit_practice_session(
+    db: AsyncSession,
+    *,
+    session_id: str,
+    current_user_id: str,
+    language: str,
+    code: str,
+) -> dict[str, Any]:
+    practice_session = await get_practice_session(db, session_id=session_id, current_user_id=current_user_id)
+    allowed_languages = (practice_session.get("problem") or {}).get("allowed_languages") or SUPPORTED_FRONTEND_LANGUAGES
+    if language not in SUPPORTED_FRONTEND_LANGUAGES or language not in allowed_languages:
+        raise HTTPException(status_code=400, detail=f"Unsupported language: {language}")
+    oj_language = _to_oj_language(language)
+    problem_pk = practice_session.get("oj_problem_pk")
+    if not problem_pk:
+        raise HTTPException(status_code=500, detail="Missing QingdaoU OJ problem id in practice session")
+
+    async with _get_oj_client() as client:
+        response = await _oj_request(
+            client,
+            "POST",
+            "submission",
+            json={"problem_id": int(problem_pk), "language": oj_language, "code": code},
+        )
+
+    submission_id = str(response.get("submission_id") or "").strip()
+    if not submission_id:
+        raise HTTPException(status_code=502, detail="QingdaoU OJ did not return submission_id")
+
+    drafts = dict(practice_session.get("drafts") or {})
+    drafts[language] = code
+    practice_session.update(
+        {
+            "status": "submitted",
+            "language": language,
+            "draft_code": code,
+            "drafts": drafts,
+            "submission_id": submission_id,
+            "judge_status": "PENDING",
+            "judge_result": {
+                "status": "PENDING",
+                "passed": False,
+                "score": 0,
+                "message": "Submission accepted by OJ, waiting for judge result",
+                "tests": [],
+            },
+            "submitted_at": _utc_now(),
+        }
+    )
+    return await save_practice_session(
+        db,
+        session_id=session_id,
+        current_user_id=current_user_id,
+        practice_session=practice_session,
+    )
+
+
+async def get_practice_submission_result(
+    db: AsyncSession,
+    *,
+    session_id: str,
+    current_user_id: str,
+    submission_id: str,
+) -> dict[str, Any]:
+    practice_session = await get_practice_session(db, session_id=session_id, current_user_id=current_user_id)
+    if practice_session.get("submission_id") != submission_id:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    practice_session = await _refresh_practice_submission_if_needed(
+        db,
+        session_id=session_id,
+        current_user_id=current_user_id,
+        practice_session=practice_session,
+        force=True,
+    )
+    return {
+        "submission_id": submission_id,
+        "judge_status": practice_session.get("judge_status", ""),
+        "judge_result": practice_session.get("judge_result") or {},
+        "submitted_at": practice_session.get("submitted_at", ""),
     }
 
 

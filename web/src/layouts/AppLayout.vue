@@ -9,7 +9,8 @@ import {
   Blocks,
   FileText,
   History,
-  BookOpen
+  BookOpen,
+  Code2
 } from 'lucide-vue-next'
 
 import { useConfigStore } from '@/stores/config'
@@ -150,6 +151,13 @@ const mainList = computed(() => {
       matchNames: ['LearnHomePage', 'LearnDatabasePage', 'LearnDocumentPage'],
       icon: BookOpen,
       activeIcon: BookOpen
+    },
+    {
+      name: '代码练习',
+      path: '/practice',
+      matchNames: ['PracticeHomePage', 'PracticeTopicPage', 'PracticeProblemPage'],
+      icon: Code2,
+      activeIcon: Code2
     },
     {
       name: '我的简历',
