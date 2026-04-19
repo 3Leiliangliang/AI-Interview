@@ -31,6 +31,11 @@ cache
 .backup
 *.bak
 *._*
+.corepack/
+.npm-cache/
+.pnpm-store/
+output/
+test/artifacts/
 
 
 ### IDE

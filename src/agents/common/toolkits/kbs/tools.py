@@ -44,6 +44,8 @@ BACKEND_KB_KEYWORDS = (
 )
 FRONTEND_KB_KEYWORDS = ("前端", "frontend", "react", "vue", "javascript", "typescript", "css", "html")
 QUESTION_FILE_KEYWORDS = ("question", "questions", "interview", "面试", "题")
+
+
 def _normalize_runtime_user_id(runtime: ToolRuntime) -> int | None:
     runtime_context = getattr(runtime, "context", None)
     user_id = getattr(runtime_context, "user_id", None)
@@ -291,6 +293,19 @@ def _build_kb_search_text(kb_info: dict[str, Any]) -> str:
     )
 
 
+def _keyword_matches_search_text(keyword: str, search_text: str) -> bool:
+    normalized_keyword = str(keyword or "").strip().lower()
+    normalized_search_text = str(search_text or "").strip().lower()
+    if not normalized_keyword or not normalized_search_text:
+        return False
+
+    if re.fullmatch(r"[a-z0-9][a-z0-9_+\-.]*", normalized_keyword):
+        pattern = rf"(?<![a-z0-9]){re.escape(normalized_keyword)}(?![a-z0-9])"
+        return re.search(pattern, normalized_search_text) is not None
+
+    return normalized_keyword in normalized_search_text
+
+
 def _match_role_based_kbs(requested_name: str, all_kbs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     normalized_name = requested_name.strip().lower()
     if not normalized_name:
@@ -306,7 +321,7 @@ def _match_role_based_kbs(requested_name: str, all_kbs: list[dict[str, Any]]) ->
     return [
         kb_info
         for kb_info in all_kbs
-        if any(keyword in _build_kb_search_text(kb_info) for keyword in keywords)
+        if any(_keyword_matches_search_text(keyword, _build_kb_search_text(kb_info)) for keyword in keywords)
     ]
 
 
@@ -320,9 +335,8 @@ def _get_position_kb_names(target_position: str | None) -> list[str]:
 def _get_interview_kb_names_from_runtime(runtime: ToolRuntime | None) -> list[str]:
     runtime_context = getattr(runtime, "context", None)
     request_context = get_agent_request_context()
-    target_position = (
-        getattr(runtime_context, "target_position", "")
-        or str(request_context.get("target_position") or "")
+    target_position = getattr(runtime_context, "target_position", "") or str(
+        request_context.get("target_position") or ""
     )
     return _get_position_kb_names(target_position)
 
@@ -353,11 +367,15 @@ async def _resolve_candidate_kbs(kb_names: list[str]) -> list[dict[str, Any]]:
                 or _build_kb_search_text(kb_info) in normalized_name
             ]
             if not matched_kbs:
+                requested_position_label = normalize_position_label(kb_name, fallback_to_default=False)
                 matched_kbs = [
                     kb_info
                     for kb_info in all_kbs
-                    if normalize_position_label((kb_info.get("additional_params") or {}).get("position", ""))
-                    == normalize_position_label(kb_name)
+                    if normalize_position_label(
+                        (kb_info.get("additional_params") or {}).get("position", ""),
+                        fallback_to_default=False,
+                    )
+                    == requested_position_label
                 ]
             if not matched_kbs:
                 matched_kbs = _match_role_based_kbs(kb_name, all_kbs)
@@ -372,12 +390,12 @@ async def _resolve_candidate_kbs(kb_names: list[str]) -> list[dict[str, Any]]:
     return resolved
 
 
-async def _collect_technical_question_candidates(kb_names: list[str]) -> list[dict[str, str]]:
+async def _collect_technical_question_candidates(kb_names: list[str]) -> list[dict[str, Any]]:
     if not kb_names:
         return []
 
     seen_questions: set[str] = set()
-    candidates: list[dict[str, str]] = []
+    candidates: list[dict[str, Any]] = []
 
     resolved_kbs = await _resolve_candidate_kbs(kb_names)
     for kb_info in resolved_kbs:
@@ -411,34 +429,41 @@ async def _collect_technical_question_candidates(kb_names: list[str]) -> list[di
                     {
                         "question": question,
                         "kb_name": kb_name,
+                        "db_id": db_id,
+                        "file_id": str(file_id or "").strip(),
                         "file_name": file_info.get("filename") or "",
+                        "chunk_id": str(line.get("id") or "").strip(),
+                        "chunk_index": line.get("chunk_order_index"),
                     }
                 )
 
     return candidates
 
-async def _pick_random_technical_question(kb_names: list[str]) -> dict[str, str]:
+
+async def _pick_random_technical_question(kb_names: list[str]) -> dict[str, Any]:
     return await _pick_random_technical_question_with_excludes(kb_names, excluded_questions=None)
 
 
 async def _pick_random_technical_question_with_excludes(
     kb_names: list[str],
     excluded_questions: list[str] | None = None,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     normalized_kb_names = [name.strip() for name in kb_names if isinstance(name, str) and name.strip()]
     if not normalized_kb_names:
         return {
             "question": "",
             "kb_name": "",
+            "db_id": "",
+            "file_id": "",
             "file_name": "",
+            "chunk_id": "",
+            "chunk_index": None,
             "message": "当前没有可用的技术题库。",
         }
 
     candidates = await _collect_technical_question_candidates(normalized_kb_names)
     normalized_excluded_questions = {
-        question.strip()
-        for question in (excluded_questions or [])
-        if isinstance(question, str) and question.strip()
+        question.strip() for question in (excluded_questions or []) if isinstance(question, str) and question.strip()
     }
     if normalized_excluded_questions:
         candidates = [
@@ -449,7 +474,11 @@ async def _pick_random_technical_question_with_excludes(
         return {
             "question": "",
             "kb_name": "",
+            "db_id": "",
+            "file_id": "",
             "file_name": "",
+            "chunk_id": "",
+            "chunk_index": None,
             "message": (
                 "当前岗位对应的知识库里没有更多可用的技术题目。"
                 if normalized_excluded_questions
@@ -461,7 +490,11 @@ async def _pick_random_technical_question_with_excludes(
     return {
         "question": selected["question"],
         "kb_name": selected["kb_name"],
+        "db_id": selected["db_id"],
+        "file_id": selected["file_id"],
         "file_name": selected["file_name"],
+        "chunk_id": selected["chunk_id"],
+        "chunk_index": selected["chunk_index"],
         "message": "success",
     }
 

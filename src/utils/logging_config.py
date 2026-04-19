@@ -9,6 +9,12 @@ from src.utils.datetime_utils import shanghai_now
 SAVE_DIR = os.getenv("SAVE_DIR") or "saves"
 DATETIME = shanghai_now().strftime("%Y-%m-%d")
 LOG_FILE = f"{SAVE_DIR}/logs/ai-interview-{DATETIME}.log"
+ENABLE_LOG_QUEUE = os.getenv("AI_INTERVIEW_LOG_ENQUEUE", "0" if os.name == "nt" else "1").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 
 class LoguruHandler(logging.Handler):
@@ -38,7 +44,6 @@ def _setup_logging_bridge():
     formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     loguru_handler.setFormatter(formatter)
 
-
     # 桥接其他常见第三方库（降低级别减少噪音）
     for lib in ["httpx", "openai", "urllib3"]:
         lib_logger = logging.getLogger(lib)
@@ -63,7 +68,7 @@ def setup_logger(name, level="DEBUG", console=True):
         rotation="10 MB",
         retention="30 days",
         compression="zip",
-        enqueue=True,
+        enqueue=ENABLE_LOG_QUEUE,
     )
 
     # 添加控制台日志（有颜色）
@@ -78,7 +83,7 @@ def setup_logger(name, level="DEBUG", console=True):
                 "<level>{message}</level>"
             ),
             colorize=True,
-            enqueue=True,
+            enqueue=ENABLE_LOG_QUEUE,
         )
 
     return loguru_logger

@@ -37,6 +37,7 @@ from src.services.interview_result_service import (
     get_interview_history,
     get_interview_improvement_plan,
     get_interview_result,
+    get_personalized_interview_path,
     list_learning_databases,
 )
 
@@ -244,6 +245,7 @@ async def start_thread_coding_session(
         )
     }
 
+
 @interview.post("/{thread_id}/coding-session")
 async def start_thread_coding_session_legacy(
     thread_id: str,
@@ -411,6 +413,19 @@ async def get_user_interview_history(
     db: AsyncSession = Depends(get_db),
 ):
     return await get_interview_history(
+        db,
+        current_user=current_user,
+        user_id=user_id,
+    )
+
+
+@interview.get("/personalized-path")
+async def get_user_personalized_path(
+    user_id: int | None = Query(default=None),
+    current_user: User = Depends(get_required_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_personalized_interview_path(
         db,
         current_user=current_user,
         user_id=user_id,
