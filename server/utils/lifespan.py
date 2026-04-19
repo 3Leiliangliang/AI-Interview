@@ -17,8 +17,11 @@ async def lifespan(app: FastAPI):
     try:
         pg_manager.initialize()
         await pg_manager.create_business_tables()
-        await pg_manager.ensure_business_schema()
-        await pg_manager.ensure_knowledge_schema()
+        if pg_manager.is_postgresql:
+            await pg_manager.ensure_business_schema()
+            await pg_manager.ensure_knowledge_schema()
+        else:
+            logger.info("Skip PostgreSQL-specific schema sync because current database is not PostgreSQL")
     except Exception as e:
         logger.error(f"Failed to initialize database during startup: {e}")
 

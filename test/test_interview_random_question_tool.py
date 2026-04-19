@@ -15,9 +15,9 @@ from src.services.position_types import get_position_type
 
 
 def test_extract_question_from_chunk_content_only_returns_question() -> None:
-    chunk_content = "问题：什么是 React Hooks？\t回答：它让函数组件拥有状态能力。"
+    chunk_content = "问题：什么是 React Hooks\t回答：它让函数组件拥有状态能力。"
 
-    assert kb_tools._extract_question_from_chunk_content(chunk_content) == "什么是 React Hooks？"
+    assert kb_tools._extract_question_from_chunk_content(chunk_content) == "什么是 React Hooks"
 
 
 @pytest.mark.asyncio
@@ -34,12 +34,16 @@ async def test_collect_technical_question_candidates_merges_kbs_and_deduplicates
     }
     db_lines = {
         ("db_backend", "file_backend"): [
-            {"content": "问题：什么是 Redis？\t回答：缓存数据库。"},
-            {"content": "问题：什么是 JVM？\t回答：Java 虚拟机。"},
+            {"id": "chunk-backend-1", "chunk_order_index": 1, "content": "问题：什么是 Redis\t回答：缓存数据库。"},
+            {"id": "chunk-backend-2", "chunk_order_index": 2, "content": "问题：什么是 JVM\t回答：Java 虚拟机。"},
         ],
         ("db_algorithm", "file_algorithm"): [
-            {"content": "问题：什么是 JVM？\t回答：另一份重复答案。"},
-            {"content": "问题：说一下动态规划。\t回答：一种算法设计方法。"},
+            {"id": "chunk-algorithm-1", "chunk_order_index": 1, "content": "问题：什么是 JVM\t回答：另一份重复答案。"},
+            {
+                "id": "chunk-algorithm-2",
+                "chunk_order_index": 2,
+                "content": "问题：说一下动态规划。\t回答：一种算法设计方法。",
+            },
         ],
     }
 
@@ -82,20 +86,40 @@ async def test_collect_technical_question_candidates_merges_kbs_and_deduplicates
     )
 
     assert [candidate["question"] for candidate in candidates] == [
-        "什么是 Redis？",
-        "什么是 JVM？",
+        "什么是 Redis",
+        "什么是 JVM",
         "说一下动态规划。",
     ]
     assert candidates[-1]["kb_name"] == get_position_type("algorithm")["label"]
     assert candidates[-1]["file_name"] == "algorithm.md"
+    assert candidates[-1]["db_id"] == "db_algorithm"
+    assert candidates[-1]["file_id"] == "file_algorithm"
+    assert candidates[-1]["chunk_id"] == "chunk-algorithm-2"
+    assert candidates[-1]["chunk_index"] == 2
 
 
 @pytest.mark.asyncio
 async def test_pick_random_technical_question_uses_random_choice(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_collect(_: list[str]) -> list[dict[str, str]]:
+    async def fake_collect(_: list[str]) -> list[dict[str, object]]:
         return [
-            {"question": "第一题", "kb_name": get_position_type("backend")["label"], "file_name": "a.md"},
-            {"question": "第二题", "kb_name": get_position_type("algorithm")["label"], "file_name": "b.md"},
+            {
+                "question": "第一题",
+                "kb_name": get_position_type("backend")["label"],
+                "db_id": "db_backend",
+                "file_id": "file_backend",
+                "file_name": "a.md",
+                "chunk_id": "chunk-1",
+                "chunk_index": 1,
+            },
+            {
+                "question": "第二题",
+                "kb_name": get_position_type("algorithm")["label"],
+                "db_id": "db_algorithm",
+                "file_id": "file_algorithm",
+                "file_name": "b.md",
+                "chunk_id": "chunk-2",
+                "chunk_index": 2,
+            },
         ]
 
     monkeypatch.setattr(kb_tools, "_collect_technical_question_candidates", fake_collect)
@@ -108,7 +132,11 @@ async def test_pick_random_technical_question_uses_random_choice(monkeypatch: py
     assert result == {
         "question": "第二题",
         "kb_name": get_position_type("algorithm")["label"],
+        "db_id": "db_algorithm",
+        "file_id": "file_algorithm",
         "file_name": "b.md",
+        "chunk_id": "chunk-2",
+        "chunk_index": 2,
         "message": "success",
     }
 
@@ -117,10 +145,26 @@ async def test_pick_random_technical_question_uses_random_choice(monkeypatch: py
 async def test_pick_random_technical_question_skips_excluded_questions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def fake_collect(_: list[str]) -> list[dict[str, str]]:
+    async def fake_collect(_: list[str]) -> list[dict[str, object]]:
         return [
-            {"question": "第一题", "kb_name": get_position_type("backend")["label"], "file_name": "a.md"},
-            {"question": "第二题", "kb_name": get_position_type("algorithm")["label"], "file_name": "b.md"},
+            {
+                "question": "第一题",
+                "kb_name": get_position_type("backend")["label"],
+                "db_id": "db_backend",
+                "file_id": "file_backend",
+                "file_name": "a.md",
+                "chunk_id": "chunk-1",
+                "chunk_index": 1,
+            },
+            {
+                "question": "第二题",
+                "kb_name": get_position_type("algorithm")["label"],
+                "db_id": "db_algorithm",
+                "file_id": "file_algorithm",
+                "file_name": "b.md",
+                "chunk_id": "chunk-2",
+                "chunk_index": 2,
+            },
         ]
 
     monkeypatch.setattr(kb_tools, "_collect_technical_question_candidates", fake_collect)
@@ -134,7 +178,11 @@ async def test_pick_random_technical_question_skips_excluded_questions(
     assert result == {
         "question": "第二题",
         "kb_name": get_position_type("algorithm")["label"],
+        "db_id": "db_algorithm",
+        "file_id": "file_algorithm",
         "file_name": "b.md",
+        "chunk_id": "chunk-2",
+        "chunk_index": 2,
         "message": "success",
     }
 
@@ -143,7 +191,7 @@ async def test_pick_random_technical_question_skips_excluded_questions(
 async def test_pick_random_technical_question_returns_empty_result_when_no_candidates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def fake_collect(_: list[str]) -> list[dict[str, str]]:
+    async def fake_collect(_: list[str]) -> list[dict[str, object]]:
         return []
 
     monkeypatch.setattr(kb_tools, "_collect_technical_question_candidates", fake_collect)
@@ -152,7 +200,11 @@ async def test_pick_random_technical_question_returns_empty_result_when_no_candi
 
     assert result["question"] == ""
     assert result["kb_name"] == ""
+    assert result["db_id"] == ""
+    assert result["file_id"] == ""
     assert result["file_name"] == ""
+    assert result["chunk_id"] == ""
+    assert result["chunk_index"] is None
     assert "没有可用的技术题目" in result["message"]
 
 
@@ -160,9 +212,17 @@ async def test_pick_random_technical_question_returns_empty_result_when_no_candi
 async def test_pick_random_technical_question_returns_empty_result_when_all_are_excluded(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def fake_collect(_: list[str]) -> list[dict[str, str]]:
+    async def fake_collect(_: list[str]) -> list[dict[str, object]]:
         return [
-            {"question": "第一题", "kb_name": get_position_type("frontend")["label"], "file_name": "react.md"},
+            {
+                "question": "第一题",
+                "kb_name": get_position_type("frontend")["label"],
+                "db_id": "db_frontend",
+                "file_id": "file_frontend",
+                "file_name": "react.md",
+                "chunk_id": "chunk-1",
+                "chunk_index": 1,
+            },
         ]
 
     monkeypatch.setattr(kb_tools, "_collect_technical_question_candidates", fake_collect)
@@ -174,7 +234,11 @@ async def test_pick_random_technical_question_returns_empty_result_when_all_are_
 
     assert result["question"] == ""
     assert result["kb_name"] == ""
+    assert result["db_id"] == ""
+    assert result["file_id"] == ""
     assert result["file_name"] == ""
+    assert result["chunk_id"] == ""
+    assert result["chunk_index"] is None
     assert "没有更多可用的技术题目" in result["message"]
 
 

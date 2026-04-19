@@ -49,12 +49,13 @@ class PostgresManager(metaclass=SingletonMeta):
             return
 
         try:
+            is_sqlite = db_url.startswith("sqlite")
             # 创建异步 SQLAlchemy 引擎
             self.async_engine = create_async_engine(
                 db_url,
                 json_serializer=lambda obj: json.dumps(obj, ensure_ascii=False),
                 json_deserializer=json.loads,
-                pool_pre_ping=True,
+                pool_pre_ping=not is_sqlite,
                 pool_recycle=1800,
             )
 
@@ -66,7 +67,10 @@ class PostgresManager(metaclass=SingletonMeta):
             )
 
             self._initialized = True
-            logger.info(f"PostgreSQL manager initialized for knowledge base: {db_url.split('@')[0]}://***")
+            if is_sqlite:
+                logger.info(f"SQLite manager initialized for local testing: {db_url}")
+            else:
+                logger.info(f"PostgreSQL manager initialized for knowledge base: {db_url.split('@')[0]}://***")
         except Exception as e:
             logger.error(f"Failed to initialize PostgreSQL manager: {e}")
             # 不抛出异常，允许应用启动，但在使用时会报错
@@ -174,12 +178,18 @@ class PostgresManager(metaclass=SingletonMeta):
             "ALTER TABLE IF EXISTS conversations ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN NOT NULL DEFAULT FALSE",
             "ALTER TABLE IF EXISTS mcp_servers ADD COLUMN IF NOT EXISTS env JSONB",
             "ALTER TABLE IF EXISTS user_resume_items ADD COLUMN IF NOT EXISTS summary_json JSON",
-            "ALTER TABLE IF EXISTS user_resume_items ADD COLUMN IF NOT EXISTS summary_status VARCHAR(32) NOT NULL DEFAULT 'pending'",
+            (
+                "ALTER TABLE IF EXISTS user_resume_items ADD COLUMN IF NOT EXISTS "
+                "summary_status VARCHAR(32) NOT NULL DEFAULT 'pending'"
+            ),
             "ALTER TABLE IF EXISTS user_resume_items ADD COLUMN IF NOT EXISTS summary_error TEXT",
             "ALTER TABLE IF EXISTS user_resume_items ADD COLUMN IF NOT EXISTS target_job_id INTEGER",
             "ALTER TABLE IF EXISTS user_resume_items ADD COLUMN IF NOT EXISTS detected_position VARCHAR(200)",
             "ALTER TABLE IF EXISTS user_resume_items ADD COLUMN IF NOT EXISTS match_result JSON",
-            "ALTER TABLE IF EXISTS user_resume_items ADD COLUMN IF NOT EXISTS match_status VARCHAR(32) NOT NULL DEFAULT 'none'",
+            (
+                "ALTER TABLE IF EXISTS user_resume_items ADD COLUMN IF NOT EXISTS "
+                "match_status VARCHAR(32) NOT NULL DEFAULT 'none'"
+            ),
             """
             CREATE TABLE IF NOT EXISTS agent_runs (
                 id VARCHAR(64) PRIMARY KEY,

@@ -13,19 +13,22 @@ class WebSearcher:
         self.client = TavilyClient(api_key)
         logger.info("WebSearcher initialized with Tavily client")
 
-    def search(self, query: str, max_results: int = 1) -> list[dict]:
+    def search(self, query: str, max_results: int = 1, search_depth: str = "basic") -> list[dict]:
         """
         使用 Tavily 搜索相关内容
 
         Args:
             query: 搜索查询
             max_results: 最大返回结果数
+            search_depth: Tavily 搜索深度
 
         Returns:
             搜索结果列表
         """
         try:
-            search_results = self.client.search(query=query, search_depth="basic", max_results=max_results)
+            search_results = self.client.search(
+                query=query, search_depth=search_depth, max_results=max_results, timeout=20
+            )
 
             # 提取需要的信息
             formatted_results = []
@@ -35,7 +38,7 @@ class WebSearcher:
                         "title": result.get("title", ""),
                         "content": result.get("content", ""),
                         "url": result.get("url", ""),
-                        "score": result.get("score", 0),
+                        "score": float(result.get("score", 0) or 0),
                     }
                 )
 
