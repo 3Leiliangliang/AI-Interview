@@ -3,10 +3,8 @@ import os
 from abc import ABC, abstractmethod
 from typing import Any
 
-from src.knowledge.chunking.ragflow_like.presets import (
-    ensure_chunk_defaults_in_additional_params,
-    resolve_chunk_processing_params,
-)
+from src.knowledge.chunking.ragflow_like.presets import resolve_chunk_processing_params
+from src.knowledge.metadata import normalize_file_processing_params, normalize_kb_additional_params
 from src.utils import logger
 from src.utils.datetime_utils import coerce_any_to_utc_datetime, utc_isoformat
 
@@ -64,7 +62,12 @@ class KnowledgeBase(ABC):
         self.benchmarks_meta: dict[str, dict] = {}
         self._metadata_loaded = False  # 标记元数据是否已加载
 
-        # 初始化类级别的锁
+        # 实例级 async 锁：保护 files_meta/databases_meta 的"读-改-写"原子性
+        # （状态机转移必须在此锁内进行，避免 parse_file/index_file 并发触发的双写）
+        self._metadata_lock = asyncio.Lock()
+
+        # 类级 sync 锁：仅保护 _processing_files 集合的瞬时 add/discard
+        # （不可跨 await 持有；真正的状态机保护使用上面的 _metadata_lock）
         if KnowledgeBase._processing_lock is None:
             KnowledgeBase._processing_lock = threading.Lock()
 
@@ -80,7 +83,7 @@ class KnowledgeBase(ABC):
         self.databases_meta = {}
         for db_id, meta in global_databases_meta.items():
             if meta.get("kb_type") == self.kb_type:
-                normalized_additional_params = ensure_chunk_defaults_in_additional_params(meta.get("additional_params"))
+                normalized_additional_params = normalize_kb_additional_params(meta.get("additional_params"))
                 self.databases_meta[db_id] = {
                     "name": meta.get("name"),
                     "description": meta.get("description"),
@@ -99,9 +102,13 @@ class KnowledgeBase(ABC):
                 db_id = meta.get("database_id")
                 kb_additional_params = self.databases_meta.get(db_id, {}).get("metadata") or {}
                 normalized_meta = dict(meta)
-                normalized_meta["processing_params"] = resolve_chunk_processing_params(
-                    kb_additional_params=kb_additional_params,
-                    file_processing_params=meta.get("processing_params"),
+                normalized_meta["processing_params"] = normalize_file_processing_params(
+                    resolve_chunk_processing_params(
+                        kb_additional_params=kb_additional_params,
+                        file_processing_params=meta.get("processing_params"),
+                    ),
+                    fallback_position_tags=kb_additional_params.get("position_tags"),
+                    fallback_topic_tags=kb_additional_params.get("topic_tags"),
                 )
                 self.files_meta[file_id] = normalized_meta
 
@@ -212,9 +219,13 @@ class KnowledgeBase(ABC):
         metadata = await prepare_item_metadata(item, content_type, db_id, params=params)
         file_id = metadata["file_id"]
         kb_additional_params = self.databases_meta.get(db_id, {}).get("metadata") or {}
-        metadata["processing_params"] = resolve_chunk_processing_params(
-            kb_additional_params=kb_additional_params,
-            file_processing_params=metadata.get("processing_params"),
+        metadata["processing_params"] = normalize_file_processing_params(
+            resolve_chunk_processing_params(
+                kb_additional_params=kb_additional_params,
+                file_processing_params=metadata.get("processing_params"),
+            ),
+            fallback_position_tags=kb_additional_params.get("position_tags"),
+            fallback_topic_tags=kb_additional_params.get("topic_tags"),
         )
 
         # Initial status
@@ -241,42 +252,42 @@ class KnowledgeBase(ABC):
         Returns:
             Updated file metadata
         """
-        if file_id not in self.files_meta:
-            raise ValueError(f"File {file_id} not found")
+        # CAS：状态检查 + 转移 + 持久化必须在同一把异步锁下完成，
+        # 防止两个并发 parse_file(same_id) 都从 UPLOADED 读到并双写 PARSING。
+        async with self._metadata_lock:
+            if file_id not in self.files_meta:
+                raise ValueError(f"File {file_id} not found")
 
-        file_meta = self.files_meta[file_id]
-        current_status = file_meta.get("status")
+            file_meta = self.files_meta[file_id]
+            current_status = file_meta.get("status")
 
-        # Validate current status - only allow parsing from these states
-        allowed_statuses = {
-            FileStatus.UPLOADED,
-            FileStatus.ERROR_PARSING,
-            "failed",  # Legacy status
-        }
+            # Validate current status - only allow parsing from these states
+            allowed_statuses = {
+                FileStatus.UPLOADED,
+                FileStatus.ERROR_PARSING,
+                "failed",  # Legacy status
+            }
 
-        if current_status not in allowed_statuses:
-            raise ValueError(
-                f"Cannot parse file with status '{current_status}'. "
-                f"File must be in one of these states: {', '.join(allowed_statuses)}"
-            )
+            if current_status not in allowed_statuses:
+                raise ValueError(
+                    f"Cannot parse file with status '{current_status}'. "
+                    f"File must be in one of these states: {', '.join(allowed_statuses)}"
+                )
 
-        file_path = file_meta.get("path")
-        if not file_path:
-            raise ValueError(f"File {file_id} has no valid path in metadata")
+            file_path = file_meta.get("path")
+            if not file_path:
+                raise ValueError(f"File {file_id} has no valid path in metadata")
 
-        # Clear previous error if any
-        if "error" in file_meta:
-            self.files_meta[file_id].pop("error", None)
+            # Clear previous error if any
+            file_meta.pop("error", None)
 
-        # Update status to PARSING and add to processing queue
-        self.files_meta[file_id]["status"] = FileStatus.PARSING
-        self.files_meta[file_id]["updated_at"] = utc_isoformat()
-        if operator_id:
-            self.files_meta[file_id]["updated_by"] = operator_id
-        await self._persist_file(file_id)
-
-        # Add to processing queue
-        self._add_to_processing_queue(file_id)
+            # Atomically transition to PARSING
+            file_meta["status"] = FileStatus.PARSING
+            file_meta["updated_at"] = utc_isoformat()
+            if operator_id:
+                file_meta["updated_by"] = operator_id
+            await self._persist_file(file_id)
+            self._add_to_processing_queue(file_id)
 
         try:
             # Determine processing function based on content type
@@ -301,34 +312,34 @@ class KnowledgeBase(ABC):
                 # Process file to Markdown
                 markdown_content, _ = await process_file_to_markdown(file_path, params=params)
 
-            # Save Markdown to MinIO
+            # Save Markdown to MinIO (long IO — must run outside the lock)
             markdown_file_path = await self._save_markdown_to_minio(db_id, file_id, markdown_content)
 
-            # Update metadata
-            self.files_meta[file_id]["status"] = FileStatus.PARSED
-            self.files_meta[file_id]["markdown_file"] = markdown_file_path
-            self.files_meta[file_id]["updated_at"] = utc_isoformat()
-            if operator_id:
-                self.files_meta[file_id]["updated_by"] = operator_id
-            await self._persist_file(file_id)
-
-            return self.files_meta[file_id]
+            async with self._metadata_lock:
+                self.files_meta[file_id]["status"] = FileStatus.PARSED
+                self.files_meta[file_id]["markdown_file"] = markdown_file_path
+                self.files_meta[file_id]["updated_at"] = utc_isoformat()
+                if operator_id:
+                    self.files_meta[file_id]["updated_by"] = operator_id
+                await self._persist_file(file_id)
+                return self.files_meta[file_id]
 
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Failed to parse file {file_id}: {error_msg}")
 
-            self.files_meta[file_id]["status"] = FileStatus.ERROR_PARSING
-            self.files_meta[file_id]["error"] = error_msg
-            self.files_meta[file_id]["updated_at"] = utc_isoformat()
-            if operator_id:
-                self.files_meta[file_id]["updated_by"] = operator_id
-            await self._persist_file(file_id)
+            async with self._metadata_lock:
+                self.files_meta[file_id]["status"] = FileStatus.ERROR_PARSING
+                self.files_meta[file_id]["error"] = error_msg
+                self.files_meta[file_id]["updated_at"] = utc_isoformat()
+                if operator_id:
+                    self.files_meta[file_id]["updated_by"] = operator_id
+                await self._persist_file(file_id)
 
             raise
 
         finally:
-            # Remove from processing queue
+            # Remove from processing queue (sync lock; never inside the await chain)
             self._remove_from_processing_queue(file_id)
 
     async def update_file_params(self, db_id: str, file_id: str, params: dict, operator_id: str | None = None) -> None:
@@ -351,12 +362,18 @@ class KnowledgeBase(ABC):
             request_params=params,
         )
 
-        self.files_meta[file_id]["processing_params"] = current_params
+        self.files_meta[file_id]["processing_params"] = normalize_file_processing_params(
+            current_params,
+            fallback_position_tags=kb_additional_params.get("position_tags"),
+            fallback_topic_tags=kb_additional_params.get("topic_tags"),
+        )
         self.files_meta[file_id]["updated_at"] = utc_isoformat()
         if operator_id:
             self.files_meta[file_id]["updated_by"] = operator_id
 
-        logger.debug(f"[update_file_params] file_id={file_id}, updated_params={current_params}")
+        logger.debug(
+            f"[update_file_params] file_id={file_id}, updated_params={self.files_meta[file_id]['processing_params']}"
+        )
 
         await self._persist_file(file_id)
 
@@ -434,7 +451,7 @@ class KnowledgeBase(ABC):
         """
         from src.utils import hashstr
 
-        kwargs = ensure_chunk_defaults_in_additional_params(kwargs)
+        kwargs = normalize_kb_additional_params(kwargs)
 
         # 从 kwargs 中获取 is_private 配置
         is_private = kwargs.get("is_private", False)
@@ -655,6 +672,7 @@ class KnowledgeBase(ABC):
 
         meta = self.databases_meta[db_id].copy()
         meta["db_id"] = db_id
+        meta["additional_params"] = normalize_kb_additional_params(meta.pop("metadata", {}))
 
         # 检查并修复异常的processing状态
         self._check_and_fix_processing_status(db_id)
@@ -672,7 +690,11 @@ class KnowledgeBase(ABC):
                     "type": file_info.get("file_type", ""),
                     "status": file_info.get("status", "done"),
                     "created_at": created_at,
-                    "processing_params": file_info.get("processing_params", None),
+                      "processing_params": normalize_file_processing_params(
+                          file_info.get("processing_params", None),
+                          fallback_position_tags=meta["additional_params"].get("position_tags"),
+                          fallback_topic_tags=meta["additional_params"].get("topic_tags"),
+                      ),
                     "is_folder": file_info.get("is_folder", False),
                     "parent_id": file_info.get("parent_id", None),
                 }
@@ -708,6 +730,7 @@ class KnowledgeBase(ABC):
 
             db_dict = meta.copy()
             db_dict["db_id"] = db_id
+            db_dict["additional_params"] = normalize_kb_additional_params(db_dict.pop("metadata", {}))
 
             # 获取文件信息
             db_files = {}
@@ -722,6 +745,11 @@ class KnowledgeBase(ABC):
                         "type": file_info.get("file_type", ""),
                         "status": file_info.get("status", "done"),
                         "created_at": created_at,
+                        "processing_params": normalize_file_processing_params(
+                            file_info.get("processing_params", None),
+                            fallback_position_tags=db_dict["additional_params"].get("position_tags"),
+                            fallback_topic_tags=db_dict["additional_params"].get("topic_tags"),
+                        ),
                         "is_folder": file_info.get("is_folder", False),
                         "parent_id": file_info.get("parent_id", None),
                     }
@@ -993,7 +1021,14 @@ class KnowledgeBase(ABC):
         os.makedirs(general_uploads, exist_ok=True)
         return general_uploads
 
-    def update_database(self, db_id: str, name: str, description: str, llm_info: dict = None) -> dict:
+    def update_database(
+        self,
+        db_id: str,
+        name: str,
+        description: str,
+        llm_info: dict = None,
+        additional_params: dict | None = None,
+    ) -> dict:
         """
         更新数据库
 
@@ -1014,6 +1049,9 @@ class KnowledgeBase(ABC):
 
         if llm_info is not None:
             self.databases_meta[db_id]["llm_info"] = llm_info
+
+        if additional_params is not None:
+            self.databases_meta[db_id]["metadata"] = normalize_kb_additional_params(additional_params)
 
         asyncio.create_task(self._save_metadata())
 
@@ -1061,7 +1099,7 @@ class KnowledgeBase(ABC):
                 "embed_info": kb.embed_info,
                 "llm_info": kb.llm_info,
                 "query_params": kb.query_params,
-                "metadata": ensure_chunk_defaults_in_additional_params(kb.additional_params),
+                "metadata": normalize_kb_additional_params(kb.additional_params),
                 "created_at": utc_isoformat(kb.created_at) if kb.created_at else utc_isoformat(),
             }
             for kb in databases
@@ -1083,9 +1121,13 @@ class KnowledgeBase(ABC):
                     "content_hash": record.content_hash,
                     "size": record.file_size,
                     "content_type": record.content_type,
-                    "processing_params": resolve_chunk_processing_params(
-                        kb_additional_params=kb_additional_params,
-                        file_processing_params=record.processing_params,
+                    "processing_params": normalize_file_processing_params(
+                        resolve_chunk_processing_params(
+                            kb_additional_params=kb_additional_params,
+                            file_processing_params=record.processing_params,
+                        ),
+                        fallback_position_tags=kb_additional_params.get("position_tags"),
+                        fallback_topic_tags=kb_additional_params.get("topic_tags"),
                     ),
                     "is_folder": record.is_folder,
                     "error": record.error_message,
@@ -1120,6 +1162,7 @@ class KnowledgeBase(ABC):
                 }
 
         logger.info(f"Loaded {self.kb_type} metadata from database for {len(self.databases_meta)} databases")
+        self._normalize_metadata_state()
 
     async def _save_metadata(self) -> None:
         from src.repositories.evaluation_repository import EvaluationRepository
@@ -1142,7 +1185,7 @@ class KnowledgeBase(ABC):
                 "embed_info": meta.get("embed_info"),
                 "llm_info": meta.get("llm_info"),
                 "query_params": meta.get("query_params"),
-                "additional_params": meta.get("metadata") or {},
+                "additional_params": normalize_kb_additional_params(meta.get("metadata") or {}),
             }
             if existing is None:
                 await kb_repo.create(payload)
@@ -1179,7 +1222,7 @@ class KnowledgeBase(ABC):
                     "content_hash": meta.get("content_hash"),
                     "file_size": meta.get("size"),
                     "content_type": meta.get("content_type"),
-                    "processing_params": meta.get("processing_params"),
+                    "processing_params": normalize_file_processing_params(meta.get("processing_params")),
                     "is_folder": meta.get("is_folder", False),
                     "error_message": meta.get("error"),
                     "created_by": str(meta.get("created_by")) if meta.get("created_by") else None,

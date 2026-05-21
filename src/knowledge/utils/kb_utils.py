@@ -9,6 +9,7 @@ from langchain_text_splitters import MarkdownTextSplitter
 
 from src import config
 from src.config.static.models import EmbedModelInfo
+from src.knowledge.metadata import normalize_file_processing_params
 from src.utils import hashstr, logger
 from src.utils.datetime_utils import utc_isoformat
 
@@ -222,14 +223,11 @@ async def prepare_item_metadata(item: str, content_type: str, db_id: str, params
         }
 
         if params:
-            # 移除内部参数以免污染 metadata
             safe_params = params.copy()
             safe_params.pop("_preprocessed_map", None)
-            # 覆盖 content_type 为 file，确保后续解析走文件流程（MinIO 下载 -> HTML 解析）
-            # 而不是再次尝试作为 URL 抓取
             safe_params["content_type"] = "file"
-            safe_params["original_source"] = item  # 保存完整 URL 到 JSON 字段，避免数据库字段长度限制
-            metadata["processing_params"] = safe_params
+            safe_params["original_source"] = item
+            metadata["processing_params"] = normalize_file_processing_params(safe_params)
 
         return metadata
 
@@ -314,7 +312,7 @@ async def prepare_item_metadata(item: str, content_type: str, db_id: str, params
 
     # 保存处理参数到元数据
     if params:
-        metadata["processing_params"] = params.copy()
+        metadata["processing_params"] = normalize_file_processing_params(params.copy())
 
     return metadata
 

@@ -13,7 +13,14 @@
         <!-- 左侧：文件名和图标 -->
         <div class="file-title">
           <component :is="fileIcon" :style="{ color: fileIconColor, fontSize: '18px' }" />
-          <span class="file-name">{{ file?.filename || '文件详情' }}</span>
+          <div class="file-title-meta">
+            <span class="file-name">{{ file?.filename || '文件详情' }}</span>
+            <div v-if="detailTags.length > 0" class="detail-tags">
+              <a-tag v-for="tag in detailTags" :key="tag.key" :color="tag.color">
+                {{ tag.label }}
+              </a-tag>
+            </div>
+          </div>
         </div>
 
         <div class="header-controls">
@@ -164,6 +171,20 @@ const visible = computed({
 
 const file = computed(() => store.selectedFile)
 const loading = computed(() => store.state.fileDetailLoading)
+const detailTags = computed(() => {
+  const processingParams = file.value?.processing_params || {}
+  const tags = []
+  for (const tag of processingParams.position_tags || []) {
+    tags.push({ key: `position-${tag}`, label: tag, color: 'geekblue' })
+  }
+  for (const tag of processingParams.topic_tags || []) {
+    tags.push({ key: `topic-${tag}`, label: tag, color: 'green' })
+  }
+  if (processingParams.content_kind) {
+    tags.push({ key: `kind-${processingParams.content_kind}`, label: processingParams.content_kind, color: 'cyan' })
+  }
+  return tags
+})
 
 // 文件图标
 const fileIcon = computed(() => getFileIcon(file.value?.filename))
@@ -624,10 +645,22 @@ const handleDownloadMarkdown = () => {
   gap: 8px;
 }
 
+.file-title-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .file-name {
   font-weight: 600;
   font-size: 15px;
   color: var(--gray-900);
+}
+
+.detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .title-info {

@@ -59,6 +59,28 @@
           </template>
         </a-input>
 
+        <a-select
+          v-model:value="positionTagFilter"
+          mode="multiple"
+          allow-clear
+          size="small"
+          class="tag-filter"
+          placeholder="岗位标签"
+          :options="positionTagOptions"
+          @change="resetToFirstPage"
+        />
+
+        <a-select
+          v-model:value="topicTagFilter"
+          mode="multiple"
+          allow-clear
+          size="small"
+          class="tag-filter"
+          placeholder="知识点标签"
+          :options="topicTagOptions"
+          @change="resetToFirstPage"
+        />
+
         <a-dropdown trigger="click">
           <a-button
             type="text"
@@ -290,15 +312,24 @@
               </div>
             </template>
             <a-button class="main-btn" type="link" @click="openFileDetail(record)">
-              <component
-                :is="getFileIcon(record.displayName || text)"
-                :style="{
-                  marginRight: '0',
-                  color: getFileIconColor(record.displayName || text),
-                  fontSize: '16px'
-                }"
-              />
-              {{ record.displayName || text }}
+              <div class="file-name-cell">
+                <div class="file-name-main">
+                  <component
+                    :is="getFileIcon(record.displayName || text)"
+                    :style="{
+                      marginRight: '0',
+                      color: getFileIconColor(record.displayName || text),
+                      fontSize: '16px'
+                    }"
+                  />
+                  <span>{{ record.displayName || text }}</span>
+                </div>
+                <div v-if="getRecordTags(record).length > 0" class="file-meta-tags">
+                  <a-tag v-for="tag in getRecordTags(record)" :key="tag.key" :color="tag.color">
+                    {{ tag.label }}
+                  </a-tag>
+                </div>
+              </div>
             </a-button>
           </a-popover>
         </div>
@@ -495,14 +526,12 @@ const sortOptions = [
 
 const handleSortMenuClick = (e) => {
   sortField.value = e.key
-  // 排序变化时重置到第一页
-  paginationConfig.value.current = 1
+  resetToFirstPage()
 }
 
 const handleStatusMenuClick = (e) => {
   statusFilter.value = e.key
-  // 状态筛选变化时重置到第一页
-  paginationConfig.value.current = 1
+  resetToFirstPage()
 }
 
 // Status text mapping
@@ -545,6 +574,63 @@ const selectedRowKeys = computed({
 })
 
 const isSelectionMode = ref(false)
+const filenameFilter = ref('')
+const statusFilter = ref('all')
+const positionTagFilter = ref([])
+const topicTagFilter = ref([])
+
+const normalizeTagList = (values) => {
+  if (!Array.isArray(values)) {
+    return []
+  }
+  return values.filter((item, index) => item && values.indexOf(item) === index)
+}
+
+const getProcessingParams = (file) => file?.processing_params || {}
+
+const matchesTagFilters = (file) => {
+  const processingParams = getProcessingParams(file)
+  const positionTags = normalizeTagList(processingParams.position_tags)
+  const topicTags = normalizeTagList(processingParams.topic_tags)
+  const matchPosition =
+    positionTagFilter.value.length === 0 ||
+    positionTagFilter.value.every((tag) => positionTags.includes(tag))
+  const matchTopic =
+    topicTagFilter.value.length === 0 || topicTagFilter.value.every((tag) => topicTags.includes(tag))
+  return matchPosition && matchTopic
+}
+
+const getRecordTags = (record) => {
+  const processingParams = getProcessingParams(record)
+  const tags = []
+  for (const tag of normalizeTagList(processingParams.position_tags)) {
+    tags.push({ key: `position-${record.file_id}-${tag}`, label: tag, color: 'geekblue' })
+  }
+  for (const tag of normalizeTagList(processingParams.topic_tags).slice(0, 4)) {
+    tags.push({ key: `topic-${record.file_id}-${tag}`, label: tag, color: 'green' })
+  }
+  return tags
+}
+
+const positionTagOptions = computed(() => {
+  const tags = new Set()
+  for (const file of files.value) {
+    normalizeTagList(getProcessingParams(file).position_tags).forEach((tag) => tags.add(tag))
+  }
+  return Array.from(tags)
+    .sort((a, b) => a.localeCompare(b))
+    .map((tag) => ({ label: tag, value: tag }))
+})
+
+const topicTagOptions = computed(() => {
+  const tags = new Set()
+  for (const file of files.value) {
+    normalizeTagList(getProcessingParams(file).topic_tags).forEach((tag) => tags.add(tag))
+  }
+  return Array.from(tags)
+    .sort((a, b) => a.localeCompare(b))
+    .map((tag) => ({ label: tag, value: tag }))
+})
 
 const allSelectableFiles = computed(() => {
   const nameFilter = filenameFilter.value.trim().toLowerCase()
@@ -555,17 +641,13 @@ const allSelectableFiles = computed(() => {
     // Follow getCheckboxProps logic
     if (lock.value || file.status === 'processing' || file.status === 'waiting') return false
 
-    if (nameFilter || status !== 'all') {
-      const nameMatch =
-        !nameFilter || (file.filename && file.filename.toLowerCase().includes(nameFilter))
-      const statusMatch =
-        status === 'all' ||
-        file.status === status ||
-        (status === 'indexed' && file.status === 'done') ||
-        (status === 'error_indexing' && file.status === 'failed')
-      return nameMatch && statusMatch
-    }
-    return true
+    const nameMatch = !nameFilter || (file.filename && file.filename.toLowerCase().includes(nameFilter))
+    const statusMatch =
+      status === 'all' ||
+      file.status === status ||
+      (status === 'indexed' && file.status === 'done') ||
+      (status === 'error_indexing' && file.status === 'failed')
+    return nameMatch && statusMatch && matchesTagFilters(file)
   })
 })
 
@@ -798,6 +880,9 @@ const paginationConfig = ref({
   pageSize: 100,
   pageSizeOptions: ['100', '300', '500', '1000']
 })
+const resetToFirstPage = () => {
+  paginationConfig.value.current = 1
+}
 
 // 文件总数
 const totalFiles = computed(() => files.value.length)
@@ -833,8 +918,6 @@ const handleTableChange = (pagination) => {
 }
 
 // 文件名过滤
-const filenameFilter = ref('')
-const statusFilter = ref('all')
 const statusOptions = [
   { label: '已上传', value: 'uploaded' },
   { label: '解析中', value: 'parsing' },
@@ -1017,33 +1100,40 @@ const buildFileTree = (fileList) => {
 
 // 过滤后的文件列表
 const filteredFiles = computed(() => {
-  let filtered = files.value
   const nameFilter = filenameFilter.value.trim().toLowerCase()
   const status = statusFilter.value
+  const isFlatMode =
+    Boolean(nameFilter) ||
+    status !== 'all' ||
+    positionTagFilter.value.length > 0 ||
+    topicTagFilter.value.length > 0
 
-  // 应用过滤
-  if (nameFilter || status !== 'all') {
-    // 搜索/过滤模式下使用扁平列表
+  if (isFlatMode) {
     return files.value
       .filter((file) => {
-        const nameMatch =
-          !nameFilter || (file.filename && file.filename.toLowerCase().includes(nameFilter))
+        const nameMatch = !nameFilter || (file.filename && file.filename.toLowerCase().includes(nameFilter))
         const statusMatch =
           status === 'all' ||
           file.status === status ||
           (status === 'indexed' && file.status === 'done') ||
           (status === 'error_indexing' && file.status === 'failed')
-        return nameMatch && statusMatch
+        return nameMatch && statusMatch && matchesTagFilters(file)
       })
       .map((f) => ({ ...f, displayName: f.filename }))
   }
 
-  return buildFileTree(filtered)
+  return buildFileTree(files.value.filter((file) => matchesTagFilters(file)))
 })
 
 // 空状态文本
 const emptyText = computed(() => {
-  return filenameFilter.value ? `没有找到包含"${filenameFilter.value}"的文件` : '暂无文件'
+  if (filenameFilter.value) {
+    return `没有找到包含"${filenameFilter.value}"的文件`
+  }
+  if (positionTagFilter.value.length > 0 || topicTagFilter.value.length > 0) {
+    return '没有符合标签筛选的文件'
+  }
+  return '暂无文件'
 })
 
 // 计算是否可以批量删除
@@ -1081,8 +1171,7 @@ const showAddFilesModal = (options = {}) => {
 }
 
 const handleRefresh = () => {
-  // 刷新时重置分页
-  paginationConfig.value.current = 1
+  resetToFirstPage()
   store.getDatabaseInfo(undefined, true) // Skip query params for manual refresh
 }
 
@@ -1109,8 +1198,7 @@ const getCheckboxProps = (record) => ({
 
 const onFilterChange = (e) => {
   filenameFilter.value = e.target.value
-  // 过滤变化时重置到第一页
-  paginationConfig.value.current = 1
+  resetToFirstPage()
 }
 
 const handleDeleteFile = (fileId) => {
@@ -1368,6 +1456,10 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue'
     border: none;
     box-shadow: 0 0 0 1px var(--shadow-1);
   }
+
+  .tag-filter {
+    min-width: 120px;
+  }
 }
 
 .batch-actions {
@@ -1425,6 +1517,25 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue'
   font-weight: 600;
   color: var(--color-text);
   text-decoration: none;
+}
+
+.file-name-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.file-name-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-meta-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .my-table .main-btn:hover {

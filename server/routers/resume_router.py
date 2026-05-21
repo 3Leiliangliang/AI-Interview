@@ -892,8 +892,8 @@ async def _trigger_resume_match(resume_id: int, job_id: int) -> None:
                 if resume:
                     resume.match_status = "failed"
                     await session.commit()
-        except Exception:
-            logger.error(f"更新匹配失败状态也失败，resume_id={resume_id}")
+        except Exception as cleanup_exc:  # noqa: BLE001 - background cleanup must not propagate
+            logger.error(f"更新匹配失败状态也失败，resume_id={resume_id}: {cleanup_exc}")
 
 
 @resume.post("/{resume_id}/match")

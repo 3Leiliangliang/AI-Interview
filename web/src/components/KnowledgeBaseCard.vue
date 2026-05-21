@@ -37,6 +37,17 @@
       <!-- Tags -->
       <div class="tags-section">
         <a-tag color="blue" size="small">{{ database.embed_info?.name || 'N/A' }}</a-tag>
+        <a-tag
+          v-for="tag in positionTags"
+          :key="`position-${tag}`"
+          color="geekblue"
+          size="small"
+        >
+          {{ tag }}
+        </a-tag>
+        <a-tag v-for="tag in topicTags" :key="`topic-${tag}`" color="green" size="small">
+          {{ tag }}
+        </a-tag>
         <a-tag color="cyan" size="small" class="chunk-tag">{{
           `分块：${chunkPresetLabelMap[database.additional_params?.chunk_preset_id || 'general'] || 'General'}`
         }}</a-tag>
@@ -161,6 +172,9 @@ const fileList = computed(() => {
     .filter(Boolean)
 })
 
+const positionTags = computed(() => database.value?.additional_params?.position_tags || [])
+const topicTags = computed(() => (database.value?.additional_params?.topic_tags || []).slice(0, 6))
+
 // 复制数据库ID
 const copyDatabaseId = async () => {
   if (!database.value.db_id) {
@@ -252,6 +266,7 @@ const handleEditSubmit = () => {
       }
 
       updateData.additional_params = {
+        ...(database.value.additional_params || {}),
         auto_generate_questions: editForm.auto_generate_questions,
         chunk_preset_id: editForm.chunk_preset_id || 'general'
       }

@@ -34,16 +34,20 @@ PRACTICE_WORKBENCH_ROUTE = "/practice/problem"
 PRACTICE_AGENT_ID = "PracticeWorkbench"
 OJ_API_BASE_URL = os.getenv("OJ_API_BASE_URL", "http://oj-backend.local:8000/api").rstrip("/")
 OJ_APPKEY = os.getenv("OJ_APPKEY", "").strip()
-OJ_USERNAME = os.getenv("OJ_USERNAME", "root").strip()
-OJ_PASSWORD = os.getenv("OJ_PASSWORD", "rootroot").strip()
+# OJ 凭据无安全默认值；缺失时由 _require_oj_credentials/_judge_server_request 在调用时 fail-fast
+OJ_USERNAME = os.getenv("OJ_USERNAME", "").strip()
+OJ_PASSWORD = os.getenv("OJ_PASSWORD", "").strip()
 OJ_PROBLEM_SOURCE = os.getenv("OJ_PROBLEM_SOURCE", "interview-seed").strip()
 OJ_REQUEST_TIMEOUT = float(os.getenv("OJ_REQUEST_TIMEOUT", "20"))
 OJ_PAGE_LIMIT = min(max(int(os.getenv("OJ_PAGE_LIMIT", "250")), 1), 250)
 OJ_MAX_SCAN = max(int(os.getenv("OJ_MAX_SCAN", "1000")), OJ_PAGE_LIMIT)
 OJ_JUDGE_SERVER_URL = os.getenv("OJ_JUDGE_SERVER_URL", "http://oj-judge-server:8080").rstrip("/")
-OJ_JUDGE_SERVER_TOKEN = os.getenv("OJ_JUDGE_SERVER_TOKEN", "CHANGE_ME").strip()
+OJ_JUDGE_SERVER_TOKEN = os.getenv("OJ_JUDGE_SERVER_TOKEN", "").strip()
 FREEPROBLEMSET_MANIFEST_PATH = Path(__file__).resolve().parents[2] / "saves" / "oj" / "freeproblemset_manifest.json"
 FREEPROBLEMSET_REPO_DIR = Path(__file__).resolve().parents[2] / ".codex_tmp" / "freeproblemset"
+CS_NOTES_CURATED_PROBLEMS_PATH = (
+    Path(__file__).resolve().parents[2] / "src" / "config" / "static" / "cs_notes_coding_problems.json"
+)
 SUPPORTED_FRONTEND_LANGUAGES = ["javascript", "c", "cpp", "java", "python"]
 OJ_LANGUAGE_TO_FRONTEND = {
     "JavaScript": "javascript",
@@ -259,6 +263,11 @@ def _build_sample_run_state() -> dict[str, Any]:
 
 
 async def _judge_server_request(payload: dict[str, Any]) -> dict[str, Any]:
+    if not OJ_JUDGE_SERVER_TOKEN:
+        raise HTTPException(
+            status_code=500,
+            detail="OJ judge server is not configured. Please set OJ_JUDGE_SERVER_TOKEN.",
+        )
     token = hashlib.sha256(OJ_JUDGE_SERVER_TOKEN.encode("utf-8")).hexdigest()
     urls = [OJ_JUDGE_SERVER_URL]
     if OJ_JUDGE_SERVER_URL.endswith(":12358"):
@@ -769,10 +778,116 @@ def _load_freeproblemset_package_problems(package_path: str) -> list[dict[str, A
     return problems
 
 
+def _load_cs_notes_curated_problems() -> list[dict[str, Any]]:
+    if not CS_NOTES_CURATED_PROBLEMS_PATH.exists():
+        return []
+    try:
+        payload = json.loads(CS_NOTES_CURATED_PROBLEMS_PATH.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning("Failed to load CS-Notes curated problems: %s", exc)
+        return []
+
+    if not isinstance(payload, list):
+        return []
+
+    problems: list[dict[str, Any]] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        position_tags = [
+            str(tag).strip() for tag in (item.get("position_tags") or []) if str(tag or "").strip()
+        ]
+        normalized_item = {
+            "package_path": _normalize_repo_package_path(item.get("package_path") or ""),
+            "package_type": str(item.get("package_type") or "curated"),
+            "package_sha": str(item.get("package_sha") or ""),
+            "problem_index": int(item.get("problem_index") or 0),
+            "title": str(item.get("title") or ""),
+            "source": str(item.get("source") or ""),
+            "summary": str(item.get("summary") or ""),
+            "description": str(item.get("description") or ""),
+            "input_description": str(item.get("input_description") or ""),
+            "output_description": str(item.get("output_description") or ""),
+            "examples": list(item.get("examples") or []),
+            "starter_code": dict(item.get("starter_code") or {}),
+            "allowed_languages": list(item.get("allowed_languages") or []),
+            "statement_language": str(item.get("statement_language") or "zh"),
+            "difficulty_tag": _normalize_difficulty_tag(item.get("difficulty_tag")),
+            "topic_tags": [str(tag).strip() for tag in (item.get("topic_tags") or []) if str(tag or "").strip()],
+            "position_tags": position_tags,
+            "primary_position_tag": str(item.get("primary_position_tag") or "").strip()
+            or _resolve_primary_position_tag(position_tags),
+            "classifier": str(item.get("classifier") or "cs_notes_rule"),
+            "imported_at": str(item.get("imported_at") or ""),
+        }
+        if normalized_item["package_path"]:
+            problems.append(normalized_item)
+    return problems
+
+
+def _build_curated_problem_packages(problems: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    package_buckets: dict[str, dict[str, Any]] = {}
+    for problem in problems:
+        package_path = str(problem.get("package_path") or "").strip()
+        if not package_path:
+            continue
+        bucket = package_buckets.setdefault(
+            package_path,
+            {
+                "package_path": package_path,
+                "package_type": str(problem.get("package_type") or "curated"),
+                "package_sha": "",
+                "problem_count": 0,
+                "imported_problem_count": 0,
+                "oj_problem_ids": [],
+                "oj_display_ids": [],
+                "imported_at": "",
+                "updated_at": "",
+                "classifier": str(problem.get("classifier") or "cs_notes_rule"),
+                "position_tag_summary": {"frontend": 0, "backend": 0, GENERAL_POSITION_TAG: 0},
+                "topic_tags": {},
+            },
+        )
+        bucket["problem_count"] += 1
+        bucket["imported_problem_count"] += 1
+        for tag in problem.get("position_tags") or []:
+            if tag in bucket["position_tag_summary"]:
+                bucket["position_tag_summary"][tag] += 1
+        for tag in problem.get("topic_tags") or []:
+            bucket["topic_tags"][tag] = int(bucket["topic_tags"].get(tag) or 0) + 1
+
+    packages = []
+    for bucket in package_buckets.values():
+        top_topics = sorted(
+            bucket["topic_tags"].items(),
+            key=lambda item: (-int(item[1]), str(item[0])),
+        )[:5]
+        packages.append(
+            {
+                "package_path": bucket["package_path"],
+                "package_type": bucket["package_type"],
+                "package_sha": bucket["package_sha"],
+                "problem_count": bucket["problem_count"],
+                "imported_problem_count": bucket["imported_problem_count"],
+                "oj_problem_ids": bucket["oj_problem_ids"],
+                "oj_display_ids": bucket["oj_display_ids"],
+                "imported_at": bucket["imported_at"],
+                "updated_at": bucket["updated_at"],
+                "classifier": bucket["classifier"],
+                "position_tag_summary": bucket["position_tag_summary"],
+                "top_topic_tags": [{"tag": tag, "count": count} for tag, count in top_topics],
+            }
+        )
+    packages.sort(key=lambda item: str(item.get("package_path") or ""))
+    return packages
+
+
 def list_imported_problem_packages() -> dict[str, Any]:
     manifest = _load_freeproblemset_manifest_payload()
-    packages = manifest.get("packages") or []
-    problems = manifest.get("problems") or []
+    packages = list(manifest.get("packages") or [])
+    problems = list(manifest.get("problems") or [])
+    curated_problems = _load_cs_notes_curated_problems()
+    curated_packages = _build_curated_problem_packages(curated_problems)
 
     problem_counts_by_package: dict[str, dict[str, Any]] = {}
     for item in problems:
@@ -872,20 +987,67 @@ def list_imported_problem_packages() -> dict[str, Any]:
             str(item.get("title") or ""),
         )
     )
+    imported_problems.extend(curated_problems)
+    imported_problems.sort(
+        key=lambda item: (
+            {"frontend": 0, "backend": 1, GENERAL_POSITION_TAG: 2}.get(item.get("primary_position_tag"), 3),
+            str(item.get("package_type") or ""),
+            str(item.get("package_path") or ""),
+            -int(item.get("problem_index") or 0),
+            str(item.get("title") or ""),
+        )
+    )
+
+    all_packages = imported_packages + curated_packages
     return {
-        "packages": imported_packages,
+        "packages": all_packages,
         "problems": imported_problems,
         "summary": {
-            "imported_package_count": len(imported_packages),
-            "imported_problem_count": sum(int(item.get("imported_problem_count") or 0) for item in imported_packages),
-            "tracked_package_count": len(packages),
-            "tracked_problem_count": len(problems),
+            "imported_package_count": len(all_packages),
+            "imported_problem_count": len(imported_problems),
+            "tracked_package_count": len(packages) + len(curated_packages),
+            "tracked_problem_count": len(problems) + len(curated_problems),
         },
     }
 
 
 def get_problem_package_detail(package_path: str) -> dict[str, Any]:
     normalized_path = _normalize_repo_package_path(package_path)
+    curated_problems = [
+        problem
+        for problem in _load_cs_notes_curated_problems()
+        if _normalize_repo_package_path(problem.get("package_path") or "") == normalized_path
+    ]
+    if curated_problems:
+        curated_packages = {
+            item["package_path"]: item for item in _build_curated_problem_packages(curated_problems)
+        }
+        return {
+            "package": curated_packages[normalized_path],
+            "problems": [
+                {
+                    "problem_index": int(problem.get("problem_index") or 0),
+                    "title": problem.get("title") or "",
+                    "source": problem.get("source") or normalized_path,
+                    "summary": problem.get("summary") or "",
+                    "description": problem.get("description") or "",
+                    "input_description": problem.get("input_description") or "",
+                    "output_description": problem.get("output_description") or "",
+                    "examples": list(problem.get("examples") or []),
+                    "allowed_languages": list(problem.get("allowed_languages") or []),
+                    "starter_code": dict(problem.get("starter_code") or {}),
+                    "topic_tags": list(problem.get("topic_tags") or []),
+                    "position_tags": list(problem.get("position_tags") or []),
+                    "statement_language": str(problem.get("statement_language") or "zh"),
+                    "difficulty_tag": _normalize_difficulty_tag(problem.get("difficulty_tag")),
+                    "oj_problem_ids": [],
+                    "oj_display_ids": [],
+                    "imported_at": problem.get("imported_at") or "",
+                }
+                for problem in sorted(curated_problems, key=lambda item: int(item.get("problem_index") or 0))
+            ],
+        }
+
     manifest = _load_freeproblemset_manifest_payload()
     package = next(
         (

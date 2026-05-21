@@ -75,6 +75,7 @@ lint.select = [         # 选择的规则
     "E",
     "W",
     "UP",
+    # "BLE",  # 禁裸 except Exception；存量 ~356 处，待集中清理后再启用（见 CLAUDE.md "异常处理规范"）
 ]
 
 [tool.uv]

@@ -13,8 +13,8 @@ from starlette.responses import StreamingResponse
 from src.services.task_service import TaskContext, tasker
 from server.utils.auth_middleware import get_admin_user, get_required_user
 from src import config, knowledge_base
-from src.knowledge.chunking.ragflow_like.presets import ensure_chunk_defaults_in_additional_params
 from src.knowledge.indexing import SUPPORTED_FILE_EXTENSIONS, is_supported_file_extension, process_file_to_markdown
+from src.knowledge.metadata import normalize_kb_additional_params
 from src.knowledge.utils import calculate_content_hash
 from src.models.embed import test_all_embedding_models_status, test_embedding_model_status
 from src.storage.postgres.models_business import User
@@ -72,11 +72,8 @@ media_types = {
 @knowledge.get("/databases")
 async def get_databases(current_user: User = Depends(get_admin_user)):
     """获取所有知识库（根据用户权限过滤）"""
-    try:
-        return await knowledge_base.get_databases_by_user_id(current_user.user_id)
-    except Exception as e:
-        logger.error(f"获取数据库列表失败 {e}, {traceback.format_exc()}")
-        return {"message": f"获取数据库列表失败 {e}", "databases": []}
+    # 错误由全局 exception handler 统一处理为 {"detail", "code"} 形状
+    return await knowledge_base.get_databases_by_user_id(current_user.user_id)
 
 
 @knowledge.post("/databases")
@@ -104,7 +101,7 @@ async def create_database(
                 detail=f"知识库名称 '{database_name}' 已存在，请使用其他名称",
             )
 
-        additional_params = {**(additional_params or {})}
+        additional_params = normalize_kb_additional_params(additional_params)
         additional_params["auto_generate_questions"] = False  # 默认不生成问题
         def remove_reranker_config(params: dict) -> None:
             """Remove deprecated reranker_config."""
@@ -113,8 +110,6 @@ async def create_database(
                 params.pop("reranker_config", None)
 
         remove_reranker_config(additional_params)
-        additional_params = ensure_chunk_defaults_in_additional_params(additional_params)
-
         if not embed_model_name:
             raise HTTPException(status_code=400, detail="embed_model_name 不能为空")
         if embed_model_name not in config.embed_model_names:
@@ -198,7 +193,7 @@ async def update_database_info(
     )
     try:
         if additional_params is not None:
-            additional_params = ensure_chunk_defaults_in_additional_params(additional_params)
+            additional_params = normalize_kb_additional_params(additional_params)
 
             db_info = await knowledge_base.get_database_info(db_id)
             if not db_info:

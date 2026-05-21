@@ -4,7 +4,7 @@
 
 import uuid as uuid_lib
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -194,6 +194,38 @@ class ConversationRepository:
             return []
 
         return await self.get_messages(conversation.id, limit, offset)
+
+    async def get_latest_assistant_messages_by_thread_ids(self, thread_ids: list[str]) -> dict[str, Message]:
+        normalized_thread_ids = [str(thread_id).strip() for thread_id in thread_ids if str(thread_id).strip()]
+        if not normalized_thread_ids:
+            return {}
+
+        ranked_messages = (
+            select(
+                Conversation.thread_id.label("thread_id"),
+                Message.id.label("message_id"),
+                func.row_number()
+                .over(
+                    partition_by=Conversation.thread_id,
+                    order_by=(Message.created_at.desc(), Message.id.desc()),
+                )
+                .label("row_number"),
+            )
+            .join(Conversation, Conversation.id == Message.conversation_id)
+            .where(
+                Conversation.thread_id.in_(normalized_thread_ids),
+                Message.role == "assistant",
+            )
+            .subquery()
+        )
+
+        query = (
+            select(ranked_messages.c.thread_id, Message)
+            .join(Message, Message.id == ranked_messages.c.message_id)
+            .where(ranked_messages.c.row_number == 1)
+        )
+        result = await self.db.execute(query)
+        return {thread_id: message for thread_id, message in result.all()}
 
     async def list_conversations(
         self,

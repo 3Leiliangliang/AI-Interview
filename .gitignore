@@ -74,3 +74,16 @@ docs/vibe
 
 /models
 web/public/models/*.task
+
+### vendored sibling projects (have their own .git)
+/OpenViking/
+
+### root-level binary materials (move under saves/project-materials/ instead)
+/*.pptx
+/*.ppt
+/*.docx
+/*.doc
+/*.png
+/*.jpg
+/*.jpeg
+/*.mp4

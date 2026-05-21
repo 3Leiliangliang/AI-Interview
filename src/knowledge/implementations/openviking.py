@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from pathlib import PurePosixPath
 from types import SimpleNamespace
 from typing import Any
@@ -22,7 +21,7 @@ class OpenVikingKB(KnowledgeBase):
 
     def __init__(self, work_dir: str, **kwargs):
         super().__init__(work_dir)
-        self._metadata_lock = asyncio.Lock()
+        # _metadata_lock is now provided by the base class (see KnowledgeBase.__init__)
 
     @property
     def kb_type(self) -> str:

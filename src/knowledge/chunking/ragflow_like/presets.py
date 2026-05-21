@@ -161,6 +161,12 @@ def _sanitize_chunk_parser_config(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def ensure_chunk_defaults_in_additional_params(additional_params: dict[str, Any] | None) -> dict[str, Any]:
+    """Chunking-internal helper：仅补齐 chunk_preset_id 与 chunk_parser_config。
+
+    KB 元数据规范化请统一调用 ``src.knowledge.metadata.normalize_kb_additional_params``，
+    它会在本函数之上再做 position/topic_tags/source 字段的标准化。直接在 KB 元数据
+    入口调用本函数会绕过那些字段的归一化。
+    """
     params = dict(additional_params or {})
     params["chunk_preset_id"] = normalize_chunk_preset_id(params.get("chunk_preset_id"))
 

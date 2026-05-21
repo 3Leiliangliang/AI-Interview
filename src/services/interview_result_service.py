@@ -3112,7 +3112,9 @@ async def get_interview_history(
         offset=0,
     )
 
-    records: list[dict[str, Any]] = []
+    stored_results_by_thread: dict[str, dict[str, Any] | None] = {}
+    coding_sessions_by_thread: dict[str, dict[str, Any] | None] = {}
+    thread_ids_requiring_message_lookup: list[str] = []
     for conversation in conversations:
         metadata = dict(conversation.extra_metadata or {})
         coding_session = get_coding_session_from_metadata(metadata)
@@ -3121,29 +3123,39 @@ async def get_interview_history(
             conversation=conversation,
             coding_session=coding_session,
         )
-
-        messages: list[Any] | None = None
+        stored_results_by_thread[conversation.thread_id] = stored_result
+        coding_sessions_by_thread[conversation.thread_id] = coding_session
         if not _is_result_complete_enough(stored_result):
-            messages = await conv_repo.get_messages_by_thread_id(conversation.thread_id)
+            thread_ids_requiring_message_lookup.append(conversation.thread_id)
 
-        result_payload = _resolve_interview_result_payload(
-            conversation,
-            stored_result=stored_result,
-            coding_session=coding_session,
-            messages=messages,
-        )
-        enriched_result = await _ensure_result_enrichment(
-            db=db,
-            thread_id=conversation.thread_id,
-            current_user_id=str(target_user.id),
-            conversation=conversation,
-            result_payload=result_payload,
-            coding_session=coding_session,
-            messages=messages,
-            persist_if_missing=False,
-        )
-        record = _build_history_record(conversation=conversation, result_payload=enriched_result)
-        record["improvement_plan"] = (enriched_result or {}).get("improvement_plan")
+    latest_assistant_messages_by_thread = await conv_repo.get_latest_assistant_messages_by_thread_ids(
+        thread_ids_requiring_message_lookup
+    )
+
+    records: list[dict[str, Any]] = []
+    for conversation in conversations:
+        stored_result = stored_results_by_thread.get(conversation.thread_id)
+        coding_session = coding_sessions_by_thread.get(conversation.thread_id)
+        result_payload = stored_result
+
+        if not _is_result_complete_enough(stored_result):
+            latest_message = latest_assistant_messages_by_thread.get(conversation.thread_id)
+            derived_result = (
+                _build_result_from_message(latest_message, conversation, coding_session)
+                if latest_message
+                else None
+            )
+            if derived_result:
+                improvement_plan = (stored_result or {}).get("improvement_plan")
+                expression_analysis = (stored_result or {}).get("expression_analysis")
+                if improvement_plan:
+                    derived_result["improvement_plan"] = improvement_plan
+                if expression_analysis:
+                    derived_result["expression_analysis"] = expression_analysis
+                result_payload = derived_result
+
+        record = _build_history_record(conversation=conversation, result_payload=result_payload)
+        record["improvement_plan"] = (result_payload or {}).get("improvement_plan")
         records.append(record)
 
     records.sort(

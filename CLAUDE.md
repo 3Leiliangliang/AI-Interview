@@ -155,6 +155,10 @@ Agent 的能力通过 `src/agents/skills/*/SKILLS.md` 定义。技能可声明�
 - Python 3.12+，遵循 pythonic 风格
 - 使用 `uv` 管理依赖，pyproject.toml 中配置了清华 PyPI 镜像
 - ruff 格式化，行宽 120，规则 F/E/W/UP
+- **异常处理规范**：
+  - 业务异常使用 `KnowledgeBaseException`/`KBNotFoundError`/`KBOperationError` 或显式 `HTTPException`，**不要**在 router 内 `try/except Exception` 后返回成功形状的占位数据——全局 exception handler 会统一为 `{"detail", "code"}` 形状（见 [server/main.py](server/main.py)）。
+  - 后台/清理路径必须吞掉异常时，要捕获到具体变量并 `logger.error(..., exc)`，且加 `# noqa: BLE001` 标注故意行为。
+  - 存量代码约有 ~356 处裸 `except Exception`，待集中清理后会启用 ruff `BLE001` 规则。新代码不许新增违规。
 - pytest 配置：asyncio_mode=auto，markers 有 auth/slow/integration
 - 路由器测试 (`test/api/`) 是集成测试，需要 API 容器运行中，通过 httpx.AsyncClient 发送真实 HTTP 请求
 - 单元测试在 `test/unit/` 和 `test/` 根目录下

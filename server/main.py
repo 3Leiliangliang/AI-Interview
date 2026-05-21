@@ -1,9 +1,11 @@
 import asyncio
+import os
 import time
+import traceback
 from collections import defaultdict, deque
 
 import uvicorn
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -13,6 +15,8 @@ from server.utils.lifespan import lifespan
 from server.utils.auth_middleware import is_public_path
 from server.utils.common_utils import setup_logging
 from server.utils.access_log_middleware import AccessLogMiddleware
+from src.knowledge.base import KBNotFoundError, KBOperationError, KnowledgeBaseException
+from src.utils import logger
 
 # 设置日志配置
 setup_logging()
@@ -25,17 +29,63 @@ RATE_LIMIT_ENDPOINTS = {("/api/auth/token", "POST")}
 _login_attempts: defaultdict[str, deque[float]] = defaultdict(deque)
 _attempt_lock = asyncio.Lock()
 
+
+def _parse_cors_origins() -> list[str]:
+    raw = os.getenv("AI_INTERVIEW_CORS_ORIGINS", "http://localhost:5173")
+    origins = [item.strip() for item in raw.split(",") if item.strip()]
+    return origins or ["http://localhost:5173"]
+
+
 app = FastAPI(lifespan=lifespan)
 app.include_router(router, prefix="/api")
 
-# CORS 设置
+# CORS：从 AI_INTERVIEW_CORS_ORIGINS 读取逗号分隔白名单，缺省仅放行本地开发前端
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_parse_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ---------------------------------------------------------------------------
+# 统一错误响应：所有 API 错误都收敛到 {"detail": str, "code": str} 形状
+# ---------------------------------------------------------------------------
+def _error_response(status_code: int, detail: str, code: str) -> JSONResponse:
+    return JSONResponse(status_code=status_code, content={"detail": detail, "code": code})
+
+
+@app.exception_handler(HTTPException)
+async def _http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    # 保留路由内显式抛出的 HTTPException，仅规范化响应形状
+    return _error_response(
+        status_code=exc.status_code,
+        detail=str(exc.detail) if exc.detail else "HTTP error",
+        code=f"http_{exc.status_code}",
+    )
+
+
+@app.exception_handler(KBNotFoundError)
+async def _kb_not_found_handler(request: Request, exc: KBNotFoundError) -> JSONResponse:
+    return _error_response(status_code=404, detail=str(exc), code="kb_not_found")
+
+
+@app.exception_handler(KBOperationError)
+async def _kb_operation_handler(request: Request, exc: KBOperationError) -> JSONResponse:
+    return _error_response(status_code=400, detail=str(exc), code="kb_operation_failed")
+
+
+@app.exception_handler(KnowledgeBaseException)
+async def _kb_generic_handler(request: Request, exc: KnowledgeBaseException) -> JSONResponse:
+    return _error_response(status_code=500, detail=str(exc), code="kb_error")
+
+
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    # 兜底：未在路由内被捕获的异常，避免泄漏 traceback 到响应
+    logger.error(f"Unhandled exception on {request.method} {request.url.path}: {exc}\n{traceback.format_exc()}")
+    return _error_response(status_code=500, detail="服务器内部错误，请稍后再试", code="internal_error")
 
 
 def _extract_client_ip(request: Request) -> str:

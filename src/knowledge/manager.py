@@ -2,11 +2,9 @@ import asyncio
 import os
 
 from src.knowledge.base import KBNotFoundError, KnowledgeBase
-from src.knowledge.chunking.ragflow_like.presets import (
-    deep_merge,
-    ensure_chunk_defaults_in_additional_params,
-)
+from src.knowledge.chunking.ragflow_like.presets import deep_merge
 from src.knowledge.factory import KnowledgeBaseFactory
+from src.knowledge.metadata import normalize_kb_additional_params
 from src.storage.postgres.models_business import User
 from src.utils import logger
 from src.utils.datetime_utils import utc_isoformat
@@ -150,7 +148,7 @@ class KnowledgeBaseManager:
                 continue
 
             db_info["share_config"] = self._normalize_share_config(row.share_config)
-            db_info["additional_params"] = ensure_chunk_defaults_in_additional_params(row.additional_params)
+            db_info["additional_params"] = normalize_kb_additional_params(row.additional_params)
             all_databases.append(db_info)
         return {"databases": all_databases}
 
@@ -254,7 +252,7 @@ class KnowledgeBaseManager:
 
         share_config = self._normalize_share_config(share_config)
 
-        kwargs = ensure_chunk_defaults_in_additional_params(kwargs)
+        kwargs = normalize_kb_additional_params(kwargs)
 
         kb_instance = self._get_or_create_kb_instance(kb_type)
         db_info = await kb_instance.create_database(database_name, description, embed_info, **kwargs)
@@ -348,7 +346,7 @@ class KnowledgeBaseManager:
                 "status": "???",
             }
 
-        db_info["additional_params"] = ensure_chunk_defaults_in_additional_params(kb.additional_params)
+        db_info["additional_params"] = normalize_kb_additional_params(kb.additional_params)
         db_info["share_config"] = self._normalize_share_config(kb.share_config)
         db_info["mindmap"] = kb.mindmap
         db_info["sample_questions"] = kb.sample_questions or []
@@ -477,7 +475,7 @@ class KnowledgeBaseManager:
             raise ValueError(f"??? {db_id} ???")
 
         kb_instance = await self._get_kb_for_database(db_id)
-        kb_instance.update_database(db_id, name, description, llm_info)
+        kb_instance.update_database(db_id, name, description, llm_info, additional_params)
 
         update_data: dict = {
             "name": name,
@@ -487,9 +485,7 @@ class KnowledgeBaseManager:
             update_data["llm_info"] = llm_info
 
         if additional_params is not None:
-            merged_additional_params = ensure_chunk_defaults_in_additional_params(
-                deep_merge(kb.additional_params or {}, additional_params)
-            )
+            merged_additional_params = normalize_kb_additional_params(deep_merge(kb.additional_params or {}, additional_params))
             update_data["additional_params"] = merged_additional_params
             if db_id in kb_instance.databases_meta:
                 kb_instance.databases_meta[db_id]["metadata"] = merged_additional_params
