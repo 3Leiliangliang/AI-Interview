@@ -255,6 +255,12 @@ const maybeStartInterview = async () => {
 }
 
 const interviewCompletedKey = (tid) => `interview-completed-redirected:${tid}`
+// Threads observed actively in-progress this session. The completion redirect
+// must only fire on a genuine live transition (in-progress → all done), never on
+// a stale all-completed snapshot carried over when switching into a freshly
+// started thread — otherwise a brand-new interview is bounced straight to the
+// result page before the first question is even answered.
+const threadsSeenInProgress = new Set()
 
 const handleAgentStateChange = (agentState) => {
   if (!threadId.value) return
@@ -265,7 +271,9 @@ const handleAgentStateChange = (agentState) => {
     const allCompleted = todos.every((t) => t.status === 'completed')
     const lastTodo = todos[todos.length - 1]
     const lastDone = lastTodo?.status === 'completed'
-    if (allCompleted && lastDone) {
+    if (!allCompleted) {
+      threadsSeenInProgress.add(threadId.value)
+    } else if (lastDone && threadsSeenInProgress.has(threadId.value)) {
       const doneKey = interviewCompletedKey(threadId.value)
       if (!sessionStorage.getItem(doneKey)) {
         sessionStorage.setItem(doneKey, '1')
