@@ -1,0 +1,242 @@
+[
+  {
+    "id": "js-closure-001",
+    "domain": "javascript",
+    "concept": "闭包",
+    "difficulty": 0.45,
+    "question_template": "什么是JavaScript闭包？请举例说明其应用场景。",
+    "rubric": {
+      "required": ["词法作用域", "内层函数", "外部变量引用"],
+      "bonus": ["内存泄漏", "模块模式", "柯里化", "事件监听器"],
+      "misconceptions": ["闭包就是匿名函数", "闭包会导致内存一定泄漏"]
+    }
+  },
+  {
+    "id": "js-event-001",
+    "domain": "javascript",
+    "concept": "事件循环",
+    "difficulty": 0.65,
+    "question_template": "请解释JavaScript的事件循环机制，宏任务和微任务有什么区别？",
+    "rubric": {
+      "required": ["调用栈", "宏任务", "微任务", "执行顺序"],
+      "bonus": ["Promise.then", "queueMicrotask", "requestAnimationFrame", "Node.js差异"],
+      "misconceptions": ["setTimeout(fn,0)立即执行", "微任务在宏任务之后"]
+    }
+  },
+  {
+    "id": "css-box-001",
+    "domain": "css",
+    "concept": "CSS盒模型",
+    "difficulty": 0.35,
+    "question_template": "请解释CSS盒模型，标准盒模型和IE盒模型有什么区别？",
+    "rubric": {
+      "required": ["content", "padding", "border", "margin", "box-sizing"],
+      "bonus": ["BFC", "外边距折叠", "border-box", "inline-block"],
+      "misconceptions": ["margin是盒子的一部分（内部）", "padding包含content"]
+    }
+  },
+  {
+    "id": "fw-vue-001",
+    "domain": "frameworks",
+    "concept": "Vue响应式原理",
+    "difficulty": 0.60,
+    "question_template": "请解释Vue3的响应式原理，与Vue2有什么不同？",
+    "rubric": {
+      "required": ["Proxy", "Reflect", "依赖收集", "派发更新"],
+      "bonus": ["Object.defineProperty局限", "嵌套对象", "数组监听", "WeakMap存储"],
+      "misconceptions": ["Vue3用Object.defineProperty", "Proxy比defineProperty慢"]
+    }
+  },
+  {
+    "id": "perf-render-001",
+    "domain": "performance",
+    "concept": "浏览器渲染优化",
+    "difficulty": 0.55,
+    "question_template": "如何优化前端页面的首屏加载速度？",
+    "rubric": {
+      "required": ["懒加载", "代码分割", "缓存"],
+      "bonus": ["Critical CSS", "预加载preload", "Tree Shaking", "CDN", "SSR/SSG"],
+      "misconceptions": ["压缩图片就够了", "所有资源都应该懒加载"]
+    }
+  },
+  {
+    "id": "js-proto-001",
+    "domain": "javascript",
+    "concept": "原型链",
+    "difficulty": 0.58,
+    "question_template": "请解释JavaScript的原型链机制，instanceof是如何工作的？",
+    "rubric": {
+      "required": ["prototype", "__proto__", "原型链查找"],
+      "bonus": ["Object.create", "constructor属性", "寄生组合继承", "ES6 class语法糖"],
+      "misconceptions": ["class是全新机制与原型链无关", "所有对象都有prototype"]
+    }
+  },
+  {
+    "id": "fw-vdom-001",
+    "domain": "frameworks",
+    "concept": "虚拟DOM与Diff算法",
+    "difficulty": 0.68,
+    "question_template": "虚拟DOM解决了什么问题？React/Vue的Diff算法有哪些优化策略？",
+    "rubric": {
+      "required": ["批量更新", "减少真实DOM操作", "同层比较"],
+      "bonus": ["key的作用", "O(n)复杂度优化", "双端对比", "最长递增子序列"],
+      "misconceptions": ["虚拟DOM一定比直接操作DOM快", "Diff算法是O(n³)"]
+    }
+  },
+  {
+    "id": "css-flex-001",
+    "domain": "css",
+    "concept": "Flex布局",
+    "difficulty": 0.30,
+    "question_template": "请说明Flex布局的核心概念，如何用Flex实现常见的居中布局？",
+    "rubric": {
+      "required": ["flex-container", "flex-item", "主轴", "交叉轴"],
+      "bonus": ["flex-grow/shrink/basis", "align-self", "order", "flex-wrap"],
+      "misconceptions": ["flex只能水平布局", "flex-direction默认是column"]
+    }
+  },
+  {
+    "id": "perf-memory-001",
+    "domain": "performance",
+    "concept": "内存泄漏排查",
+    "difficulty": 0.70,
+    "question_template": "前端应用中常见的内存泄漏场景有哪些？如何排查？",
+    "rubric": {
+      "required": ["未清除事件监听", "定时器", "闭包引用"],
+      "bonus": ["WeakMap/WeakRef", "Chrome Memory面板", "Heap Snapshot", "分离DOM节点"],
+      "misconceptions": ["SPA不存在内存泄漏", "垃圾回收能处理所有泄漏"]
+    }
+  },
+  {
+    "id": "beh-review-001",
+    "domain": "behavioral",
+    "concept": "代码审查经验",
+    "difficulty": 0.40,
+    "question_template": "描述一次你参与代码审查的经历，你关注哪些方面？",
+    "rubric": {
+      "required": ["可读性", "正确性", "反馈"],
+      "bonus": ["性能考量", "安全问题", "测试覆盖", "建设性建议"],
+      "misconceptions": []
+    }
+  },
+  {
+    "id": "js-promise-001",
+    "domain": "javascript",
+    "concept": "Promise与async/await",
+    "difficulty": 0.50,
+    "question_template": "Promise和async/await有什么关系？如何处理并发请求？",
+    "rubric": {
+      "required": ["异步", "链式调用", "错误处理"],
+      "bonus": ["Promise.all", "Promise.race", "Promise.allSettled", "取消请求AbortController"],
+      "misconceptions": ["async/await比Promise性能更好", "await可以用在普通函数中"]
+    }
+  },
+  {
+    "id": "css-bfc-001",
+    "domain": "css",
+    "concept": "BFC块级格式上下文",
+    "difficulty": 0.62,
+    "question_template": "什么是BFC？它能解决哪些CSS布局问题？",
+    "rubric": {
+      "required": ["独立渲染区域", "清除浮动", "外边距折叠"],
+      "bonus": ["overflow:hidden触发", "float触发", "flex触发", "position:absolute"],
+      "misconceptions": ["BFC只能用overflow:hidden触发", "BFC影响外部布局"]
+    }
+  },
+  {
+    "id": "fw-state-001",
+    "domain": "frameworks",
+    "concept": "前端状态管理",
+    "difficulty": 0.58,
+    "question_template": "什么情况下需要引入全局状态管理？Pinia和Vuex有什么区别？",
+    "rubric": {
+      "required": ["组件间通信", "单向数据流", "状态集中"],
+      "bonus": ["组合式API支持", "TypeScript推断", "插件系统", "持久化"],
+      "misconceptions": ["所有状态都要放在store里", "Pinia需要mutation"]
+    }
+  },
+  {
+    "id": "perf-bundle-001",
+    "domain": "performance",
+    "concept": "构建优化",
+    "difficulty": 0.65,
+    "question_template": "如何减小前端应用的bundle体积？请说明具体优化手段。",
+    "rubric": {
+      "required": ["Tree Shaking", "Code Splitting", "懒加载路由"],
+      "bonus": ["动态import", "scope hoisting", "externals", "gzip/br", "按需引入"],
+      "misconceptions": ["压缩=优化完成", "所有第三方库都应打包进bundle"]
+    }
+  },
+  {
+    "id": "js-this-001",
+    "domain": "javascript",
+    "concept": "this指向",
+    "difficulty": 0.55,
+    "question_template": "请解释JavaScript中this的绑定规则，箭头函数和普通函数有什么区别？",
+    "rubric": {
+      "required": ["调用位置", "显式绑定", "箭头函数继承this"],
+      "bonus": ["new绑定", "call/apply/bind", "严格模式", "class中的this"],
+      "misconceptions": ["this在定义时确定（普通函数）", "箭头函数可以被bind改变this"]
+    }
+  },
+  {
+    "id": "fw-lifecycle-001",
+    "domain": "frameworks",
+    "concept": "组件生命周期",
+    "difficulty": 0.42,
+    "question_template": "请描述Vue3组件的生命周期钩子，onMounted和onUpdated分别适合做什么？",
+    "rubric": {
+      "required": ["setup", "onMounted", "onUnmounted", "onUpdated"],
+      "bonus": ["onBeforeMount", "onActivated", "keep-alive", "watchEffect"],
+      "misconceptions": ["setup替代了created和beforeCreate", "onMounted在服务端也执行"]
+    }
+  },
+  {
+    "id": "beh-deadline-001",
+    "domain": "behavioral",
+    "concept": "时间压力下的工作",
+    "difficulty": 0.38,
+    "question_template": "描述一次你在紧迫截止日期下完成项目的经历，你是如何安排优先级的？",
+    "rubric": {
+      "required": ["优先级", "沟通", "完成"],
+      "bonus": ["MVP思路", "及时同步进度", "技术债记录", "团队协作"],
+      "misconceptions": []
+    }
+  },
+  {
+    "id": "css-animation-001",
+    "domain": "css",
+    "concept": "CSS动画性能",
+    "difficulty": 0.60,
+    "question_template": "CSS动画如何避免触发重排（reflow）？哪些属性对性能友好？",
+    "rubric": {
+      "required": ["transform", "opacity", "合成层", "重排重绘"],
+      "bonus": ["will-change", "GPU加速", "requestAnimationFrame", "FLIP技术"],
+      "misconceptions": ["所有CSS动画都在合成线程", "margin动画和transform动画性能一样"]
+    }
+  },
+  {
+    "id": "js-module-001",
+    "domain": "javascript",
+    "concept": "ES模块vs CommonJS",
+    "difficulty": 0.52,
+    "question_template": "ES模块和CommonJS模块有什么区别？为什么现代项目推荐ES模块？",
+    "rubric": {
+      "required": ["静态分析", "tree shaking", "异步加载", "实时绑定"],
+      "bonus": ["循环依赖处理差异", "顶层await", "import.meta", "动态import"],
+      "misconceptions": ["两者完全兼容可以混用", "require是同步的所以更快"]
+    }
+  },
+  {
+    "id": "perf-security-001",
+    "domain": "performance",
+    "concept": "前端安全",
+    "difficulty": 0.68,
+    "question_template": "前端常见的安全漏洞有哪些？如何防范XSS和CSRF攻击？",
+    "rubric": {
+      "required": ["XSS", "CSRF", "输入转义"],
+      "bonus": ["CSP", "SameSite Cookie", "HTTPS", "Token验证", "iframe沙箱"],
+      "misconceptions": ["前端验证够用不需要后端验证", "HTTPS能防止XSS"]
+    }
+  }
+]
