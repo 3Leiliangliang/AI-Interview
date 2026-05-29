@@ -39,6 +39,8 @@ services:
       - no_proxy=localhost,127.0.0.1,minio,mineru,paddlex,api.siliconflow.cn
       - OJ_API_BASE_URL=${OJ_API_BASE_URL:-http://oj-backend.local:8000/api}
       - OJ_JUDGE_SERVER_URL=${OJ_JUDGE_SERVER_URL:-http://oj-judge-server:12358}
+      - OJ_USERNAME=${OJ_USERNAME:-root}
+      - OJ_PASSWORD=${OJ_PASSWORD:-rootroot}
     # endregion api_envs
     command: uv run --no-dev uvicorn server.main:app --host 0.0.0.0 --port 5050 --reload
     restart: unless-stopped
@@ -95,6 +97,8 @@ services:
       - no_proxy=localhost,127.0.0.1,minio,mineru,paddlex,api.siliconflow.cn
       - OJ_API_BASE_URL=${OJ_API_BASE_URL:-http://oj-backend.local:8000/api}
       - OJ_JUDGE_SERVER_URL=${OJ_JUDGE_SERVER_URL:-http://oj-judge-server:12358}
+      - OJ_USERNAME=${OJ_USERNAME:-root}
+      - OJ_PASSWORD=${OJ_PASSWORD:-rootroot}
     command: uv run --no-dev arq server.worker_main.WorkerSettings
     restart: unless-stopped
     depends_on:
