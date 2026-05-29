@@ -22,6 +22,7 @@ from src.services.chat_stream_service import (
     save_messages_from_langgraph_state,
 )
 from src.services.interview_result_sep_helpers import (
+    SEP_BANK_SLUGS,
     SEP_MIN_BANK_COVERAGE as _SEP_MIN_BANK_COVERAGE,
     SEP_MIN_MATCHED_PAIRS as _SEP_MIN_MATCHED_PAIRS,
     match_question as _sep_match_question,
@@ -1797,7 +1798,13 @@ def _parse_thread_context(title: str | None) -> tuple[str, str]:
 
 
 def _extract_qa_pairs(messages: list) -> list[tuple[str, str]]:
-    """Extract (question, answer) pairs from conversation messages."""
+    """Extract (interviewer_question, candidate_answer) pairs from messages.
+
+    In a mock interview the *interviewer* is the assistant (asks questions) and
+    the *candidate* is the user (gives answers). SEP scores the candidate's
+    answer, so a pair is an assistant question immediately followed by the
+    user's reply — not the other way around.
+    """
     qa_pairs: list[tuple[str, str]] = []
     pending_question: str | None = None
 
@@ -1806,12 +1813,13 @@ def _extract_qa_pairs(messages: list) -> list[tuple[str, str]]:
         content = str(getattr(msg, "content", "") or "").strip()
         if not content or role not in ("user", "assistant"):
             continue
-        # Skip very short messages (greetings, confirmations)
-        if role == "user":
+        # Assistant asks the question; keep the latest one as pending.
+        if role == "assistant":
             if len(content) >= 8:
                 pending_question = content
             continue
-        if role == "assistant" and pending_question and len(content) >= 20:
+        # User answers; pair a substantive answer with the pending question.
+        if pending_question and len(content) >= 20:
             qa_pairs.append((pending_question, content))
             pending_question = None
 
@@ -1831,105 +1839,183 @@ def _resolve_position_for_sep(conversation, coding_session: dict[str, Any] | Non
     return resolve_bank_slug(raw_position)
 
 
-def _try_sep_scoring(
-    messages: list,
-    conversation,
-    coding_session: dict[str, Any] | None,
-) -> dict[str, Any] | None:
-    """Run SEP deterministic scoring on conversation Q&A pairs.
+def _collect_sep_qa_pairs(messages: list[Any] | None) -> tuple[list[tuple[str, str]], str | None]:
+    """Reconstruct (sep_question_id, candidate_answer) pairs from the transcript.
 
-    Preferred path: a thread-scoped SEPSession seeded at *ask-time* by the
-    `pick_sep_adaptive_question` agent tool. Each question's id is therefore
-    already known, so we can pair questions to rubrics with zero ambiguity.
+    Each `pick_sep_adaptive_question` tool call persists the chosen question's
+    `sep_question_id` and the bank `file_name` (e.g. ``backend.json``). The
+    candidate's answer is the user message(s) that follow the delivered
+    question. This mirrors `_collect_technical_question_reviews` but keys on the
+    SEP id, so the scorer looks up the *exact* rubric — no fuzzy matching and no
+    misalignment with non-SEP intro/project turns.
 
-    Fallback path (legacy conversations whose agent didn't use the adaptive
-    tool): rebuild a fresh session and try Jaccard text matching against the
-    bank. If that doesn't reach the coverage floor we return None so the
-    caller falls back to the LLM scorecard instead of inventing scores.
+    Reconstructing from the persisted transcript (rather than the in-process
+    session cache) also means scoring works even when the agent ran in a
+    different process than the result request.
+
+    Returns the ordered (id, answer) pairs plus the bank slug parsed from the
+    tool output so scoring loads the matching question bank.
     """
-    if not _is_sep_available():
-        return None
+    ordered_messages = list(messages or [])
+    pairs: list[tuple[str, str]] = []
+    bank_slug: str | None = None
 
-    qa_pairs = _extract_qa_pairs(messages)
-    if len(qa_pairs) < 2:
-        return None
+    for index, message in enumerate(ordered_messages):
+        if _is_hidden_history_message(message):
+            continue
+        if str(getattr(message, "role", "") or "").strip() != "assistant":
+            continue
 
-    try:
-        from src.services.sep import SEPSession
-        from src.services.sep.session_cache import get_session
-    except Exception as exc:  # noqa: BLE001 - import boundary; log instead of swallow
-        logger.warning("SEP import failed: {}", exc)
-        return None
-
-    thread_id = str(getattr(conversation, "thread_id", "") or "").strip()
-    cached = get_session(thread_id) if thread_id else None
-    matched_pairs = 0
-
-    if cached and cached.asked_ids:
-        # Adaptive path: cached.asked_ids holds question_ids the agent already
-        # picked via SEP. Replay them in order against the candidate's answers.
-        bank_by_id = {q["id"]: q for q in cached._question_bank}
-        asked_in_order: list[dict] = [bank_by_id[qid] for qid in cached.asked_ids if qid in bank_by_id]
-        # Pair the first len(asked_in_order) Q&A pairs with the picked questions.
-        pairing = list(zip(asked_in_order, qa_pairs))
-        # SEP's session state already had `asked_ids` populated; rebuild a clean
-        # session so record_answer can re-run feature extraction from scratch.
-        session = SEPSession(position=cached.position)
-        for question, (_question_text, answer_text) in pairing:
-            try:
-                session.record_answer(question, answer_text)
-                matched_pairs += 1
-            except Exception as exc:  # noqa: BLE001 - per-question boundary
-                logger.warning(
-                    "SEP record_answer failed (adaptive) for q_id={}: {}",
-                    question.get("id"),
-                    exc,
-                )
+        for tool_call in getattr(message, "tool_calls", None) or []:
+            if str(getattr(tool_call, "tool_name", "") or "").strip() != "pick_sep_adaptive_question":
                 continue
-        if matched_pairs == 0:
-            # Cached session existed but couldn't be replayed; fall through.
-            cached = None
-
-    if not (cached and matched_pairs > 0):
-        # Legacy / unmatched path — try fuzzy matching as a best effort.
-        position = _resolve_position_for_sep(conversation, coding_session)
-        try:
-            session = SEPSession(position=position)
-        except Exception as exc:  # noqa: BLE001 - SEPSession init boundary
-            logger.warning("SEPSession init failed for position={}: {}", position, exc)
-            return None
-
-        bank_questions = list(session._question_bank)
-        if not bank_questions:
-            return None
-
-        for question_text, answer_text in qa_pairs:
-            best_match = _sep_match_question(question_text, bank_questions, session.asked_ids)
-            if best_match is None:
-                continue
-            try:
-                session.record_answer(best_match, answer_text)
-                matched_pairs += 1
-            except Exception as exc:  # noqa: BLE001 - per-question record boundary
-                logger.warning("SEP record_answer failed for q_id={}: {}", best_match.get("id"), exc)
+            if str(getattr(tool_call, "status", "") or "").strip() != "success":
                 continue
 
-    coverage = matched_pairs / len(qa_pairs)
+            payload = _parse_tool_output_payload(getattr(tool_call, "tool_output", ""))
+            question_id = str(payload.get("sep_question_id") or "").strip()
+            if not question_id:
+                continue
+
+            if bank_slug is None:
+                file_name = str(payload.get("file_name") or "").strip().lower()
+                if file_name.endswith(".json"):
+                    candidate_slug = file_name[:-5]
+                    if candidate_slug in SEP_BANK_SLUGS:
+                        bank_slug = candidate_slug
+
+            question_text = str(payload.get("question") or "").strip()
+            asked_index, _asked_message = _find_question_delivery_message(
+                ordered_messages,
+                start_index=index,
+                question=question_text,
+            )
+            answer_messages = _collect_answer_messages(ordered_messages, question_index=asked_index)
+            answer_text = "\n".join(
+                str(getattr(answer_message, "content", "") or "").strip()
+                for answer_message in answer_messages
+                if str(getattr(answer_message, "content", "") or "").strip()
+            ).strip()
+            if not answer_text:
+                continue
+            pairs.append((question_id, answer_text))
+
+    return pairs, bank_slug
+
+
+def _build_sep_scorecard_if_covered(
+    session: Any,
+    *,
+    matched_pairs: int,
+    denominator: int,
+) -> dict[str, Any] | None:
+    """Build the SEP scorecard if recorded answers clear the coverage floor.
+
+    `denominator` is the number of candidate questions we *attempted* to score
+    (SEP questions asked, or transcript Q&A pairs for the legacy path). Below
+    the floor we return None so the caller falls back to the LLM scorecard
+    instead of inventing scores from a thin sample.
+    """
+    coverage = matched_pairs / denominator if denominator else 0.0
     if matched_pairs < _SEP_MIN_MATCHED_PAIRS or coverage < _SEP_MIN_BANK_COVERAGE:
         logger.info(
             "SEP coverage too low (matched={}/{}, ratio={:.2f}) — falling back to LLM scorecard",
             matched_pairs,
-            len(qa_pairs),
+            denominator,
             coverage,
         )
         return None
-
     try:
         report = session.build_report()
     except Exception as exc:  # noqa: BLE001 - report build boundary
         logger.warning("SEP build_report failed: {}", exc)
         return None
     return _scorecard_from_sep_report(report, coverage=coverage)
+
+
+def _try_sep_scoring(
+    messages: list,
+    conversation,
+    coding_session: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Run SEP deterministic scoring on the interview transcript.
+
+    Preferred path: replay the questions the `pick_sep_adaptive_question` agent
+    tool picked at ask-time. Each tool call persisted its `sep_question_id`, so
+    we look the rubric up by id and score it against the candidate's *actual*
+    answer (role=user) — exact question↔answer alignment, fully grounded.
+
+    Fallback path (legacy conversations whose agent never used the adaptive
+    tool): Jaccard-match free-form questions against the bank. If neither path
+    reaches the coverage floor we return None so the caller falls back to the
+    LLM scorecard instead of inventing scores.
+    """
+    if not _is_sep_available():
+        return None
+
+    try:
+        from src.services.sep import SEPSession
+    except Exception as exc:  # noqa: BLE001 - import boundary; log instead of swallow
+        logger.warning("SEP import failed: {}", exc)
+        return None
+
+    # --- Preferred: adaptive replay reconstructed from persisted tool calls ---
+    sep_pairs, bank_slug = _collect_sep_qa_pairs(messages)
+    if sep_pairs:
+        position = bank_slug or _resolve_position_for_sep(conversation, coding_session)
+        try:
+            session = SEPSession(position=position)
+        except Exception as exc:  # noqa: BLE001 - SEPSession init boundary
+            logger.warning("SEPSession init failed for position={}: {}", position, exc)
+            return None
+
+        bank_by_id = {q["id"]: q for q in session._question_bank}
+        matched_pairs = 0
+        for question_id, answer_text in sep_pairs:
+            question = bank_by_id.get(question_id)
+            if question is None:
+                continue
+            try:
+                session.record_answer(question, answer_text)
+                matched_pairs += 1
+            except Exception as exc:  # noqa: BLE001 - per-question record boundary
+                logger.warning("SEP record_answer failed (adaptive) for q_id={}: {}", question_id, exc)
+                continue
+
+        scorecard = _build_sep_scorecard_if_covered(session, matched_pairs=matched_pairs, denominator=len(sep_pairs))
+        if scorecard:
+            return scorecard
+        # Adaptive replay didn't clear the floor; fall through to fuzzy matching.
+
+    # --- Fallback: legacy Jaccard text matching against the bank ---
+    qa_pairs = _extract_qa_pairs(messages)
+    if len(qa_pairs) < 2:
+        return None
+
+    position = _resolve_position_for_sep(conversation, coding_session)
+    try:
+        session = SEPSession(position=position)
+    except Exception as exc:  # noqa: BLE001 - SEPSession init boundary
+        logger.warning("SEPSession init failed for position={}: {}", position, exc)
+        return None
+
+    bank_questions = list(session._question_bank)
+    if not bank_questions:
+        return None
+
+    matched_pairs = 0
+    for question_text, answer_text in qa_pairs:
+        best_match = _sep_match_question(question_text, bank_questions, session.asked_ids)
+        if best_match is None:
+            continue
+        try:
+            session.record_answer(best_match, answer_text)
+            matched_pairs += 1
+        except Exception as exc:  # noqa: BLE001 - per-question record boundary
+            logger.warning("SEP record_answer failed for q_id={}: {}", best_match.get("id"), exc)
+            continue
+
+    return _build_sep_scorecard_if_covered(session, matched_pairs=matched_pairs, denominator=len(qa_pairs))
 
 
 # SEP narrative + scorecard shaping live in interview_result_sep_helpers (see
@@ -2013,6 +2099,10 @@ def _normalize_result_payload(
                     scorecard["dimensions"] = sep_scorecard.get("dimensions", [])
                 scorecard["sep_evidence_chain"] = sep_scorecard.get("sep_evidence_chain", [])
                 scorecard["sep_theta_trajectory"] = sep_scorecard.get("sep_theta_trajectory", [])
+                # Carry the score-source provenance so the UI labels the score
+                # as rule-engine-derived instead of "基于 LLM 综合评估".
+                scorecard["score_source"] = sep_scorecard.get("score_source")
+                scorecard["sep_coverage"] = sep_scorecard.get("sep_coverage")
             else:
                 scorecard = sep_scorecard
 
