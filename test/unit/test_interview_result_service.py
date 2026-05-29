@@ -243,7 +243,9 @@ def test_generate_improvement_plan_includes_filtered_external_resources(monkeypa
     assert video_resource["title"] == "B 站缓存一致性实战视频"
     assert article_resource["search_score"] > video_resource["search_score"] > service.EXTERNAL_RESOURCE_MIN_SCORE
     assert "延迟双删" in article_resource["reason"]
-    assert "当前维度得分约为 58 分" in article_resource["reason"]
+    # Reason should cite the actual low score (was: "当前维度得分约为 58 分");
+    # P1 wording change kept the score grounded but rephrased the sentence.
+    assert "58 分" in article_resource["reason"]
 
 
 def test_search_external_learning_resources_prioritizes_high_score_and_diverse_types(monkeypatch):
@@ -1351,3 +1353,47 @@ def test_normalize_result_payload_splits_legacy_title_when_role_contains_full_ti
     assert payload is not None
     assert payload["scorecard"]["role"] == "backend engineer"
     assert payload["scorecard"]["round"] == "first round"
+
+
+def test_normalize_result_payload_recovers_overall_from_dimensions():
+    """V3-001 fix: when LLM forgets `overall` but emits dimension scores,
+    we average them instead of letting the UI render '—'."""
+    conversation = SimpleNamespace(title="后端工程师 · 初试")
+
+    payload = service._normalize_result_payload(
+        {
+            "status": "completed",
+            "scorecard": {
+                "dimensions": [
+                    {"name": "技术能力", "score": 60},
+                    {"name": "沟通表达", "score": 78},
+                    {"name": "综合素质", "score": 72},
+                ],
+            },
+        },
+        conversation=conversation,
+        coding_session=None,
+    )
+
+    assert payload is not None
+    assert payload["scorecard"]["overall"] == 70  # round((60+78+72)/3)
+
+
+def test_normalize_result_payload_preserves_null_overall_when_no_dimensions():
+    """V3-001 fix corollary: if we have no dimensions either, leave overall
+    as None so the UI can show the 'incomplete scorecard' banner."""
+    conversation = SimpleNamespace(title="后端工程师 · 初试")
+
+    payload = service._normalize_result_payload(
+        {
+            "status": "completed",
+            "scorecard": {
+                "strengths": ["候选人表达清晰"],
+            },
+        },
+        conversation=conversation,
+        coding_session=None,
+    )
+
+    assert payload is not None
+    assert payload["scorecard"].get("overall") is None

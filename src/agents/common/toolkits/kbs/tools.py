@@ -714,6 +714,107 @@ async def pick_random_technical_question(
         }
 
 
+# ---------------------------------------------------------------------------
+# SEP adaptive question selector tool
+# ---------------------------------------------------------------------------
+# Wires the SEP three-layer pipeline into the live interview.
+# When the agent calls this tool:
+#   1. Resolve thread_id from request context;
+#   2. Get-or-create a thread-scoped SEPSession;
+#   3. Ask the session for the next question via IRT + domain-coverage rules.
+# The scoring service later replays this same session to produce a 100%
+# grounded evidence chain — no fuzzy text matching, no inflated scores.
+
+_AGENT_POSITION_BANK_MAP = (
+    ("frontend", "frontend"),
+    ("前端", "frontend"),
+    ("react", "frontend"),
+    ("vue", "frontend"),
+    ("algorithm", "algorithm"),
+    ("算法", "algorithm"),
+    ("ml", "algorithm"),
+    ("ai", "algorithm"),
+    ("backend", "backend"),
+    ("后端", "backend"),
+    ("java", "backend"),
+    ("python", "backend"),
+    ("node", "backend"),
+)
+
+
+def _resolve_sep_bank_slug(position: str | None) -> str:
+    raw = str(position or "").strip().lower()
+    if raw in ("backend", "frontend", "algorithm"):
+        return raw
+    for keyword, slug in _AGENT_POSITION_BANK_MAP:
+        if keyword in raw:
+            return slug
+    return "backend"
+
+
+@tool
+async def pick_sep_adaptive_question(runtime: ToolRuntime) -> dict[str, Any]:
+    """从 SEP 自适应题库选下一道技术题。
+
+    在第 3 阶段（相关技术知识提问）调用本工具。它会：
+    1. 根据候选人当前能力估计 θ 和已覆盖的领域，从题库中挑选信息增益最大的题；
+    2. 将选定的题缓存到当前面试会话中，供后续 SEP 评分时精准匹配；
+    3. 返回题目文本、所属概念、难度，以及一个内部 `sep_question_id`。
+
+    使用规则：
+    - 直接把 `question` 字段念给候选人，可以做轻微改写但保留技术核心；
+    - 不要在用户面前展示 `sep_question_id`；
+    - 如果返回 `{"question": ""}`（题库耗尽或不可用），改用 `pick_random_technical_question` 兜底。
+    """
+    try:
+        from src.services.sep.session_cache import get_or_create_session
+    except Exception as exc:  # noqa: BLE001 - import boundary
+        logger.warning("SEP 不可用，无法启用自适应选题: {}", exc)
+        return {"question": "", "message": f"SEP 不可用：{exc}"}
+
+    ctx = get_agent_request_context()
+    thread_id = ctx.get("thread_id", "")
+    raw_position = ctx.get("target_position", "")
+    runtime_context = getattr(runtime, "context", None)
+    if not raw_position:
+        raw_position = getattr(runtime_context, "target_position", "") or ""
+
+    bank_slug = _resolve_sep_bank_slug(raw_position)
+    session = get_or_create_session(thread_id, bank_slug)
+
+    question = session.next_question()
+    if not question:
+        logger.info(
+            "SEP 题库已无可用题（thread={}, position={}, asked={}）",
+            thread_id,
+            bank_slug,
+            len(session.asked_ids),
+        )
+        return {
+            "question": "",
+            "concept": "",
+            "difficulty": None,
+            "sep_question_id": "",
+            "message": "SEP 题库已耗尽，请改用 pick_random_technical_question 兜底。",
+        }
+
+    # Mark the question as asked so the next call doesn't repeat it.
+    # The candidate's answer will be replayed via session.record_answer at
+    # scoring time once the assistant message is committed to the database.
+    session.asked_ids.add(question["id"])
+    session.asked_domains.add(question.get("domain", "behavioral"))
+
+    return {
+        "question": question.get("question_template", ""),
+        "concept": question.get("concept", ""),
+        "difficulty": question.get("difficulty"),
+        "domain": question.get("domain", ""),
+        "sep_question_id": question.get("id", ""),
+        "kb_name": "SEP 自适应题库",
+        "file_name": f"{bank_slug}.json",
+    }
+
+
 def get_common_kb_tools() -> list:
     """获取通用知识库工具列表。"""
     return [list_kbs, get_mindmap, query_kb]
