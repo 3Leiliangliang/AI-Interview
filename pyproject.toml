@@ -67,6 +67,7 @@ dependencies = [
     "loguru>=0.7.3",
     "redis>=5.2.0",
     "openviking>=0.2.6",
+    "jieba>=0.42",
 ]
 [tool.ruff]
 line-length = 120  # 代码最大行宽
