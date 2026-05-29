@@ -296,8 +296,10 @@ const activeTopicKey = ref('')
 const expandedRefs = ref(new Set())
 const topicPanelState = reactive({})
 
+// Seed keyword from `?q=` so the interview result page can deep-link
+// learners straight to a pre-filtered practice list.
 const filters = reactive({
-  keyword: '',
+  keyword: String(route.query.q || '').trim(),
   difficulty: 'all',
   status: 'all',
   language: 'all'

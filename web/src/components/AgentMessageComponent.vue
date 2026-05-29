@@ -438,8 +438,8 @@ const extractInterviewScorecard = (content) => {
   let scorecard = null
   try {
     scorecard = normalizeScorecard(JSON.parse(match[1].trim()))
-  } catch (error) {
-    console.warn('Failed to parse interview scorecard JSON:', error)
+  } catch {
+    // LLM may output markdown table instead of JSON — silently ignored
   }
 
   return {
