@@ -1,5 +1,13 @@
 # SEP: Structured Evaluation Pipeline — Implementation Plan
 
+> **STATUS (2026-05-29): FULLY IMPLEMENTED in the working tree.** The unchecked `- [ ]` boxes below
+> are stale — they were never ticked during execution. All 13 tasks are done: backend module
+> (`src/services/sep/`) with 48 passing unit tests, result-service integration (`_try_sep_scoring`),
+> agent tool (`pick_sep_adaptive_question`), and frontend components, all building/passing. The
+> implementation diverged from this plan: it added `session_cache.py` + `interview_result_sep_helpers.py`
+> and dropped `CognitiveTimeline.vue` — see the design spec's "Implementation notes" for the full list.
+> Treat this plan as historical reference, not an open TODO.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development`
 > (recommended) or `superpowers:executing-plans` to implement this plan task-by-task.
 > Steps use checkbox (`- [ ]`) syntax for tracking.

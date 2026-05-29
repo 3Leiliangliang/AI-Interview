@@ -1,5 +1,17 @@
 # SEP Design Spec: Structured Evaluation Pipeline
-> Date: 2026-05-23 | Status: Approved | Competition: AI Application Development Track
+> Date: 2026-05-23 | Status: **Implemented** (2026-05, in working tree) | Competition: AI Application Development Track
+
+> **Implementation notes** (divergences from this spec, verified 2026-05-29):
+> - **Added** `src/services/sep/session_cache.py` (thread-scoped `SEPSession`). The agent seeds the
+>   selected question id at *ask-time* via the `pick_sep_adaptive_question` tool, so scoring matches
+>   answers to the exact bank question rather than reconstructing the mapping post-hoc.
+> - **Added** `src/services/interview_result_sep_helpers.py` — pure (IO-free) report→scorecard
+>   conversion, deterministic narrative, bank-slug resolution, and a Jaccard fuzzy matcher used by the
+>   legacy/non-adaptive fallback path. Carries a coverage-based `score_source` flag (`sep` vs `sep_partial`).
+> - **Dropped** `CognitiveTimeline.vue` (the third frontend component in §6). Only `EvidenceChain.vue`
+>   and `AdaptiveTrajectory.vue` were built and wired into `InterviewResultView.vue`.
+> - **Status**: 48 SEP unit tests pass (`test/unit/sep/`); frontend builds clean. Question banks live at
+>   `src/data/question_banks/` and are tracked via a `.gitignore` negative rule (`src/data` is otherwise ignored).
 
 ## 1. Core Claim
 

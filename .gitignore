@@ -59,7 +59,10 @@ test/artifacts/
 
 
 *.pdf
-src/data
+src/data/**
+# SEP question banks are tracked runtime data, not generated output.
+!src/data/question_banks/
+!src/data/question_banks/**
 */package-lock.json
 web/package-lock.json
 saves
@@ -71,6 +74,9 @@ docs/vibe
 .codex_tmp/
 .knowledge/
 .playwright-cli/
+.playwright-mcp/
+.serena/
+screenshots/
 
 /models
 web/public/models/*.task
