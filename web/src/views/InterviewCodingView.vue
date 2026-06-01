@@ -8,7 +8,7 @@
       <div class="toolbar-actions">
         <a-button :loading="starting" @click="handleStartIfNeeded">刷新题目</a-button>
         <a-button @click="goBackToInterview">返回面试</a-button>
-        <a-button v-if="canOpenResult" @click="goToInterviewResult()">查看面试结果</a-button>
+        <a-button v-if="canOpenResult" @click="goToInterviewResult(true)">查看面试结果</a-button>
         <a-button :loading="runningSample" @click="handleRunSample">运行样例</a-button>
         <a-button type="primary" :loading="submitting" @click="handleSubmit">提交判题</a-button>
       </div>

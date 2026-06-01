@@ -1,5 +1,12 @@
 ﻿<template>
   <div class="interview-session-view">
+    <Transition name="coding-banner">
+      <div v-if="codingReady" class="coding-ready-banner">
+        <span class="coding-ready-banner__text">编程题已就绪，准备好后点击进入考核</span>
+        <button class="coding-ready-banner__btn" @click="goToCodingWorkbench">进入编程考核</button>
+        <button class="coding-ready-banner__close" @click="dismissCodingBanner">&times;</button>
+      </div>
+    </Transition>
     <AgentChatComponent
       ref="chatComponentRef"
       :agent-id="interviewAgentId"
@@ -64,6 +71,7 @@ const router = useRouter()
 const agentStore = useAgentStore()
 const chatComponentRef = ref(null)
 const eventStream = useVideoEventStream()
+const codingReady = ref(false)
 
 const { selectedAgentId, defaultAgentId } = storeToRefs(agentStore)
 
@@ -153,6 +161,24 @@ const openResumeCenter = () => {
   router.push('/resume')
 }
 
+const goToCodingWorkbench = () => {
+  if (!threadId.value) return
+  codingReady.value = false
+  router.push({
+    name: 'InterviewCodingWorkbench',
+    query: {
+      threadId: threadId.value,
+      position: selectedPosition.value,
+      round: selectedRound.value,
+      ...(selectedResumeId.value ? { resumeId: String(selectedResumeId.value) } : {})
+    }
+  })
+}
+
+const dismissCodingBanner = () => {
+  codingReady.value = false
+}
+
 const openInterviewResult = () => {
   if (!threadId.value) return
   router.push({
@@ -228,7 +254,44 @@ const maybeStartInterview = async () => {
   }
 }
 
+const interviewCompletedKey = (tid) => `interview-completed-redirected:${tid}`
+// Threads observed actively in-progress this session. The completion redirect
+// must only fire on a genuine live transition (in-progress → all done), never on
+// a stale all-completed snapshot carried over when switching into a freshly
+// started thread — otherwise a brand-new interview is bounced straight to the
+// result page before the first question is even answered.
+const threadsSeenInProgress = new Set()
+
 const handleAgentStateChange = (agentState) => {
+  if (!threadId.value) return
+
+  // Detect interview completion: all todos finished → auto-redirect to result page
+  const todos = agentState?.todos
+  if (Array.isArray(todos) && todos.length > 0) {
+    const allCompleted = todos.every((t) => t.status === 'completed')
+    const lastTodo = todos[todos.length - 1]
+    const lastDone = lastTodo?.status === 'completed'
+    if (!allCompleted) {
+      threadsSeenInProgress.add(threadId.value)
+    } else if (lastDone && threadsSeenInProgress.has(threadId.value)) {
+      const doneKey = interviewCompletedKey(threadId.value)
+      if (!sessionStorage.getItem(doneKey)) {
+        sessionStorage.setItem(doneKey, '1')
+        router.replace({
+          name: 'InterviewResultPage',
+          query: {
+            threadId: threadId.value,
+            position: selectedPosition.value,
+            round: selectedRound.value,
+            autoGenerate: '1',
+            ...(selectedResumeId.value ? { resumeId: String(selectedResumeId.value) } : {})
+          }
+        })
+        return
+      }
+    }
+  }
+
   const codingSession = agentState?.coding_session
   if (!threadId.value || !codingSession) return
   if (!['ready', 'coding'].includes(codingSession.status)) return
@@ -242,15 +305,7 @@ const handleAgentStateChange = (agentState) => {
     sessionStorage.removeItem(skipKey)
   }
 
-  router.push({
-    name: 'InterviewCodingWorkbench',
-    query: {
-      threadId: threadId.value,
-      position: selectedPosition.value,
-      round: selectedRound.value,
-      ...(selectedResumeId.value ? { resumeId: String(selectedResumeId.value) } : {})
-    }
-  })
+  codingReady.value = true
 }
 
 const handleThreadChange = (nextThread) => {
@@ -311,6 +366,58 @@ watch(
   width: 100%;
   height: 100%;
   overflow: hidden;
+  position: relative;
+}
+
+.coding-ready-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #e8f5e9, #f1f8e9);
+  border-bottom: 1px solid #c8e6c9;
+  font-size: 14px;
+  color: #2e7d32;
+
+  &__btn {
+    padding: 4px 16px;
+    border: none;
+    border-radius: 6px;
+    background: #43a047;
+    color: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    white-space: nowrap;
+    transition: background 0.2s;
+
+    &:hover { background: #388e3c; }
+  }
+
+  &__close {
+    border: none;
+    background: none;
+    font-size: 18px;
+    color: #666;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+  }
+}
+
+.coding-banner-enter-active,
+.coding-banner-leave-active {
+  transition: all 0.3s ease;
+}
+.coding-banner-enter-from,
+.coding-banner-leave-to {
+  opacity: 0;
+  transform: translateY(-100%);
 }
 
 .agent-nav-btn {

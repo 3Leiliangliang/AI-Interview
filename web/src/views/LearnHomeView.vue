@@ -174,7 +174,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { DownOutlined, SearchOutlined, UpOutlined } from '@ant-design/icons-vue'
 import { BookOpen, BrainCircuit, Code2, Database, FileText, Network, Sparkles } from 'lucide-vue-next'
 
@@ -183,11 +183,14 @@ import { usePositionTypes } from '@/composables/usePositionTypes'
 import { normalizePositionType } from '@/utils/position_utils'
 
 const router = useRouter()
+const route = useRoute()
 const { positionTypeOptions, loadPositionTypes, positionTypes } = usePositionTypes()
 
 const loading = ref(false)
 const errorMessage = ref('')
-const keyword = ref('')
+// Seed the search box from `?q=` so the interview result page can
+// deep-link learners straight to a pre-filtered list.
+const keyword = ref(String(route.query.q || '').trim())
 const selectedPosition = ref('all')
 const selectedDifficulty = ref('all')
 const selectedUpdateRange = ref('all')

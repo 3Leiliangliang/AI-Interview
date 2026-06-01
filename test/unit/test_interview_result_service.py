@@ -5,11 +5,15 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.services import interview_result_service as service  # noqa: E402
+
+_SEP_READY = service._is_sep_available()
 
 
 def test_generate_improvement_plan_builds_structured_sections(monkeypatch):
@@ -243,7 +247,9 @@ def test_generate_improvement_plan_includes_filtered_external_resources(monkeypa
     assert video_resource["title"] == "B 站缓存一致性实战视频"
     assert article_resource["search_score"] > video_resource["search_score"] > service.EXTERNAL_RESOURCE_MIN_SCORE
     assert "延迟双删" in article_resource["reason"]
-    assert "当前维度得分约为 58 分" in article_resource["reason"]
+    # Reason should cite the actual low score (was: "当前维度得分约为 58 分");
+    # P1 wording change kept the score grounded but rephrased the sentence.
+    assert "58 分" in article_resource["reason"]
 
 
 def test_search_external_learning_resources_prioritizes_high_score_and_diverse_types(monkeypatch):
@@ -1351,3 +1357,184 @@ def test_normalize_result_payload_splits_legacy_title_when_role_contains_full_ti
     assert payload is not None
     assert payload["scorecard"]["role"] == "backend engineer"
     assert payload["scorecard"]["round"] == "first round"
+
+
+def test_normalize_result_payload_recovers_overall_from_dimensions():
+    """V3-001 fix: when LLM forgets `overall` but emits dimension scores,
+    we average them instead of letting the UI render '—'."""
+    conversation = SimpleNamespace(title="后端工程师 · 初试")
+
+    payload = service._normalize_result_payload(
+        {
+            "status": "completed",
+            "scorecard": {
+                "dimensions": [
+                    {"name": "技术能力", "score": 60},
+                    {"name": "沟通表达", "score": 78},
+                    {"name": "综合素质", "score": 72},
+                ],
+            },
+        },
+        conversation=conversation,
+        coding_session=None,
+    )
+
+    assert payload is not None
+    assert payload["scorecard"]["overall"] == 70  # round((60+78+72)/3)
+
+
+def test_normalize_result_payload_preserves_null_overall_when_no_dimensions():
+    """V3-001 fix corollary: if we have no dimensions either, leave overall
+    as None so the UI can show the 'incomplete scorecard' banner."""
+    conversation = SimpleNamespace(title="后端工程师 · 初试")
+
+    payload = service._normalize_result_payload(
+        {
+            "status": "completed",
+            "scorecard": {
+                "strengths": ["候选人表达清晰"],
+            },
+        },
+        conversation=conversation,
+        coding_session=None,
+    )
+
+    assert payload is not None
+    assert payload["scorecard"].get("overall") is None
+
+
+# ---------------------------------------------------------------------------
+# SEP deterministic scoring — the three dormancy bugs (role misalignment,
+# adaptive zip misalignment, coverage-denominator gate). See project memory
+# `sep-scoring-dormant`.
+# ---------------------------------------------------------------------------
+def _sep_tool_call(*, question: str, question_id: str, bank: str = "backend.json") -> SimpleNamespace:
+    return SimpleNamespace(
+        tool_name="pick_sep_adaptive_question",
+        status="success",
+        tool_output={
+            "question": question,
+            "concept": "",
+            "difficulty": 0.4,
+            "domain": "database",
+            "sep_question_id": question_id,
+            "kb_name": "SEP 自适应题库",
+            "file_name": bank,
+        },
+    )
+
+
+def _interview_msg(role: str, content: str, *, tool_calls: list | None = None) -> SimpleNamespace:
+    return SimpleNamespace(
+        role=role,
+        content=content,
+        tool_calls=tool_calls or [],
+        extra_metadata={},
+        created_at=None,
+    )
+
+
+def _sep_adaptive_transcript() -> list[SimpleNamespace]:
+    """A realistic interview transcript that used the SEP adaptive tool twice.
+
+    Interviewer = assistant (asks), candidate = user (answers). The two
+    technical questions are preceded by intro/project exchanges that are NOT
+    SEP questions — exactly the shape that used to break the adaptive `zip`.
+    """
+    tx_question = "请你解释一下数据库事务的 ACID 特性。"
+    tx_answer = "数据库事务的 ACID 指原子性、一致性、隔离性和持久性。原子性保证操作要么全部成功要么全部回滚。"
+    index_question = "数据库索引的作用和代价是什么？"
+    index_answer = "索引主要用来做查询加速，常见的数据结构是 B+树，但它会带来额外的写入开销。"
+    return [
+        _interview_msg("assistant", "你好，我们先确认一下你的简历，请简单介绍下自己。"),
+        _interview_msg("user", "你好，我是一名后端工程师，主要用 Java 和 Python 做服务端开发。"),
+        _interview_msg("assistant", "聊聊你最近做的一个项目吧，重点说说你负责的部分。"),
+        _interview_msg("user", "我负责一个订单系统的后端，做了缓存和数据库优化，把接口延迟降了一半。"),
+        # --- First SEP question (db-tx-001, required: 原子性/一致性/隔离性/持久性) ---
+        _interview_msg(
+            "assistant",
+            f"我们来一道技术题：{tx_question}",
+            tool_calls=[_sep_tool_call(question=tx_question, question_id="db-tx-001")],
+        ),
+        _interview_msg("user", tx_answer),
+        # --- Second SEP question (db-index-001, required: 查询加速/B+树/写入开销) ---
+        _interview_msg(
+            "assistant",
+            f"再来一题：{index_question}",
+            tool_calls=[_sep_tool_call(question=index_question, question_id="db-index-001")],
+        ),
+        _interview_msg("user", index_answer),
+    ]
+
+
+def test_extract_qa_pairs_pairs_interviewer_question_with_candidate_answer():
+    """Bug (a): the interviewer is the assistant and the candidate is the user,
+    so a Q&A pair must be (assistant question, user answer)."""
+    messages = [
+        SimpleNamespace(role="assistant", content="请你解释一下数据库事务的 ACID 特性。"),
+        SimpleNamespace(
+            role="user",
+            content="ACID 指原子性、一致性、隔离性和持久性，事务要么全部成功要么全部回滚。",
+        ),
+    ]
+
+    pairs = service._extract_qa_pairs(messages)
+
+    assert len(pairs) == 1
+    question, answer = pairs[0]
+    assert "ACID" in question  # interviewer's question, not the candidate text
+    assert "原子性" in answer  # candidate's answer, not the interviewer text
+
+
+def test_collect_sep_qa_pairs_reconstructs_ids_and_answers_in_order():
+    """Bugs (b): align each SEP-picked question id to the candidate's actual
+    answer via the persisted tool call, skipping non-SEP intro/project turns."""
+    pairs, bank_slug = service._collect_sep_qa_pairs(_sep_adaptive_transcript())
+
+    assert bank_slug == "backend"
+    assert [qid for qid, _ in pairs] == ["db-tx-001", "db-index-001"]
+    assert "原子性" in pairs[0][1]
+    assert "查询加速" in pairs[1][1]
+
+
+@pytest.mark.skipif(not _SEP_READY, reason="SEP/jieba unavailable in this environment")
+def test_try_sep_scoring_engages_on_adaptive_transcript():
+    """Bug (c): coverage must be measured against the SEP questions asked, not
+    every transcript Q&A pair — so a clean adaptive run scores at 100%."""
+    conversation = SimpleNamespace(thread_id="thread-sep-1", title="后端工程师 · 一面")
+
+    result = service._try_sep_scoring(_sep_adaptive_transcript(), conversation, None)
+
+    assert result is not None, "SEP scoring should engage on an adaptive transcript"
+    assert result["score_source"] == "sep"
+    assert result["sep_coverage"] == 1.0
+    assert isinstance(result["overall"], int)
+    assert result["dimensions"], "SEP scorecard must carry per-dimension scores"
+    assert result["sep_evidence_chain"], "SEP scorecard must carry an evidence chain"
+    assert len(result["sep_theta_trajectory"]) == 3  # initial 0.5 + two answers
+
+
+@pytest.mark.skipif(not _SEP_READY, reason="SEP/jieba unavailable in this environment")
+def test_normalize_result_payload_uses_sep_when_llm_scorecard_lacks_scores():
+    """End-to-end: an LLM scorecard with prose but no numbers gets its scores
+    (and score-source provenance) from SEP so the UI labels it correctly."""
+    conversation = SimpleNamespace(thread_id="thread-sep-2", title="后端工程师 · 一面")
+
+    normalized = service._normalize_result_payload(
+        {
+            "status": "completed",
+            "scorecard": {"summary": "候选人基础尚可，但深度有待加强。"},
+        },
+        conversation=conversation,
+        coding_session=None,
+        messages=_sep_adaptive_transcript(),
+    )
+
+    assert normalized is not None
+    scorecard = normalized["scorecard"]
+    assert scorecard["overall"] is not None
+    assert scorecard["score_source"] == "sep"
+    assert scorecard["sep_coverage"] == 1.0
+    assert scorecard["sep_evidence_chain"]
+    # The LLM's prose summary is preserved alongside the SEP-derived scores.
+    assert scorecard["summary"] == "候选人基础尚可，但深度有待加强。"

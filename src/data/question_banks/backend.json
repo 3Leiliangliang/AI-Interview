@@ -1,0 +1,242 @@
+[
+  {
+    "id": "net-tcp-001",
+    "domain": "networking",
+    "concept": "TCP三次握手",
+    "difficulty": 0.40,
+    "question_template": "请解释TCP建立连接的过程",
+    "rubric": {
+      "required": ["SYN", "SYN-ACK", "ACK"],
+      "bonus": ["TIME_WAIT", "半连接队列", "SYN flood"],
+      "misconceptions": ["四次握手建立连接", "握手传输数据"]
+    }
+  },
+  {
+    "id": "net-http-001",
+    "domain": "networking",
+    "concept": "HTTP与HTTPS的区别",
+    "difficulty": 0.35,
+    "question_template": "HTTP和HTTPS有什么区别？为什么要用HTTPS？",
+    "rubric": {
+      "required": ["加密", "TLS", "SSL", "证书"],
+      "bonus": ["中间人攻击", "CA", "对称加密", "非对称加密", "握手"],
+      "misconceptions": ["HTTPS更慢所以不推荐", "HTTP也能加密"]
+    }
+  },
+  {
+    "id": "db-index-001",
+    "domain": "database",
+    "concept": "数据库索引",
+    "difficulty": 0.45,
+    "question_template": "请解释数据库索引的作用，以及什么情况下不应该建索引？",
+    "rubric": {
+      "required": ["查询加速", "B+树", "写入开销"],
+      "bonus": ["覆盖索引", "联合索引最左前缀", "索引失效", "回表"],
+      "misconceptions": ["索引越多越好", "索引不占空间"]
+    }
+  },
+  {
+    "id": "db-tx-001",
+    "domain": "database",
+    "concept": "数据库事务ACID",
+    "difficulty": 0.50,
+    "question_template": "请描述数据库事务的ACID特性，各自解决什么问题？",
+    "rubric": {
+      "required": ["原子性", "一致性", "隔离性", "持久性"],
+      "bonus": ["脏读", "幻读", "不可重复读", "MVCC", "undo log"],
+      "misconceptions": ["ACID只有MySQL支持", "持久性靠内存实现"]
+    }
+  },
+  {
+    "id": "algo-sort-001",
+    "domain": "algorithms",
+    "concept": "排序算法对比",
+    "difficulty": 0.40,
+    "question_template": "快速排序和归并排序有什么区别？各自适用于什么场景？",
+    "rubric": {
+      "required": ["时间复杂度", "O(n log n)", "稳定性"],
+      "bonus": ["原地排序", "缓存友好", "链表用归并", "分治"],
+      "misconceptions": ["快速排序总比归并排序快", "快速排序是稳定的"]
+    }
+  },
+  {
+    "id": "algo-dp-001",
+    "domain": "algorithms",
+    "concept": "动态规划",
+    "difficulty": 0.70,
+    "question_template": "什么是动态规划？请举例说明如何用动态规划解决问题。",
+    "rubric": {
+      "required": ["最优子结构", "重叠子问题", "状态转移"],
+      "bonus": ["记忆化搜索", "滚动数组", "背包问题", "边界条件"],
+      "misconceptions": ["DP就是递归", "所有递归都能改DP"]
+    }
+  },
+  {
+    "id": "sys-cache-001",
+    "domain": "system_design",
+    "concept": "缓存策略",
+    "difficulty": 0.55,
+    "question_template": "在系统设计中，你如何设计缓存策略？常见的缓存问题有哪些？",
+    "rubric": {
+      "required": ["缓存击穿", "缓存雪崩", "缓存穿透"],
+      "bonus": ["布隆过滤器", "互斥锁", "热点key", "TTL", "LRU"],
+      "misconceptions": ["缓存能解决所有性能问题", "缓存和数据库强一致"]
+    }
+  },
+  {
+    "id": "sys-mq-001",
+    "domain": "system_design",
+    "concept": "消息队列使用场景",
+    "difficulty": 0.60,
+    "question_template": "消息队列解决了什么问题？使用消息队列有哪些注意事项？",
+    "rubric": {
+      "required": ["解耦", "异步", "削峰填谷"],
+      "bonus": ["消息幂等", "消息丢失", "消费顺序", "死信队列", "背压"],
+      "misconceptions": ["消息队列保证exactly-once默认", "同步场景也适合MQ"]
+    }
+  },
+  {
+    "id": "lang-gc-001",
+    "domain": "language",
+    "concept": "垃圾回收机制",
+    "difficulty": 0.65,
+    "question_template": "请描述你熟悉的语言的垃圾回收机制，它有什么优缺点？",
+    "rubric": {
+      "required": ["引用计数", "标记清除", "内存泄漏"],
+      "bonus": ["分代回收", "STW", "增量GC", "循环引用", "finalizer"],
+      "misconceptions": ["GC彻底解决了内存问题", "引用计数能处理循环引用"]
+    }
+  },
+  {
+    "id": "beh-conflict-001",
+    "domain": "behavioral",
+    "concept": "团队冲突处理",
+    "difficulty": 0.45,
+    "question_template": "描述一次你和团队成员产生意见分歧的经历，你是如何处理的？",
+    "rubric": {
+      "required": ["沟通", "解决", "结果"],
+      "bonus": ["倾听", "数据支撑", "妥协", "共识"],
+      "misconceptions": []
+    }
+  },
+  {
+    "id": "net-dns-001",
+    "domain": "networking",
+    "concept": "DNS解析过程",
+    "difficulty": 0.55,
+    "question_template": "请描述在浏览器中输入URL到页面显示的完整过程，重点说明DNS解析。",
+    "rubric": {
+      "required": ["本地缓存", "递归查询", "A记录"],
+      "bonus": ["根域名服务器", "TTL", "CDN", "CNAME", "负载均衡"],
+      "misconceptions": ["DNS直接返回IP内容", "DNS查询是TCP"]
+    }
+  },
+  {
+    "id": "db-redis-001",
+    "domain": "database",
+    "concept": "Redis数据结构",
+    "difficulty": 0.50,
+    "question_template": "Redis有哪些数据结构？各自适合什么场景？",
+    "rubric": {
+      "required": ["String", "Hash", "List", "Set", "ZSet"],
+      "bonus": ["HyperLogLog", "Bitmap", "Stream", "地理位置", "跳表"],
+      "misconceptions": ["Redis只能存字符串", "ZSet用二叉树实现"]
+    }
+  },
+  {
+    "id": "algo-graph-001",
+    "domain": "algorithms",
+    "concept": "图算法",
+    "difficulty": 0.72,
+    "question_template": "如何判断一个有向图中是否存在环？请描述算法并分析复杂度。",
+    "rubric": {
+      "required": ["DFS", "拓扑排序", "时间复杂度O(V+E)"],
+      "bonus": ["三色标记", "Kahn算法", "强连通分量", "SCC"],
+      "misconceptions": ["BFS可以检测有向图环", "只需检查邻接矩阵对角线"]
+    }
+  },
+  {
+    "id": "sys-lb-001",
+    "domain": "system_design",
+    "concept": "负载均衡",
+    "difficulty": 0.60,
+    "question_template": "常见的负载均衡算法有哪些？它们各有什么优缺点？",
+    "rubric": {
+      "required": ["轮询", "加权", "一致性哈希"],
+      "bonus": ["最少连接", "IP哈希", "会话保持", "健康检查", "虚拟节点"],
+      "misconceptions": ["一致性哈希能完全避免缓存失效", "轮询适合所有场景"]
+    }
+  },
+  {
+    "id": "lang-thread-001",
+    "domain": "language",
+    "concept": "并发与线程安全",
+    "difficulty": 0.68,
+    "question_template": "什么是线程安全？如何实现线程安全？请举例说明。",
+    "rubric": {
+      "required": ["竞态条件", "锁", "原子操作"],
+      "bonus": ["CAS", "volatile", "ThreadLocal", "无锁数据结构", "死锁"],
+      "misconceptions": ["加锁一定线程安全", "Python的GIL使所有操作线程安全"]
+    }
+  },
+  {
+    "id": "beh-failure-001",
+    "domain": "behavioral",
+    "concept": "失败经历与学习",
+    "difficulty": 0.40,
+    "question_template": "描述一个你犯过的技术错误，你从中学到了什么？",
+    "rubric": {
+      "required": ["错误", "影响", "改进"],
+      "bonus": ["根因分析", "预防措施", "团队分享", "复盘"],
+      "misconceptions": []
+    }
+  },
+  {
+    "id": "net-tcp-002",
+    "domain": "networking",
+    "concept": "TCP四次挥手",
+    "difficulty": 0.58,
+    "question_template": "请描述TCP关闭连接的四次挥手过程，为什么是四次而不是三次？",
+    "rubric": {
+      "required": ["FIN", "ACK", "半关闭状态"],
+      "bonus": ["TIME_WAIT等待2MSL", "close_wait堆积", "FIN_WAIT"],
+      "misconceptions": ["四次挥手可以合并为三次", "TIME_WAIT是bug"]
+    }
+  },
+  {
+    "id": "db-mysql-001",
+    "domain": "database",
+    "concept": "MySQL InnoDB与MyISAM",
+    "difficulty": 0.52,
+    "question_template": "InnoDB和MyISAM存储引擎有什么区别？什么时候选择各自？",
+    "rubric": {
+      "required": ["事务", "行锁", "外键", "崩溃恢复"],
+      "bonus": ["MVCC", "聚簇索引", "全文索引", "表锁", "redo log"],
+      "misconceptions": ["MyISAM更快所以更好", "InnoDB不支持全文索引（MySQL5.7+已支持）"]
+    }
+  },
+  {
+    "id": "algo-search-001",
+    "domain": "algorithms",
+    "concept": "二分查找",
+    "difficulty": 0.35,
+    "question_template": "请实现二分查找，并说明边界条件的处理方式。",
+    "rubric": {
+      "required": ["有序数组", "mid计算", "左闭右闭或左闭右开"],
+      "bonus": ["防止整数溢出用low+(high-low)/2", "旋转数组变种", "浮点二分"],
+      "misconceptions": ["mid=(low+high)/2在大数时溢出没问题", "二分只能用于整数"]
+    }
+  },
+  {
+    "id": "sys-design-001",
+    "domain": "system_design",
+    "concept": "短链接系统设计",
+    "difficulty": 0.75,
+    "question_template": "请设计一个短链接服务，支持每天1亿次点击，说明关键设计决策。",
+    "rubric": {
+      "required": ["哈希映射", "数据库存储", "重定向"],
+      "bonus": ["Base62编码", "缓存热点", "自定义短链", "统计分析", "分库分表", "布隆过滤器"],
+      "misconceptions": ["用UUID做短链", "不需要考虑哈希冲突"]
+    }
+  }
+]

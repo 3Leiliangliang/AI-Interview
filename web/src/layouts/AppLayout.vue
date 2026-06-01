@@ -36,10 +36,6 @@ const layoutSettings = reactive({
   useTopBar: false // 是否使用顶栏
 })
 
-// Add state for GitHub stars
-const githubStars = ref(0)
-const isLoadingStars = ref(false)
-
 // Add state for debug modal
 const showDebugModal = ref(false)
 
@@ -64,20 +60,6 @@ const getRemoteDatabase = () => {
   databaseStore.loadDatabases()
 }
 
-// Fetch GitHub stars count
-const fetchGithubStars = async () => {
-  try {
-    isLoadingStars.value = true
-    // 公共API，可以直接使用fetch
-    const response = await fetch('https://api.github.com/repos/xerrors/Bole')
-    const data = await response.json()
-    githubStars.value = data.stargazers_count
-  } catch (error) {
-    console.error('获取GitHub stars失败:', error)
-  } finally {
-    isLoadingStars.value = false
-  }
-}
 
 onMounted(async () => {
   // 加载信息配置
@@ -87,7 +69,6 @@ onMounted(async () => {
   if (userStore.isAdmin) {
     getRemoteDatabase()
   }
-  fetchGithubStars() // Fetch GitHub stars on mount
   // 预加载任务数据，确保任务中心打开时有内容
   if (userStore.isAdmin) {
     taskerStore.loadTasks()

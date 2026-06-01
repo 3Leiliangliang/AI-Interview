@@ -268,4 +268,13 @@ def test_interview_knowledge_base_middleware_registers_random_question_tool() ->
     middleware = InterviewKnowledgeBaseMiddleware()
     tool_names = {tool.name for tool in middleware.tools}
 
-    assert tool_names == {"query_kb", "pick_random_technical_question", "start_code_assessment"}
+    # `pick_sep_adaptive_question` was added so the agent can drive question
+    # selection via the SEP deterministic pipeline; the legacy
+    # `pick_random_technical_question` remains as a fallback when the SEP
+    # bank is exhausted.
+    assert tool_names == {
+        "query_kb",
+        "pick_sep_adaptive_question",
+        "pick_random_technical_question",
+        "start_code_assessment",
+    }

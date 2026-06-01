@@ -22,11 +22,19 @@ API_BASE_URL = os.getenv("TEST_BASE_URL", "http://localhost:5050").rstrip("/")
 ADMIN_LOGIN = os.getenv("TEST_USERNAME")
 ADMIN_PASSWORD = os.getenv("TEST_PASSWORD")
 
-assert ADMIN_LOGIN, "TEST_USERNAME is not set"
-assert ADMIN_PASSWORD, "TEST_PASSWORD is not set"
-
 _ADMIN_TOKEN_CACHE: str | None = None
 HTTP_TIMEOUT = httpx.Timeout(30.0, connect=5.0)
+
+
+def _require_admin_credentials() -> None:
+    """Fail clearly when admin credentials are missing.
+
+    Called only by fixtures that authenticate against the live API, so that
+    unit tests without API dependencies can collect and run without these
+    environment variables being set.
+    """
+    assert ADMIN_LOGIN, "TEST_USERNAME is not set"
+    assert ADMIN_PASSWORD, "TEST_PASSWORD is not set"
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -44,8 +52,7 @@ async def admin_token() -> str:
     if _ADMIN_TOKEN_CACHE:
         return _ADMIN_TOKEN_CACHE
 
-    if not ADMIN_LOGIN or not ADMIN_PASSWORD:
-        pytest.skip("Admin credentials are not configured via environment variables.")
+    _require_admin_credentials()
 
     async with httpx.AsyncClient(
         base_url=API_BASE_URL, timeout=HTTP_TIMEOUT, follow_redirects=True

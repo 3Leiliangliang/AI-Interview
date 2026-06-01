@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -276,6 +277,98 @@ def split_frontmatter(content: str) -> tuple[dict[str, str], str]:
     return metadata, body
 
 
+_HTML_IMG_PATTERN = re.compile(
+    r"<img\b([^>]*?)/?>",
+    re.IGNORECASE,
+)
+_HTML_IMG_ATTR_PATTERN = re.compile(
+    r"""(?P<name>\w[\w-]*)\s*=\s*(?:"(?P<dq>[^"]*)"|'(?P<sq>[^']*)'|(?P<bare>\S+))""",
+)
+_MD_IMAGE_PATTERN = re.compile(r"!\[(?P<alt>[^\]]*)\]\((?P<src>[^)]+)\)")
+
+
+def _github_repo_slug(repo_url: str) -> str | None:
+    """Extract 'owner/repo' from a GitHub URL like https://github.com/owner/repo."""
+    match = re.match(r"https?://github\.com/([^/]+/[^/]+?)(?:\.git)?/?$", repo_url.strip())
+    return match.group(1) if match else None
+
+
+def _collapse_relative_path(base_dir: str, rel: str) -> str:
+    """Resolve `rel` against `base_dir` collapsing '..' / '.' without leaving the repo root."""
+    base_parts = [p for p in base_dir.split("/") if p and p != "."]
+    rel = rel.replace("\\", "/")
+    if rel.startswith("./"):
+        rel = rel[2:]
+    parts = base_parts + [p for p in rel.split("/") if p]
+    resolved: list[str] = []
+    for part in parts:
+        if part == "..":
+            if resolved:
+                resolved.pop()
+            continue
+        if part in ("", "."):
+            continue
+        resolved.append(part)
+    return "/".join(resolved)
+
+
+def _is_absolute_url(url: str) -> bool:
+    return bool(re.match(r"^(?:[a-z][a-z0-9+\-.]*:)?//", url, re.IGNORECASE)) or url.startswith("data:")
+
+
+def _rewrite_image_url(src: str, *, repo_slug: str, commit: str, source_dir: str) -> str:
+    """Turn a relative image src into a github raw URL, preserving absolute URLs."""
+    src = src.strip()
+    if not src or _is_absolute_url(src):
+        return src
+    if src.startswith("/"):
+        # Repo-root-absolute path (`/images/x.png`).
+        absolute = src.lstrip("/")
+    else:
+        absolute = _collapse_relative_path(source_dir, src)
+    return f"https://raw.githubusercontent.com/{repo_slug}/{commit}/{absolute}"
+
+
+def _convert_html_img_tag(match: re.Match, *, repo_slug: str | None, commit: str, source_dir: str) -> str:
+    """Convert a single `<img \u2026>` HTML tag into Markdown syntax."""
+    attrs = {}
+    for attr in _HTML_IMG_ATTR_PATTERN.finditer(match.group(1)):
+        value = attr.group("dq") if attr.group("dq") is not None else (
+            attr.group("sq") if attr.group("sq") is not None else attr.group("bare") or ""
+        )
+        attrs[attr.group("name").lower()] = value
+    src = attrs.get("src", "").strip()
+    if not src:
+        return ""
+    alt = attrs.get("alt", "").strip() or attrs.get("title", "").strip()
+    if repo_slug and not _is_absolute_url(src):
+        src = _rewrite_image_url(src, repo_slug=repo_slug, commit=commit, source_dir=source_dir)
+    return f"![{alt}]({src})"
+
+
+def _rewrite_images(text: str, *, repo_slug: str | None, commit: str, source_dir: str) -> str:
+    """Rewrite both `<img \u2026>` HTML and Markdown `![](rel/path)` to raw URLs."""
+    if repo_slug:
+        text = _HTML_IMG_PATTERN.sub(
+            lambda m: _convert_html_img_tag(m, repo_slug=repo_slug, commit=commit, source_dir=source_dir),
+            text,
+        )
+
+        def _md_rewriter(match: re.Match) -> str:
+            src = match.group("src").strip()
+            # Markdown links may contain a title:  ![alt](url "title")
+            url_only = src.split(" ", 1)[0]
+            title = src[len(url_only):].strip()
+            if _is_absolute_url(url_only):
+                return match.group(0)
+            new_url = _rewrite_image_url(url_only, repo_slug=repo_slug, commit=commit, source_dir=source_dir)
+            inner = new_url if not title else f"{new_url} {title}"
+            return f"![{match.group('alt')}]({inner})"
+
+        text = _MD_IMAGE_PATTERN.sub(_md_rewriter, text)
+    return text
+
+
 def normalize_source_text(
     content: str,
     *,
@@ -286,6 +379,11 @@ def normalize_source_text(
     commit: str,
 ) -> str:
     metadata, body = split_frontmatter(content.lstrip("\ufeff"))
+
+    repo_slug = _github_repo_slug(repo_url)
+    source_dir = source_path.rsplit("/", 1)[0] if "/" in source_path else ""
+    # Pre-process images BEFORE the cleaning loop strips raw <img> tags.
+    body = _rewrite_images(body, repo_slug=repo_slug, commit=commit, source_dir=source_dir)
 
     if repo_name in {"reactjs-interview-questions", "nodejs-interview-questions"} and source_path == "README.md":
         marker = "### Table of Contents"

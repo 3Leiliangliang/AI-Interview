@@ -1,0 +1,242 @@
+[
+  {
+    "id": "algo-complexity-001",
+    "domain": "algorithms",
+    "concept": "时间复杂度分析",
+    "difficulty": 0.35,
+    "question_template": "如何分析一个算法的时间复杂度？请分析冒泡排序和快速排序的区别。",
+    "rubric": {
+      "required": ["大O记号", "最坏情况", "平均情况"],
+      "bonus": ["摊还分析", "空间换时间", "常数因子", "主定理"],
+      "misconceptions": ["O(n)一定比O(n²)快", "最好情况才是真实复杂度"]
+    }
+  },
+  {
+    "id": "algo-two-ptr-001",
+    "domain": "algorithms",
+    "concept": "双指针技巧",
+    "difficulty": 0.50,
+    "question_template": "请说明双指针技巧的核心思想，给出一个你用过的典型题目。",
+    "rubric": {
+      "required": ["两端向中间", "快慢指针", "有序数组"],
+      "bonus": ["滑动窗口", "三数之和去重", "链表判环", "反转链表"],
+      "misconceptions": ["双指针只能用于数组", "双指针比暴力解法慢"]
+    }
+  },
+  {
+    "id": "ds-tree-001",
+    "domain": "data_structures",
+    "concept": "二叉树遍历",
+    "difficulty": 0.40,
+    "question_template": "请说明二叉树的三种遍历方式，并给出非递归实现思路。",
+    "rubric": {
+      "required": ["前序", "中序", "后序", "栈模拟"],
+      "bonus": ["Morris遍历O(1)空间", "层序遍历", "迭代器模式", "线索二叉树"],
+      "misconceptions": ["非递归遍历需要额外O(n)空间（Morris不需要）", "后序遍历只能递归实现"]
+    }
+  },
+  {
+    "id": "ds-hash-001",
+    "domain": "data_structures",
+    "concept": "哈希表原理",
+    "difficulty": 0.45,
+    "question_template": "请解释哈希表的实现原理，如何处理哈希冲突？",
+    "rubric": {
+      "required": ["哈希函数", "冲突处理", "负载因子"],
+      "bonus": ["开放地址法", "链地址法", "动态扩容rehash", "一致性哈希"],
+      "misconceptions": ["哈希表查找一定是O(1)", "哈希冲突无法避免但可消除"]
+    }
+  },
+  {
+    "id": "algo-bfs-001",
+    "domain": "algorithms",
+    "concept": "BFS最短路径",
+    "difficulty": 0.52,
+    "question_template": "如何用BFS求无权图的最短路径？多源BFS如何处理？",
+    "rubric": {
+      "required": ["队列", "visited标记", "层序扩展"],
+      "bonus": ["双向BFS", "0-1BFS", "Dijkstra对比", "多源同时入队"],
+      "misconceptions": ["BFS只能用于树", "DFS也能找最短路径（无权图）"]
+    }
+  },
+  {
+    "id": "algo-dp-002",
+    "domain": "algorithms",
+    "concept": "背包问题",
+    "difficulty": 0.68,
+    "question_template": "请描述0-1背包问题和完全背包问题的区别，如何用DP求解？",
+    "rubric": {
+      "required": ["状态定义", "转移方程", "01背包逆序遍历"],
+      "bonus": ["完全背包正序遍历", "滚动数组优化", "分组背包", "多维背包"],
+      "misconceptions": ["0-1背包也可以正序遍历", "背包容量必须是整数"]
+    }
+  },
+  {
+    "id": "ds-heap-001",
+    "domain": "data_structures",
+    "concept": "堆与优先队列",
+    "difficulty": 0.55,
+    "question_template": "堆的核心操作是什么？如何用堆解决TopK问题？",
+    "rubric": {
+      "required": ["上浮下沉", "O(log n)插入删除", "O(1)查看最值"],
+      "bonus": ["建堆O(n)", "堆排序", "K路归并", "延迟删除", "双堆维护中位数"],
+      "misconceptions": ["堆是有序的", "堆排序稳定"]
+    }
+  },
+  {
+    "id": "algo-string-001",
+    "domain": "algorithms",
+    "concept": "字符串匹配",
+    "difficulty": 0.65,
+    "question_template": "请解释KMP算法的核心思路，next数组是如何构建的？",
+    "rubric": {
+      "required": ["失配时回退", "next数组", "O(n+m)复杂度"],
+      "bonus": ["前缀函数含义", "部分匹配表", "Rabin-Karp哈希", "AC自动机扩展"],
+      "misconceptions": ["KMP只适用于单模式匹配", "next数组构建是O(m²)"]
+    }
+  },
+  {
+    "id": "algo-divide-001",
+    "domain": "algorithms",
+    "concept": "分治算法",
+    "difficulty": 0.60,
+    "question_template": "分治算法的三个步骤是什么？请举一个除排序外的分治应用。",
+    "rubric": {
+      "required": ["分解", "解决", "合并"],
+      "bonus": ["最大子数组和", "逆序对计数", "大数乘法Karatsuba", "主定理分析"],
+      "misconceptions": ["分治一定比迭代慢", "分治子问题必须等规模"]
+    }
+  },
+  {
+    "id": "ds-union-001",
+    "domain": "data_structures",
+    "concept": "并查集",
+    "difficulty": 0.58,
+    "question_template": "请说明并查集的实现原理，路径压缩和按秩合并各自的作用是什么？",
+    "rubric": {
+      "required": ["find操作", "union操作", "父节点数组"],
+      "bonus": ["路径压缩O(α(n))", "按秩合并", "连通分量计数", "带权并查集"],
+      "misconceptions": ["并查集只能判断连通性", "不用路径压缩也有近似O(1)"]
+    }
+  },
+  {
+    "id": "algo-greedy-001",
+    "domain": "algorithms",
+    "concept": "贪心算法",
+    "difficulty": 0.62,
+    "question_template": "贪心算法的适用条件是什么？请举例说明如何证明贪心选择的正确性。",
+    "rubric": {
+      "required": ["局部最优", "全局最优", "贪心选择性质"],
+      "bonus": ["交换论证法", "活动选择问题", "Huffman编码", "最小生成树"],
+      "misconceptions": ["贪心算法一定正确", "能给出反例就说明贪心不可用"]
+    }
+  },
+  {
+    "id": "math-prob-001",
+    "domain": "math",
+    "concept": "概率与期望",
+    "difficulty": 0.70,
+    "question_template": "随机洗牌算法（Fisher-Yates）的原理是什么？如何证明其均匀性？",
+    "rubric": {
+      "required": ["每种排列等概率", "O(n)时间", "原地交换"],
+      "bonus": ["数学归纳法证明", "伪随机数影响", "水库抽样", "蒙特卡洛方法"],
+      "misconceptions": ["直接random.shuffle就是Fisher-Yates", "朴素方法(random位置插入)等价"]
+    }
+  },
+  {
+    "id": "ds-skiplist-001",
+    "domain": "data_structures",
+    "concept": "跳表",
+    "difficulty": 0.72,
+    "question_template": "跳表解决了什么问题？它和平衡二叉树相比有什么优缺点？",
+    "rubric": {
+      "required": ["多层索引", "O(log n)查找", "空间换时间"],
+      "bonus": ["随机层数", "Redis ZSet使用跳表的原因", "范围查询优势", "并发友好"],
+      "misconceptions": ["跳表性能不如红黑树", "跳表只能用于整数"]
+    }
+  },
+  {
+    "id": "algo-monotone-001",
+    "domain": "algorithms",
+    "concept": "单调栈",
+    "difficulty": 0.65,
+    "question_template": "单调栈的核心思想是什么？如何用单调栈解决「下一个更大元素」问题？",
+    "rubric": {
+      "required": ["维护单调性", "弹出时记录答案", "O(n)摊还"],
+      "bonus": ["接雨水", "柱状图最大矩形", "滑动窗口最大值（单调队列）", "股票价格跨度"],
+      "misconceptions": ["单调栈只能找下一个更大元素", "单调栈每次操作是O(1)"]
+    }
+  },
+  {
+    "id": "sys-oo-001",
+    "domain": "system_design",
+    "concept": "面向对象设计原则",
+    "difficulty": 0.55,
+    "question_template": "请说明SOLID原则中的开闭原则，并举例说明违反它的危害。",
+    "rubric": {
+      "required": ["对扩展开放", "对修改关闭", "抽象"],
+      "bonus": ["策略模式实现OCP", "接口隔离", "依赖注入", "里氏替换"],
+      "misconceptions": ["所有if-else都违反OCP", "OCP要求零修改"]
+    }
+  },
+  {
+    "id": "algo-bits-001",
+    "domain": "algorithms",
+    "concept": "位运算技巧",
+    "difficulty": 0.60,
+    "question_template": "位运算在算法中有哪些常见应用？请说明如何用位运算找出数组中唯一出现奇数次的数。",
+    "rubric": {
+      "required": ["XOR消除相同元素", "与/或/非操作", "移位"],
+      "bonus": ["n&(n-1)消最低位1", "lowbit=n&(-n)", "状态压缩DP", "Brian Kernighan"],
+      "misconceptions": ["位运算只能操作整数（Python大整数也可以）", "移位比乘除法一定快（现代CPU已优化）"]
+    }
+  },
+  {
+    "id": "ds-trie-001",
+    "domain": "data_structures",
+    "concept": "字典树Trie",
+    "difficulty": 0.62,
+    "question_template": "请说明Trie树的结构和应用场景，与哈希表相比有什么优势？",
+    "rubric": {
+      "required": ["公共前缀", "字符节点", "isEnd标记"],
+      "bonus": ["压缩Trie", "自动补全", "IP路由", "XOR最大值"],
+      "misconceptions": ["Trie只能存储字符串", "Trie比哈希表更省空间"]
+    }
+  },
+  {
+    "id": "beh-algo-001",
+    "domain": "behavioral",
+    "concept": "算法问题解题过程",
+    "difficulty": 0.35,
+    "question_template": "当你遇到一道陌生的算法题时，你的解题思路是什么？如何从暴力解到最优解？",
+    "rubric": {
+      "required": ["读题理解", "暴力解", "优化方向"],
+      "bonus": ["举例验证", "边界条件", "复杂度分析", "多种方法对比"],
+      "misconceptions": []
+    }
+  },
+  {
+    "id": "algo-segment-001",
+    "domain": "algorithms",
+    "concept": "线段树",
+    "difficulty": 0.80,
+    "question_template": "线段树解决了什么类型的问题？请说明区间查询和单点更新的实现思路。",
+    "rubric": {
+      "required": ["区间查询O(log n)", "单点更新O(log n)", "递归建树"],
+      "bonus": ["懒标记区间更新", "动态开点", "持久化线段树", "树状数组对比"],
+      "misconceptions": ["线段树只能存最大值", "线段树适合频繁插入删除"]
+    }
+  },
+  {
+    "id": "math-matrix-001",
+    "domain": "math",
+    "concept": "矩阵快速幂",
+    "difficulty": 0.75,
+    "question_template": "如何用矩阵快速幂优化斐波那契数列的计算？请描述原理。",
+    "rubric": {
+      "required": ["矩阵乘法", "快速幂O(log n)", "状态转移矩阵"],
+      "bonus": ["线性递推通用化", "图的路径计数", "模运算", "Cayley-Hamilton定理"],
+      "misconceptions": ["矩阵快速幂只用于斐波那契", "快速幂必须用递归实现"]
+    }
+  }
+]

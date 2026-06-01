@@ -747,13 +747,24 @@ async def stream_agent_chat(
 
             async with pg_manager.get_async_session_context() as new_db:
                 new_conv_repo = ConversationRepository(new_db)
-                await save_partial_message(
-                    new_conv_repo,
-                    thread_id,
-                    full_msg=full_msg,
-                    error_message="对话已中断" if not full_msg else None,
-                    error_type="interrupted",
-                )
+                # Only flag as interrupted if we got no content at all.
+                # If the agent produced a response before the stream was cancelled
+                # (e.g. user navigated to coding page), save it normally.
+                if full_msg and getattr(full_msg, "content", "").strip():
+                    await save_messages_from_langgraph_state(
+                        agent_instance=agent,
+                        thread_id=thread_id,
+                        conv_repo=new_conv_repo,
+                        config_dict=langgraph_config,
+                    )
+                else:
+                    await save_partial_message(
+                        new_conv_repo,
+                        thread_id,
+                        full_msg=full_msg,
+                        error_message="对话已中断" if not full_msg else None,
+                        error_type="interrupted",
+                    )
 
         cleanup_task = asyncio.create_task(save_cleanup())
         try:

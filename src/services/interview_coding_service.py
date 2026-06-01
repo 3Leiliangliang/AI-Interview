@@ -1376,6 +1376,22 @@ def _serialize_problem(problem: OJProblem) -> dict[str, Any]:
     }
 
 
+# 非编程题目标题关键词，用于过滤数理化等非编程问题
+_NON_CODING_TITLE_PATTERNS = [
+    "物理", "化学", "数学", "磁通量", "磁场", "电场",
+    "力学", "热学", "光学", "原子", "分子",
+]
+
+
+def _is_coding_problem(problem_data: dict[str, Any]) -> bool:
+    """排除明显非编程的题目（物理/数学/化学等）。"""
+    title = str(problem_data.get("title") or "")
+    for pattern in _NON_CODING_TITLE_PATTERNS:
+        if pattern in title:
+            return False
+    return True
+
+
 def _filter_candidate_problem(problem_data: dict[str, Any], *, excluded_problem_ids: set[str]) -> bool:
     display_id = str(problem_data.get("_id") or "")
     numeric_id = str(problem_data.get("id") or "")
@@ -1384,6 +1400,8 @@ def _filter_candidate_problem(problem_data: dict[str, Any], *, excluded_problem_
     if not languages.intersection(OJ_LANGUAGE_TO_FRONTEND):
         return False
     if display_id in excluded_problem_ids or numeric_id in excluded_problem_ids:
+        return False
+    if not _is_coding_problem(problem_data):
         return False
     return True
 
@@ -1517,10 +1535,13 @@ def _build_workbench_path(thread_id: str, target_position: str | None = None) ->
 
 
 def _result_code_to_status(result_code: int | str | None) -> str:
+    if result_code is None:
+        return "PENDING"
     try:
         numeric = int(result_code)
     except (TypeError, ValueError):
-        return str(result_code or "")
+        # Non-integer result (e.g. "UNKNOWN" string from OJ) — treat as pending
+        return "PENDING"
     return OJ_RESULT_CODE_MAP.get(numeric, f"UNKNOWN_{numeric}")
 
 

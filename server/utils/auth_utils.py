@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import os
 from datetime import timedelta
 from typing import Any
@@ -7,8 +8,17 @@ import jwt
 
 from src.utils.datetime_utils import utc_now
 
+logger = logging.getLogger(__name__)
+
 # JWT配置
-JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "ai_interview_secure_key")
+_raw_jwt_secret = os.environ.get("JWT_SECRET_KEY", "")
+if not _raw_jwt_secret:
+    logger.warning("JWT_SECRET_KEY not set — using derived default. Set a strong secret in production.")
+    _raw_jwt_secret = "ai_interview_secure_key"
+# Ensure the key is at least 32 bytes for HS256 by deriving via SHA-256 when too short
+if len(_raw_jwt_secret.encode("utf-8")) < 32:
+    _raw_jwt_secret = hashlib.sha256(_raw_jwt_secret.encode("utf-8")).hexdigest()
+JWT_SECRET_KEY = _raw_jwt_secret
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION = 7 * 24 * 60 * 60  # 7天过期
 
