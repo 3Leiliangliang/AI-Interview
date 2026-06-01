@@ -3,8 +3,8 @@ FROM node:20-alpine AS development
 WORKDIR /app
 ENV TZ=Asia/Shanghai
 
-# 安装 pnpm
-RUN npm install -g pnpm@latest
+# 安装 pnpm（pin 到项目 packageManager 声明的版本，避免 latest 拉到要求 Node 22 的新版）
+RUN npm install -g pnpm@10.11.0
 
 # 复制 package.json 和 pnpm-lock.yaml
 COPY ./web/package*.json ./
@@ -26,8 +26,8 @@ EXPOSE 5173
 FROM node:20-alpine AS build-stage
 WORKDIR /app
 
-# 安装 pnpm
-RUN npm install -g pnpm@latest
+# 安装 pnpm（pin 到项目 packageManager 声明的版本，避免 latest 拉到要求 Node 22 的新版）
+RUN npm install -g pnpm@10.11.0
 
 # 复制依赖文件
 COPY ./web/package*.json ./
