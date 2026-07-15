@@ -119,6 +119,11 @@ class ResumeSummaryService:
 
         return latex
 
+    @staticmethod
+    def _as_json_object(value: Any) -> dict[str, Any] | None:
+        """Return parsed JSON only when its top-level value is an object."""
+        return value if isinstance(value, dict) else None
+
     def _parse_json_response(self, content: str) -> dict[str, Any] | None:
         """
         解析 LLM 返回的内容，尝试提取 JSON。
@@ -137,7 +142,7 @@ class ResumeSummaryService:
 
         # 尝试 1: 直接解析（最常见情况）
         try:
-            return json.loads(content)
+            return self._as_json_object(json.loads(content))
         except json.JSONDecodeError:
             pass
 
@@ -151,14 +156,14 @@ class ResumeSummaryService:
             if match:
                 json_str = match.group(1).strip()
                 try:
-                    return json.loads(json_str)
+                    return self._as_json_object(json.loads(json_str))
                 except json.JSONDecodeError:
                     continue
 
         # 尝试 3: 预处理后解析（修复 LaTeX 等问题）
         try:
             cleaned = self._preprocess_json_text(content)
-            return json.loads(cleaned)
+            return self._as_json_object(json.loads(cleaned))
         except json.JSONDecodeError:
             pass
 
@@ -168,28 +173,18 @@ class ResumeSummaryService:
         if match:
             json_str = match.group(0)
             try:
-                return json.loads(json_str)
+                return self._as_json_object(json.loads(json_str))
             except json.JSONDecodeError:
                 pass
 
             # 尝试修复常见的 JSON 问题
             try:
                 fixed = self._fix_common_json_errors(json_str)
-                return json.loads(fixed)
+                return self._as_json_object(json.loads(fixed))
             except json.JSONDecodeError:
                 pass
 
-        # 尝试 5: 查找数组格式
-        array_pattern = r"\[[\s\S]*\]"
-        array_match = re.search(array_pattern, content)
-        if array_match:
-            json_str = array_match.group(0)
-            try:
-                return json.loads(json_str)
-            except json.JSONDecodeError:
-                pass
-
-        # 尝试 6: 容错解析 - 查找关键字段后截取
+        # 尝试 5: 容错解析 - 查找关键字段后截取
         try:
             result = self._fallback_parse(content)
             if result:
@@ -237,14 +232,14 @@ class ResumeSummaryService:
 
         # 尝试解析
         try:
-            return json.loads(truncated)
+            return self._as_json_object(json.loads(truncated))
         except json.JSONDecodeError:
             pass
 
         # 尝试修复后解析
         fixed = self._fix_common_json_errors(truncated)
         try:
-            return json.loads(fixed)
+            return self._as_json_object(json.loads(fixed))
         except json.JSONDecodeError:
             pass
 
