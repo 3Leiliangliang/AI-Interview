@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="_ds/modernist-ee90f652-4af0-41e4-9532-c962d0ef2cdc/styles.css">
+<script src="_ds/modernist-ee90f652-4af0-41e4-9532-c962d0ef2cdc/_ds_bundle.js"></script>
+<style>
+body{margin:0;background:#d5dce3;font-family:"Archivo","Noto Sans SC",system-ui,sans-serif;color:#10161d}
+a{color:#1d4b79;text-decoration:none}a:hover{color:#3781cf}
+.f{width:1600px;height:900px;overflow:hidden;background:#fff;display:flex;box-shadow:0 8px 24px rgba(16,22,29,.14)}
+.rail{flex:0 0 224px;background:#101822;color:#eef2f6;display:flex;flex-direction:column}
+.brand{background:#fff;border-bottom:2px solid #3781cf;padding:15px 20px;display:flex;align-items:center}
+.railg{font-size:10px;letter-spacing:.2em;color:#6b7b8c;padding:22px 20px 8px;font-weight:700}
+.ni{display:flex;align-items:center;gap:11px;height:40px;padding:0 20px;font-size:14px;color:#a8b5c2;border-left:3px solid transparent;box-sizing:border-box}
+.ni.on{color:#fff;background:#1a2531;border-left-color:#3781cf;font-weight:700}
+.ic{width:16px;height:16px;flex:0 0 16px;background:currentColor;-webkit-mask:center/contain no-repeat;mask:center/contain no-repeat}
+.i-bot{-webkit-mask-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 8V4H8'/><rect width='16' height='12' x='4' y='8' rx='2'/><path d='M2 14h2'/><path d='M20 14h2'/><path d='M15 13v2'/><path d='M9 13v2'/></svg>");mask-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 8V4H8'/><rect width='16' height='12' x='4' y='8' rx='2'/><path d='M2 14h2'/><path d='M20 14h2'/><path d='M15 13v2'/><path d='M9 13v2'/></svg>")}
+.i-hist{-webkit-mask-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/><path d='M3 3v5h5'/><path d='M12 7v5l4 2'/></svg>");mask-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/><path d='M3 3v5h5'/><path d='M12 7v5l4 2'/></svg>")}
+.i-file{-webkit-mask-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z'/><path d='M14 2v4a2 2 0 0 0 2 2h4'/><path d='M16 13H8'/><path d='M16 17H8'/></svg>");mask-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z'/><path d='M14 2v4a2 2 0 0 0 2 2h4'/><path d='M16 13H8'/><path d='M16 17H8'/></svg>")}
+.i-book{-webkit-mask-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 7v14'/><path d='M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z'/></svg>");mask-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 7v14'/><path d='M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z'/></svg>")}
+.i-code{-webkit-mask-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m18 16 4-4-4-4'/><path d='m6 8-4 4 4 4'/><path d='m14.5 4-5 16'/></svg>");mask-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m18 16 4-4-4-4'/><path d='m6 8-4 4 4 4'/><path d='m14.5 4-5 16'/></svg>")}
+.i-lib{-webkit-mask-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='8' height='18' x='3' y='3' rx='1'/><path d='M7 3v18'/><path d='M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z'/></svg>");mask-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='8' height='18' x='3' y='3' rx='1'/><path d='M7 3v18'/><path d='M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z'/></svg>")}
+.i-blocks{-webkit-mask-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='7' height='7' x='14' y='3' rx='1'/><path d='M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H10'/></svg>");mask-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect width='7' height='7' x='14' y='3' rx='1'/><path d='M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H10'/></svg>")}
+.i-chart{-webkit-mask-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 3v18h18'/><path d='M18 17V9'/><path d='M13 17V5'/><path d='M8 17v-3'/></svg>");mask-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 3v18h18'/><path d='M18 17V9'/><path d='M13 17V5'/><path d='M8 17v-3'/></svg>")}
+.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;background:#fff}
+.top{display:flex;align-items:flex-end;justify-content:space-between;padding:20px 32px 16px;border-bottom:1px solid #eef1f4}
+.h1{font-size:24px;font-weight:700;letter-spacing:-.01em;margin:0}
+.sub{font-size:13px;color:#8b97a3;margin:6px 0 0}
+.b{display:inline-flex;align-items:center;height:34px;padding:0 14px;font-size:13px;font-weight:600;border:1px solid #dfe4ea;background:#fff;color:#3d4650}
+.b.p{background:#3781cf;border-color:#3781cf;color:#fff}
+.lab{font-size:11px;letter-spacing:.12em;font-weight:700;color:#98a2ac}
+.opt{display:flex;align-items:center;justify-content:flex-start;height:38px;padding:0 14px;border:1px solid #dfe4ea;background:#fff;font-size:13px;color:#3d4650;box-sizing:border-box}
+.opt.on{border:1px solid #dfe4ea;background:#eef2f6;font-weight:700;color:#10161d}
+th{text-align:left;font-size:11px;letter-spacing:.1em;color:#98a2ac;font-weight:700;padding:9px 14px;border-bottom:1px solid #dfe4ea}
+td{font-size:13px;padding:11px 14px;border-bottom:1px solid #eef1f4}
+.badge{display:inline-flex;align-items:center;height:22px;padding:0 8px;font-size:11px;font-weight:600;letter-spacing:.04em;border:1px solid #dfe4ea;color:#5a6672}
+.id{display:inline-flex;align-items:center;height:26px;padding:0 10px;background:#eef2f6;color:#10161d;font-size:12px;font-weight:700;letter-spacing:.1em}
+</style>
+</helmet>
+
+<section style="width:1728px;box-sizing:border-box;padding:64px;display:flex;flex-direction:column;gap:72px">
+
+  <div style="max-width:1000px">
+    <div style="font-size:11px;letter-spacing:.2em;color:#1d4b79;font-weight:700">TURN 3 · 侧边栏改为内容式导航</div>
+    <h1 style="font-size:52px;line-height:1.05;margin:14px 0 14px;font-weight:800;letter-spacing:-.02em">伯乐前端界面重构</h1>
+    <p style="font-size:17px;line-height:1.65;color:#44505c;margin:0;max-width:780px;text-wrap:pretty">保留现有 <span style="font-family:ui-monospace,monospace;font-size:15px">#3781cf</span> 主色，其余按 Modernist 的结构走：零圆角、2px 分隔线、Archivo 字体、模块化栅格。蓝色只用在主操作、当前状态和数据强调三处，其它一律是墨色与灰阶。</p>
+    <p style="font-size:16px;line-height:1.7;color:#44505c;margin:16px 0 0;max-width:780px;text-wrap:pretty">侧边栏不再是一列菜单。顶部留 5 个动作，下面是按岗位分组的面试线程列表——侧边栏装的是你正在做的事，不是入口清单。运营三项沉到底部。深色栏换成白底 + 1px 分隔，只靠字重和一块浅底表示当前位置。</p>
+    <div style="display:flex;gap:0;margin-top:28px;border-top:1px solid #dfe4ea">
+      <div style="padding:16px 26px 16px 0;border-right:1px solid #eef1f4"><div class="lab">主色</div><div style="display:flex;gap:8px;margin-top:10px"><div style="width:44px;height:44px;background:#3781cf"></div><div style="width:44px;height:44px;background:#1d4b79"></div><div style="width:44px;height:44px;background:#c3e3ff"></div></div></div>
+      <div style="padding:16px 26px;border-right:1px solid #eef1f4"><div class="lab">墨与灰</div><div style="display:flex;gap:8px;margin-top:10px"><div style="width:44px;height:44px;background:#10161d"></div><div style="width:44px;height:44px;background:#5a6672"></div><div style="width:44px;height:44px;background:#eef1f4"></div><div style="width:44px;height:44px;background:#f1f4f7;border:1px solid #eef1f4;box-sizing:border-box"></div></div></div>
+      <div style="padding:16px 0 16px 26px"><div class="lab">状态</div><div style="display:flex;gap:8px;margin-top:10px;align-items:center"><span class="badge" style="background:#eef2f6;color:#10161d">已完成</span><span class="badge" style="color:#8b97a3;border-color:#b6c1cc">未完成</span><span class="badge" style="background:#3781cf;color:#fff;border-color:#3781cf">需关注</span></div></div>
+    </div>
+  </div>
+
+  <div style="height:2px;background:#10161d"></div>
+
+  <!-- IA -->
+  <div style="display:grid;grid-template-columns:300px 1fr;gap:56px;align-items:start">
+    <div>
+      <div class="lab">01</div>
+      <h2 style="font-size:30px;font-weight:800;margin:8px 0 12px">信息架构</h2>
+      <p style="font-size:14px;line-height:1.7;color:#5a6672;margin:0">现在 7 个入口平铺在一列。新版按使用者分三组，运营组只对管理员出现，候选人看到的永远只有 5 个入口。</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid #dfe4ea">
+      <div style="border-right:1px solid #eef1f4;padding:22px 24px 26px 0">
+        <div class="lab" style="color:#1d4b79">面试 · 候选人主线</div>
+        <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px;font-size:15px;font-weight:600">
+          <div>面试工作台<span style="font-weight:400;color:#8b97a3;font-size:13px;margin-left:8px">/interview</span></div>
+          <div>面试记录<span style="font-weight:400;color:#8b97a3;font-size:13px;margin-left:8px">/interview/records</span></div>
+          <div>我的简历<span style="font-weight:400;color:#8b97a3;font-size:13px;margin-left:8px">/resume</span></div>
+        </div>
+        <p style="font-size:13px;line-height:1.6;color:#5a6672;margin:18px 0 0">配置、进行中、编程、报告四个路由收进一个工作台，用进度串起来，不再互相跳页。</p>
+      </div>
+      <div style="border-right:1px solid #eef1f4;padding:22px 24px 26px 24px">
+        <div class="lab">训练 · 补短板</div>
+        <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px;font-size:15px;font-weight:600">
+          <div>知识学习<span style="font-weight:400;color:#8b97a3;font-size:13px;margin-left:8px">/learn</span></div>
+          <div>代码练习<span style="font-weight:400;color:#8b97a3;font-size:13px;margin-left:8px">/practice</span></div>
+        </div>
+        <p style="font-size:13px;line-height:1.6;color:#5a6672;margin:18px 0 0">报告里的每个弱项直接链到这两处，形成「面完 → 练什么」的闭环。</p>
+      </div>
+      <div style="padding:22px 0 26px 24px">
+        <div class="lab">运营 · 仅管理员</div>
+        <div style="margin-top:14px;display:flex;flex-direction:column;gap:10px;font-size:15px;font-weight:600">
+          <div>知识库<span style="font-weight:400;color:#8b97a3;font-size:13px;margin-left:8px">/database</span></div>
+          <div>题库管理<span style="font-weight:400;color:#8b97a3;font-size:13px;margin-left:8px">/problemsets</span></div>
+          <div>数据看板<span style="font-weight:400;color:#8b97a3;font-size:13px;margin-left:8px">/dashboard</span></div>
+        </div>
+        <p style="font-size:13px;line-height:1.6;color:#5a6672;margin:18px 0 0">全部改成表格视图：可排序、可筛选、可批量操作，替换现在的卡片墙。</p>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="lab">02 · 页面</div>
+    <h2 style="font-size:30px;font-weight:800;margin:8px 0 32px">十屏</h2>
+
+    <div style="display:flex;flex-direction:column;gap:56px">
+
+      <!-- 2a 工作台 -->
+      <div id="2a" style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:14px"><span class="id">2a</span><span style="font-size:19px;font-weight:700">面试工作台</span><span style="font-size:14px;color:#5a6672">三栏面板：配置、主线、记录同时在场</span></div>
+        <div class="f">
+          <dc-import name="Rail" active="new" hint-size="260px,100%"></dc-import>
+          <div class="main">
+            <div class="top">
+              <div><h1 class="h1">面试工作台</h1><p class="sub">128 场 · 已出报告 4 场 · 平均 70 分</p></div>
+              <div style="display:flex;gap:12px"><span class="b">导出记录</span><span class="b p">继续面试</span></div>
+            </div>
+            <div style="flex:1;display:grid;grid-template-columns:340px 1fr 320px;min-height:0">
+              <div style="border-right:1px solid #eef1f4;padding:24px;overflow:hidden">
+                <div class="lab">新面试配置</div>
+                <div style="margin-top:20px;display:flex;flex-direction:column;gap:20px">
+                  <div><div class="lab">形式</div><div style="display:flex;margin-top:8px"><div class="opt on" style="flex:1">文本</div><div class="opt" style="flex:1;border-left:none">语音</div></div></div>
+                  <div><div class="lab">岗位</div><div style="display:flex;margin-top:8px"><div class="opt" style="flex:1">前端</div><div class="opt on" style="flex:1;border-left:none">后端</div></div></div>
+                  <div><div class="lab">轮次</div><div style="display:flex;margin-top:8px"><div class="opt on" style="flex:1">初试</div><div class="opt" style="flex:1;border-left:none">复试</div><div class="opt" style="flex:1;border-left:none">HR</div></div></div>
+                  <div><div class="lab">简历</div><div class="opt on" style="margin-top:8px;height:auto;padding:12px 14px;flex-direction:column;align-items:flex-start;gap:4px"><span>付智彬-简历.pdf</span><span style="font-size:12px;color:#5a6672;font-weight:400">316 KB · 更新于 4/10 12:01</span></div></div>
+                  <div><div class="lab">出题知识库</div><div class="opt" style="margin-top:8px;justify-content:space-between"><span>JavaGuide · Waking-Up</span><span style="color:#8b97a3;font-size:12px">233 文件</span></div></div>
+                  <div class="b p" style="justify-content:flex-start;height:46px">开始面试</div>
+                </div>
+              </div>
+
+              <div style="border-right:1px solid #eef1f4;padding:24px;overflow:hidden;display:flex;flex-direction:column;gap:22px">
+                <div style="border:1px solid #dfe4ea;background:#f7f9fb;padding:22px 24px">
+                  <div class="lab" style="color:#1d4b79">进行中</div>
+                  <div style="font-size:26px;font-weight:800;margin:10px 0 6px">后端工程师 · 初试</div>
+                  <div style="font-size:13px;color:#5a6672">已回答 5 / 8 题 · 用时 22 分钟</div>
+                  <div style="display:flex;gap:2px;margin-top:18px"><div style="flex:5;height:8px;background:#3781cf"></div><div style="flex:3;height:8px;background:#eef1f4"></div></div>
+                </div>
+                <div>
+                  <div class="lab">能力趋势 · 近 4 场</div>
+                  <svg viewBox="0 0 560 200" style="width:100%;height:210px;margin-top:12px">
+                    <line x1="40" x2="550" y1="20" y2="20" stroke="#ccd5de"></line>
+                    <line x1="40" x2="550" y1="70" y2="70" stroke="#ccd5de"></line>
+                    <line x1="40" x2="550" y1="120" y2="120" stroke="#ccd5de"></line>
+                    <line x1="40" x2="550" y1="170" y2="170" stroke="#10161d" stroke-width="2"></line>
+                    <text x="30" y="24" text-anchor="end" font-size="11" fill="#8b97a3">100</text>
+                    <text x="30" y="74" text-anchor="end" font-size="11" fill="#8b97a3">75</text>
+                    <text x="30" y="124" text-anchor="end" font-size="11" fill="#8b97a3">50</text>
+                    <polyline points="80,74 230,110 380,132 530,96" fill="none" stroke="#3781cf" stroke-width="2"></polyline>
+                    <rect x="76" y="70" width="8" height="8" fill="#3781cf"></rect>
+                    <rect x="226" y="106" width="8" height="8" fill="#3781cf"></rect>
+                    <rect x="376" y="128" width="8" height="8" fill="#3781cf"></rect>
+                    <rect x="526" y="92" width="8" height="8" fill="#3781cf"></rect>
+                    <text x="80" y="192" text-anchor="middle" font-size="11" fill="#5a6672">03/26</text>
+                    <text x="230" y="192" text-anchor="middle" font-size="11" fill="#5a6672">04/08</text>
+                    <text x="380" y="192" text-anchor="middle" font-size="11" fill="#5a6672">04/11</text>
+                    <text x="530" y="192" text-anchor="middle" font-size="11" fill="#5a6672">04/13</text>
+                  </svg>
+                </div>
+                <div>
+                  <div class="lab">反复偏弱</div>
+                  <div style="display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid #dfe4ea;margin-top:10px">
+                    <div style="padding:14px 16px 14px 0;border-right:1px solid #eef1f4"><div style="font-size:13px;color:#5a6672">问题解决</div><div style="font-size:28px;font-weight:800;color:#3781cf;margin-top:4px">60</div><div style="font-size:12px;color:#8b97a3">低分 1 次</div></div>
+                    <div style="padding:14px 16px;border-right:1px solid #eef1f4"><div style="font-size:13px;color:#5a6672">技术能力</div><div style="font-size:28px;font-weight:800;margin-top:4px">80</div><div style="font-size:12px;color:#8b97a3">低分 0 次</div></div>
+                    <div style="padding:14px 0 14px 16px"><div style="font-size:13px;color:#5a6672">综合素质</div><div style="font-size:28px;font-weight:800;margin-top:4px">80</div><div style="font-size:12px;color:#8b97a3">低分 0 次</div></div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="padding:24px;overflow:hidden">
+                <div class="lab">最近记录</div>
+                <div style="margin-top:14px;display:flex;flex-direction:column">
+                  <div style="border-top:1px solid #dfe4ea;padding:14px 0"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:700;font-size:15px">后端 · 初试</span><span style="font-size:19px;font-weight:800">61</span></div><div style="font-size:12px;color:#8b97a3;margin-top:5px">04/11 18:13 · 文本 · 8 题</div></div>
+                  <div style="border-top:1px solid #eef1f4;padding:14px 0"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:700;font-size:15px">后端 · 初试</span><span style="font-size:19px;font-weight:800">68</span></div><div style="font-size:12px;color:#8b97a3;margin-top:5px">04/11 10:59 · 语音 · 6 题</div></div>
+                  <div style="border-top:1px solid #eef1f4;padding:14px 0"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:700;font-size:15px">后端 · 初试</span><span style="font-size:13px;color:#8b97a3">未完成</span></div><div style="font-size:12px;color:#8b97a3;margin-top:5px">04/11 10:37 · 文本 · 3 题</div></div>
+                  <div style="border-top:1px solid #eef1f4;padding:14px 0"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:700;font-size:15px">后端 · 复试</span><span style="font-size:19px;font-weight:800">82</span></div><div style="font-size:12px;color:#8b97a3;margin-top:5px">04/08 21:33 · 文本 · 8 题</div></div>
+                  <div style="border-top:1px solid #eef1f4;padding:14px 0"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:700;font-size:15px">前端 · HR</span><span style="font-size:19px;font-weight:800">74</span></div><div style="font-size:12px;color:#8b97a3;margin-top:5px">04/02 14:20 · 语音 · 5 题</div></div>
+                  <div style="border-top:1px solid #eef1f4;padding:14px 0"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:700;font-size:15px">后端 · 初试</span><span style="font-size:19px;font-weight:800">57</span></div><div style="font-size:12px;color:#8b97a3;margin-top:5px">03/26 14:51 · 文本 · 7 题</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2b 进行中 -->
+      <div id="2b" style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:14px"><span class="id">2b</span><span style="font-size:19px;font-weight:700">面试进行中</span><span style="font-size:14px;color:#5a6672">左侧题目进度取代顶部按钮组，右侧显示这一问在考什么</span></div>
+        <div class="f">
+          <dc-import name="Rail" active="thread" hint-size="260px,100%"></dc-import>
+          <div class="main">
+            <div class="top">
+              <div><h1 class="h1">第 5 问 · 分布式事务</h1><p class="sub">后端工程师 · 初试 · 文本面试 · 用时 22:14</p></div>
+              <div style="display:flex;gap:12px"><span class="b">视频分析</span><span class="b">导出记录</span><span class="b p">结束并生成报告</span></div>
+            </div>
+            <div style="flex:1;display:grid;grid-template-columns:1fr 340px;min-height:0">
+              <div style="display:flex;flex-direction:column;min-height:0;border-right:1px solid #eef1f4">
+                <div style="flex:1;padding:28px 32px;display:flex;flex-direction:column;gap:26px;overflow:hidden">
+                  <div style="display:flex;gap:18px">
+                    <div style="flex:0 0 64px"><div class="lab">面试官</div></div>
+                    <div style="flex:1;font-size:16px;line-height:1.75;max-width:640px">你在项目里提到用了 Seata 处理跨服务的下单扣库存。能说一下当时选的是哪种模式吗？为什么不用本地消息表？</div>
+                  </div>
+                  <div style="display:flex;gap:18px">
+                    <div style="flex:0 0 64px"><div class="lab" style="color:#1d4b79">我</div></div>
+                    <div style="flex:1;font-size:16px;line-height:1.75;max-width:640px;border-left:2px solid #3781cf;padding-left:18px">当时用的是 AT 模式，主要是接入成本低，业务代码几乎不用改。本地消息表需要每个服务自己维护一张表和补偿逻辑，团队当时人手不够。</div>
+                  </div>
+                  <div style="display:flex;gap:18px">
+                    <div style="flex:0 0 64px"><div class="lab">面试官</div></div>
+                    <div style="flex:1;font-size:16px;line-height:1.75;max-width:640px">AT 模式在高并发下有全局锁的问题，你们当时的 QPS 大概是多少？有没有遇到过锁等待超时？</div>
+                  </div>
+                </div>
+                <div style="border-top:1px solid #dfe4ea;padding:20px 32px 24px">
+                  <div style="border:1px solid #b6c1cc;background:#fff;padding:16px 18px;min-height:78px;font-size:15px;color:#8b97a3">输入你的回答，Enter 发送，Shift + Enter 换行</div>
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+                    <div style="display:flex;gap:10px"><span class="b" style="height:34px;font-size:13px">切到语音</span><span class="b" style="height:34px;font-size:13px">上传代码</span></div>
+                    <span class="b p" style="height:34px;font-size:13px">发送</span>
+                  </div>
+                </div>
+              </div>
+              <div style="padding:24px;overflow:hidden;display:flex;flex-direction:column;gap:22px">
+                <div>
+                  <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="lab">本场进度</span><span style="font-size:12px;color:#5a6672">5 / 8 题</span></div>
+                  <div style="display:flex;gap:2px;margin:10px 0 14px"><div style="flex:5;height:6px;background:#3781cf"></div><div style="flex:3;height:6px;background:#eef1f4"></div></div>
+                  <div style="display:flex;flex-direction:column;gap:7px">
+                    <div style="display:flex;gap:10px;align-items:center;font-size:13px;color:#5a6672"><span style="width:18px;height:18px;background:#3781cf;color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:700;flex:0 0 18px">1</span>自我介绍</div>
+                    <div style="display:flex;gap:10px;align-items:center;font-size:13px;color:#5a6672"><span style="width:18px;height:18px;background:#3781cf;color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:700;flex:0 0 18px">2</span>MySQL 索引</div>
+                    <div style="display:flex;gap:10px;align-items:center;font-size:13px;color:#5a6672"><span style="width:18px;height:18px;background:#3781cf;color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:700;flex:0 0 18px">3</span>Redis 缓存穿透</div>
+                    <div style="display:flex;gap:10px;align-items:center;font-size:13px;color:#5a6672"><span style="width:18px;height:18px;background:#3781cf;color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:700;flex:0 0 18px">4</span>JVM 垃圾回收</div>
+                    <div style="display:flex;gap:10px;align-items:center;font-size:13px;color:#10161d;font-weight:700"><span style="width:18px;height:18px;border:2px solid #3781cf;color:#1d4b79;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:700;box-sizing:border-box;flex:0 0 18px">5</span>分布式事务</div>
+                    <div style="display:flex;gap:10px;align-items:center;font-size:13px;color:#98a2ac"><span style="width:18px;height:18px;border:1px solid #eef1f4;font-size:10px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;flex:0 0 18px">6</span>待提问</div>
+                    <div style="display:flex;gap:10px;align-items:center;font-size:13px;color:#98a2ac"><span style="width:18px;height:18px;border:1px solid #eef1f4;font-size:10px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;flex:0 0 18px">7</span>待提问</div>
+                    <div style="display:flex;gap:10px;align-items:center;font-size:13px;color:#98a2ac"><span style="width:18px;height:18px;border:1px solid #eef1f4;font-size:10px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;flex:0 0 18px">8</span>编程题</div>
+                  </div>
+                </div>
+                <div>
+                  <div class="lab">本题考察点</div>
+                  <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;font-size:14px">
+                    <div style="display:flex;justify-content:space-between;border-bottom:1px solid #eef1f4;padding-bottom:8px"><span>分布式事务模型</span><span style="color:#1d4b79;font-weight:700">已覆盖</span></div>
+                    <div style="display:flex;justify-content:space-between;border-bottom:1px solid #eef1f4;padding-bottom:8px"><span>选型权衡</span><span style="color:#1d4b79;font-weight:700">已覆盖</span></div>
+                    <div style="display:flex;justify-content:space-between;border-bottom:1px solid #eef1f4;padding-bottom:8px"><span>并发下的锁行为</span><span style="color:#8b97a3">未提及</span></div>
+                    <div style="display:flex;justify-content:space-between;padding-bottom:8px"><span>补偿与幂等</span><span style="color:#8b97a3">未提及</span></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="lab">题目来源</div>
+                  <div style="margin-top:12px;font-size:14px;line-height:1.7">
+                    <div style="font-weight:700">JavaGuide</div>
+                    <div style="color:#5a6672">分布式 / 分布式事务.md</div>
+                    <div style="margin-top:10px"><a href="#2b">查看知识点原文</a></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="lab">简历关联</div>
+                  <div style="margin-top:12px;font-size:14px;line-height:1.7;border-left:1px solid #dfe4ea;padding-left:14px;color:#44505c">「订单中心重构，引入 Seata 保证跨服务一致性」<br><span style="font-size:12px;color:#8b97a3">付智彬-简历.pdf · 项目经历 2</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2c 报告 -->
+      <div id="2c" style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:14px"><span class="id">2c</span><span style="font-size:19px;font-weight:700">面试报告</span><span style="font-size:14px;color:#5a6672">结论在最上面，每个弱项直接链到练习</span></div>
+        <div class="f">
+          <dc-import name="Rail" active="thread" hint-size="260px,100%"></dc-import>
+          <div class="main">
+            <div class="top">
+              <div><h1 class="h1">后端工程师 · 初试</h1><p class="sub">2026-04-11 10:13 – 14:39 · 8 题 · 文本面试</p></div>
+              <div style="display:flex;gap:12px"><span class="b">导出 PDF</span><span class="b p">按弱项开始练习</span></div>
+            </div>
+            <div style="flex:1;overflow:hidden;padding:0 32px">
+              <div style="display:grid;grid-template-columns:290px 1fr;border-bottom:1px solid #eef1f4">
+                <div style="padding:20px 30px 20px 0;border-right:1px solid #eef1f4">
+                  <div class="lab">综合评分</div>
+                  <div style="font-size:74px;line-height:.92;font-weight:800;margin:8px 0 6px;letter-spacing:-.04em">61</div>
+                  <div style="font-size:15px;font-weight:700;color:#1d4b79">未达初试通过线（70）</div>
+                </div>
+                <div style="padding:20px 0 20px 30px;display:flex;flex-direction:column;gap:11px">
+                  <div class="lab">面试官结论</div>
+                  <p style="margin:0;font-size:16px;line-height:1.7;max-width:840px;text-wrap:pretty">项目经历讲得清楚，能说明技术选型的背景。主要问题在深度：涉及并发、边界和失败恢复的追问都停在概念层面，没有给出具体数字或做过的验证。建议先补分布式事务与 JVM 调优两块，再约下一轮。</p>
+                  <div style="display:flex;gap:10px"><span class="badge">项目表达 强</span><span class="badge">技术深度 弱</span><span class="badge">边界意识 弱</span></div>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #eef1f4">
+                <div style="padding:20px 30px 20px 0;border-right:1px solid #eef1f4">
+                  <div class="lab">四维评分</div>
+                  <div style="margin-top:14px;display:flex;flex-direction:column;gap:13px">
+                    <div><div style="display:flex;justify-content:space-between;font-size:14px;font-weight:600;margin-bottom:6px"><span>技术能力</span><span>80</span></div><div style="height:8px;background:#eef1f4"><div style="width:80%;height:8px;background:#10161d"></div></div></div>
+                    <div><div style="display:flex;justify-content:space-between;font-size:14px;font-weight:600;margin-bottom:6px"><span>问题解决</span><span style="color:#1d4b79">60</span></div><div style="height:8px;background:#eef1f4"><div style="width:60%;height:8px;background:#3781cf"></div></div></div>
+                    <div><div style="display:flex;justify-content:space-between;font-size:14px;font-weight:600;margin-bottom:6px"><span>沟通表达</span><span>85</span></div><div style="height:8px;background:#eef1f4"><div style="width:85%;height:8px;background:#10161d"></div></div></div>
+                    <div><div style="display:flex;justify-content:space-between;font-size:14px;font-weight:600;margin-bottom:6px"><span>综合素质</span><span>80</span></div><div style="height:8px;background:#eef1f4"><div style="width:80%;height:8px;background:#10161d"></div></div></div>
+                  </div>
+                </div>
+                <div style="padding:20px 0 20px 30px">
+                  <div class="lab">下一步练习</div>
+                  <div style="margin-top:14px;display:flex;flex-direction:column">
+                    <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid #dfe4ea;padding:12px 0"><div><div style="font-weight:700;font-size:15px">分布式事务</div><div style="font-size:13px;color:#5a6672;margin-top:3px">JavaGuide · 4 篇 + 3 道编程题</div></div><span class="b" style="height:32px;font-size:13px">去练习</span></div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid #eef1f4;padding:12px 0"><div><div style="font-weight:700;font-size:15px">JVM 调优</div><div style="font-size:13px;color:#5a6672;margin-top:3px">Waking-Up · 6 篇</div></div><span class="b" style="height:32px;font-size:13px">去练习</span></div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid #eef1f4;padding:12px 0"><div><div style="font-weight:700;font-size:15px">边界与异常设计</div><div style="font-size:13px;color:#5a6672;margin-top:3px">通用面试手册 · 2 篇</div></div><span class="b" style="height:32px;font-size:13px">去练习</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="padding:18px 0 0">
+                <div class="lab">逐题回看</div>
+                <table style="width:100%;border-collapse:collapse;margin-top:12px">
+                  <thead><tr><th style="padding-left:0;width:44px">#</th><th>题目</th><th style="width:180px">考察点覆盖</th><th style="width:120px">评价</th><th style="width:80px;text-align:right;padding-right:0">得分</th></tr></thead>
+                  <tbody>
+                    <tr><td style="padding-left:0;color:#8b97a3">1</td><td>自我介绍与项目概述</td><td style="color:#5a6672">4 / 4</td><td>表达清晰</td><td style="text-align:right;padding-right:0;font-weight:800">88</td></tr>
+                    <tr><td style="padding-left:0;color:#8b97a3">2</td><td>MySQL 联合索引与最左前缀</td><td style="color:#5a6672">3 / 4</td><td>基本正确</td><td style="text-align:right;padding-right:0;font-weight:800">76</td></tr>
+                    <tr><td style="padding-left:0;color:#8b97a3">3</td><td>Redis 缓存穿透的三种处理</td><td style="color:#5a6672">2 / 4</td><td>缺少取舍</td><td style="text-align:right;padding-right:0;font-weight:800">64</td></tr>
+                    <tr><td style="padding-left:0;color:#8b97a3">4</td><td>JVM 垃圾回收器选择</td><td style="color:#1d4b79;font-weight:700">1 / 4</td><td>停在概念</td><td style="text-align:right;padding-right:0;font-weight:800;color:#3781cf">42</td></tr>
+                    <tr><td style="padding-left:0;color:#8b97a3">5</td><td>分布式事务：Seata AT 的代价</td><td style="color:#1d4b79;font-weight:700">2 / 4</td><td>未答并发</td><td style="text-align:right;padding-right:0;font-weight:800;color:#3781cf">55</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2d 简历列表 -->
+      <div id="2d" style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:14px"><span class="id">2d</span><span style="font-size:19px;font-weight:700">我的简历 · 一级</span><span style="font-size:14px;color:#5a6672">上传与列表，点任意一行进入解析详情</span></div>
+        <div class="f">
+          <dc-import name="Rail" active="resume" hint-size="260px,100%"></dc-import>
+          <div class="main">
+            <div class="top">
+              <div><h1 class="h1">我的简历</h1><p class="sub">3 份 · 默认用于面试：付智彬-简历.pdf</p></div>
+              <div style="display:flex;gap:12px"><span class="b">刷新</span><span class="b p">上传简历</span></div>
+            </div>
+            <div style="padding:24px 32px;overflow:hidden">
+              <div style="border:1px dashed #d5dbe2;background:#fbfcfd;padding:26px;display:flex;align-items:center;justify-content:space-between">
+                <div>
+                  <div style="font-size:15px;font-weight:700">把 PDF 拖到这里上传</div>
+                  <div style="font-size:13px;color:#8b97a3;margin-top:5px">单个文件不超过 20 MB，上传后由 mineru 解析出结构化信息</div>
+                </div>
+                <span class="b">选择文件</span>
+              </div>
+              <table style="width:100%;border-collapse:collapse;margin-top:26px">
+                <thead><tr><th style="padding-left:0">文件名</th><th style="width:110px">解析状态</th><th style="width:130px">完整度</th><th style="width:170px">岗位匹配</th><th style="width:100px">大小</th><th style="width:160px">更新时间</th><th style="width:110px;text-align:right;padding-right:0">默认</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td style="padding-left:0"><div style="font-weight:700;font-size:14px">付智彬-简历.pdf</div><div style="font-size:12px;color:#8b97a3;margin-top:3px">后端工程师 · Java / Spring Boot / Redis</div></td>
+                    <td><span class="badge" style="background:#eef2f6;color:#10161d">已解析</span></td>
+                    <td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:6px;background:#eef1f4"><div style="width:82%;height:6px;background:#3781cf"></div></div><span style="font-size:12px;color:#5a6672">82%</span></div></td>
+                    <td><span style="font-size:16px;font-weight:800">78</span><span style="font-size:12px;color:#8b97a3;margin-left:6px">后端工程师</span></td>
+                    <td style="color:#5a6672">316 KB</td><td style="color:#5a6672">2026/4/10 12:01</td>
+                    <td style="text-align:right;padding-right:0"><span class="badge" style="background:#eef2f6;color:#10161d">默认</span></td>
+                  </tr>
+                  <tr>
+                    <td style="padding-left:0"><div style="font-weight:700;font-size:14px">付智彬-简历-英文.pdf</div><div style="font-size:12px;color:#8b97a3;margin-top:3px">Backend Engineer · 英文版</div></td>
+                    <td><span class="badge" style="background:#eef2f6;color:#10161d">已解析</span></td>
+                    <td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:6px;background:#eef1f4"><div style="width:64%;height:6px;background:#3781cf"></div></div><span style="font-size:12px;color:#5a6672">64%</span></div></td>
+                    <td><span style="font-size:16px;font-weight:800">55</span><span style="font-size:12px;color:#8b97a3;margin-left:6px">后端工程师</span></td>
+                    <td style="color:#5a6672">288 KB</td><td style="color:#5a6672">2026/3/28 09:14</td>
+                    <td style="text-align:right;padding-right:0;color:#8b97a3">设为默认</td>
+                  </tr>
+                  <tr>
+                    <td style="padding-left:0"><div style="font-weight:700;font-size:14px">campus-2026.pdf</div><div style="font-size:12px;color:#8b97a3;margin-top:3px">正在提取结构化信息…</div></td>
+                    <td><span class="badge" style="border-color:#3781cf;color:#1d4b79">解析中</span></td>
+                    <td><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:6px;background:#eef1f4"><div style="width:35%;height:6px;background:#b6c1cc"></div></div><span style="font-size:12px;color:#8b97a3">—</span></div></td>
+                    <td style="color:#98a2ac">—</td>
+                    <td style="color:#5a6672">412 KB</td><td style="color:#5a6672">2026/4/13 18:40</td>
+                    <td style="text-align:right;padding-right:0;color:#98a2ac">—</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2d2 简历解析详情 -->
+      <div id="2d2" style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:14px"><span class="id">2d2</span><span style="font-size:19px;font-weight:700">简历解析详情 · 二级</span><span style="font-size:14px;color:#5a6672">沿用原版卡片与配色，只把匹配度提到顶部，正文改成左右两栏</span></div>
+        <div class="f">
+          <dc-import name="Rail" active="resume" hint-size="260px,100%"></dc-import>
+          <div class="main">
+            <div class="top">
+              <div><h1 class="h1">付智彬-简历.pdf</h1><p class="sub">316 KB · 更新于 2026/4/10 12:01 · mineru_official 解析完成</p></div>
+              <div style="display:flex;gap:12px"><span class="b">返回列表</span><span class="b">重新解析</span><span class="b p">用这份简历面试</span></div>
+            </div>
+            <div style="flex:1;min-height:0;background:#f8fafa;padding:20px 24px;display:flex;flex-direction:column;gap:16px;overflow:hidden">
+
+              <div style="background:#fff;border:1px solid #eff2f2;border-radius:16px;padding:22px 26px;display:flex;align-items:center;gap:28px">
+                <div style="width:64px;height:64px;border-radius:50%;background:#edf7ff;color:#2765a3;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;flex:0 0 64px">付</div>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:24px;font-weight:700;color:#151616">付智彬</div>
+                  <div style="display:flex;gap:20px;margin-top:8px;font-size:13px;color:#697070;flex-wrap:wrap">
+                    <span>138****6621</span><span>fuzhibin@example.com</span><span>哈尔滨 · 期望北京</span><span style="color:#3781cf">github.com/fuzhibin</span>
+                  </div>
+                  <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+                    <span style="display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:6px;font-size:12px;background:#edf7ff;color:#2765a3;border:1px solid #c3e3ff">3 年后端经验</span>
+                    <span style="display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:6px;font-size:12px;background:#e6fffb;color:#08979c;border:1px solid #87e8de">985 硕士</span>
+                    <span style="display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:6px;font-size:12px;background:#f9f0ff;color:#722ed1;border:1px solid #e9d5ff">2 个高并发项目</span>
+                  </div>
+                </div>
+                <div style="flex:0 0 220px;border-left:1px solid #eff2f2;padding-left:24px">
+                  <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;color:#697070">简历完整度</span><span style="font-size:18px;font-weight:700;color:#52c41a">82%</span></div>
+                  <div style="height:8px;background:#eff2f2;border-radius:4px;margin-top:10px;overflow:hidden"><div style="width:82%;height:8px;background:#52c41a;border-radius:4px"></div></div>
+                  <div style="font-size:12px;color:#979999;margin-top:10px;line-height:1.6">建议补充：项目量化结果、获奖经历</div>
+                </div>
+                <div style="flex:0 0 170px;border-left:1px solid #eff2f2;padding-left:24px;display:flex;align-items:center;gap:16px">
+                  <svg viewBox="0 0 36 36" style="width:66px;height:66px;flex:0 0 66px">
+                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="#eff2f2" stroke-width="3.4"></circle>
+                    <circle cx="18" cy="18" r="15.9" fill="none" stroke="#3781cf" stroke-width="3.4" stroke-dasharray="78 100" stroke-linecap="round" transform="rotate(-90 18 18)"></circle>
+                    <text x="18" y="21.5" text-anchor="middle" font-size="10" font-weight="700" fill="#151616">78</text>
+                  </svg>
+                  <div>
+                    <div style="font-size:13px;color:#697070">岗位匹配</div>
+                    <div style="display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:6px;font-size:12px;background:#f6ffed;color:#389e0d;border:1px solid #b7eb8f;margin-top:8px">较匹配</div>
+                    <div style="font-size:12px;color:#3781cf;margin-top:8px">查看匹配详情</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="flex:1;min-height:0;display:grid;grid-template-columns:1fr 340px;gap:16px">
+                <div style="background:#fff;border:1px solid #eff2f2;border-radius:16px;padding:22px 26px;overflow:hidden">
+                  <div style="display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700;color:#151616"><span style="width:3px;height:15px;background:#3781cf"></span>工作与项目经历</div>
+                  <div style="margin-top:18px;border-left:2px solid #eff2f2;padding-left:20px;display:flex;flex-direction:column;gap:20px">
+                    <div>
+                      <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:16px;font-weight:700;color:#151616">某电商平台 · 订单中心</span><span style="font-size:13px;color:#979999">2024.03 – 2025.01</span></div>
+                      <div style="font-size:14px;color:#4c4d4d;margin-top:5px">后端工程师</div>
+                      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+                        <span style="display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:6px;font-size:12px;background:#f9f0ff;color:#722ed1;border:1px solid #e9d5ff">Spring Cloud</span>
+                        <span style="display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:6px;font-size:12px;background:#f9f0ff;color:#722ed1;border:1px solid #e9d5ff">Seata</span>
+                        <span style="display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:6px;font-size:12px;background:#f9f0ff;color:#722ed1;border:1px solid #e9d5ff">MySQL</span>
+                      </div>
+                      <div style="font-size:14px;line-height:1.8;color:#4c4d4d;margin-top:10px">
+                        <div>· 拆分单体订单服务为下单、库存、支付三个服务，日均订单 40 万</div>
+                        <div>· 引入 Seata AT 模式保证跨服务一致性，接入成本低于本地消息表方案</div>
+                      </div>
+                    </div>
+                    <div>
+                      <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:16px;font-weight:700;color:#151616">实时风控网关</span><span style="font-size:13px;color:#979999">2023.05 – 2024.02</span></div>
+                      <div style="font-size:14px;color:#4c4d4d;margin-top:5px">核心开发</div>
+                      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+                        <span style="display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:6px;font-size:12px;background:#f9f0ff;color:#722ed1;border:1px solid #e9d5ff">Kafka</span>
+                        <span style="display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:6px;font-size:12px;background:#f9f0ff;color:#722ed1;border:1px solid #e9d5ff">Flink</span>
+                      </div>
+                      <div style="font-size:14px;line-height:1.8;color:#4c4d4d;margin-top:10px">
+                        <div>· 规则引擎支持热更新，P99 延迟从 380ms 降到 90ms</div>
+                      </div>
+                    </div>
+                    <div>
+                      <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:16px;font-weight:700;color:#151616">哈尔滨工程大学</span><span style="font-size:13px;color:#979999">2020.09 – 2023.06</span></div>
+                      <div style="font-size:14px;color:#4c4d4d;margin-top:5px">计算机科学与技术 · 硕士</div>
+                      <div style="display:flex;gap:8px;margin-top:10px">
+                        <span style="display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:6px;font-size:12px;background:#edf7ff;color:#2765a3;border:1px solid #c3e3ff">GPA: 3.7 / 4.0</span>
+                        <span style="display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:6px;font-size:12px;background:#e6fffb;color:#08979c;border:1px solid #87e8de">专业前 15%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:16px;overflow:hidden">
+                  <div style="background:#fff;border:1px solid #eff2f2;border-radius:16px;padding:14px 18px">
+                    <div style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:#151616"><span style="width:3px;height:14px;background:#3781cf"></span>求职意向</div>
+                    <div style="margin-top:14px;font-size:14px;display:flex;flex-direction:column;gap:10px">
+                      <div style="display:flex;justify-content:space-between"><span style="color:#979999">意向岗位</span><span style="color:#151616">后端工程师</span></div>
+                      <div style="display:flex;justify-content:space-between"><span style="color:#979999">期望薪资</span><span style="color:#151616">25–35K</span></div>
+                      <div style="display:flex;justify-content:space-between"><span style="color:#979999">期望地点</span><span style="color:#151616">北京 / 杭州</span></div>
+                    </div>
+                  </div>
+                  <div style="background:#fff;border:1px solid #eff2f2;border-radius:16px;padding:14px 18px">
+                    <div style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:#151616"><span style="width:3px;height:14px;background:#3781cf"></span>技能</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+                      <span style="display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:6px;font-size:13px;background:#edf7ff;color:#2765a3;border:1px solid #c3e3ff">Java</span>
+                      <span style="display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:6px;font-size:13px;background:#edf7ff;color:#2765a3;border:1px solid #c3e3ff">Spring Boot</span>
+                      <span style="display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:6px;font-size:13px;background:#edf7ff;color:#2765a3;border:1px solid #c3e3ff">MySQL</span>
+                      <span style="display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:6px;font-size:13px;background:#edf7ff;color:#2765a3;border:1px solid #c3e3ff">Redis</span>
+                      <span style="display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:6px;font-size:13px;background:#edf7ff;color:#2765a3;border:1px solid #c3e3ff">Kafka</span>
+                      <span style="display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:6px;font-size:13px;background:#edf7ff;color:#2765a3;border:1px solid #c3e3ff">Seata</span>
+                      <span style="display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:6px;font-size:13px;background:#edf7ff;color:#2765a3;border:1px solid #c3e3ff">Docker</span>
+                    </div>
+                  </div>
+                  <div style="background:#fff;border:1px solid #eff2f2;border-radius:16px;padding:14px 18px">
+                    <div style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:#151616"><span style="width:3px;height:14px;background:#3781cf"></span>自我评价</div>
+                    <div style="font-size:14px;line-height:1.75;color:#4c4d4d;margin-top:12px">三年后端开发，主要做交易链路的服务拆分与稳定性治理，习惯先把问题量化再动手。</div>
+                  </div>
+                  <div style="background:#fff;border:1px solid #eff2f2;border-radius:16px;padding:14px 18px">
+                    <div style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:#151616"><span style="width:3px;height:14px;background:#3781cf"></span>文件信息</div>
+                    <div style="margin-top:14px;font-size:14px;display:flex;flex-direction:column;gap:10px">
+                      <div style="display:flex;justify-content:space-between"><span style="color:#979999">文件名</span><span style="color:#151616">付智彬-简历.pdf</span></div>
+                      <div style="display:flex;justify-content:space-between"><span style="color:#979999">文件大小</span><span style="color:#151616">316 KB</span></div>
+                      <div style="display:flex;justify-content:space-between"><span style="color:#979999">解析状态</span><span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:6px;font-size:12px;background:#f6ffed;color:#389e0d;border:1px solid #b7eb8f">已完成</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2e 知识库 -->
+      <div id="2e" style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:14px"><span class="id">2e</span><span style="font-size:19px;font-weight:700">知识库（运营）</span><span style="font-size:14px;color:#5a6672">卡片墙换成可排序表格，标签只保留有语义的两类</span></div>
+        <div class="f">
+          <dc-import name="Rail" active="database" hint-size="260px,100%"></dc-import>
+          <div class="main">
+            <div class="top">
+              <div><h1 class="h1">知识库</h1><p class="sub">3 个库 · 236 个文件 · 全部索引完成</p></div>
+              <div style="display:flex;gap:12px"><span class="b">导入上游资料</span><span class="b p">新建知识库</span></div>
+            </div>
+            <div style="padding:24px 32px;overflow:hidden">
+              <div style="display:flex;border-bottom:1px solid #dfe4ea;margin-bottom:22px">
+                <div style="padding:10px 20px 10px 0;font-size:14px;font-weight:700;border-bottom:2px solid #3781cf;margin-bottom:-1px">全部 3</div>
+                <div style="padding:10px 20px;font-size:14px;color:#5a6672">后端 2</div>
+                <div style="padding:10px 20px;font-size:14px;color:#5a6672">前端 1</div>
+                <div style="padding:10px 20px;font-size:14px;color:#5a6672">通用 0</div>
+                <div style="flex:1"></div>
+                <div style="padding:10px 0;font-size:14px;color:#8b97a3">搜索知识库…</div>
+              </div>
+              <table style="width:100%;border-collapse:collapse">
+                <thead><tr><th style="padding-left:0">名称</th><th style="width:150px">岗位</th><th style="width:110px">文件</th><th style="width:110px">分块</th><th style="width:190px">Embedding</th><th style="width:130px">最近索引</th><th style="width:110px;text-align:right;padding-right:0">状态</th></tr></thead>
+                <tbody>
+                  <tr><td style="padding-left:0"><div style="font-weight:700;font-size:15px">JavaGuide</div><div style="font-size:13px;color:#5a6672;margin-top:3px">Java 面试核心知识库，包含 Java、数据库、计算机基础</div></td><td>后端工程师</td><td>227</td><td>QA</td><td style="font-size:13px">Pro/BAAI/bge-m3</td><td style="font-size:13px">04/11 09:02</td><td style="text-align:right;padding-right:0"><span class="badge" style="background:#eef2f6;color:#10161d">已索引</span></td></tr>
+                  <tr><td style="padding-left:0"><div style="font-weight:700;font-size:15px">Waking-Up</div><div style="font-size:13px;color:#5a6672;margin-top:3px">后端面试笔记，计网、操作系统、数据库</div></td><td>后端工程师</td><td>6</td><td>QA</td><td style="font-size:13px">Pro/BAAI/bge-m3</td><td style="font-size:13px">04/11 09:00</td><td style="text-align:right;padding-right:0"><span class="badge" style="background:#eef2f6;color:#10161d">已索引</span></td></tr>
+                  <tr><td style="padding-left:0"><div style="font-weight:700;font-size:15px">React Interview Questions</div><div style="font-size:13px;color:#5a6672;margin-top:3px">React 面试题与答案，含核心问答和代码练习</div></td><td>前端工程师</td><td>3</td><td>QA</td><td style="font-size:13px">Pro/BAAI/bge-m3</td><td style="font-size:13px">04/11 08:57</td><td style="text-align:right;padding-right:0"><span class="badge" style="background:#eef2f6;color:#10161d">已索引</span></td></tr>
+                  <tr><td style="padding-left:0" colspan="7"><div style="border:1px dashed #d5dbe2;padding:22px;display:flex;align-items:center;justify-content:space-between;margin-top:8px"><div><div style="font-weight:700;font-size:15px">还有 6 个上游面试资料源未导入</div><div style="font-size:13px;color:#5a6672;margin-top:4px">system-design-primer、DSA-Handbook、CrackingTheSQLInterview 等</div></div><span class="b">一键导入</span></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2f 看板 -->
+      <div id="2f" style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:14px"><span class="id">2f</span><span style="font-size:19px;font-weight:700">数据看板（运营）</span><span style="font-size:14px;color:#5a6672">页面内容保持原样，只换全局导航栏</span></div>
+        <div class="f">
+          <dc-import name="Rail" active="dashboard" hint-size="260px,100%"></dc-import>
+          <div class="main" style="background:#f8fafa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;color:#151616">
+            <div style="padding:22px 26px;display:flex;flex-direction:column;gap:16px;overflow:hidden;height:100%;box-sizing:border-box">
+
+              <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                <div><div style="font-size:22px;font-weight:700">伯乐 Bole</div><div style="font-size:13px;color:#979999;margin-top:4px">大模型驱动的知识库智能体平台</div></div>
+                <div style="display:flex;align-items:center;gap:18px;font-size:13px;color:#4c4d4d">
+                  <span>2026年04月13日 18:46:17</span><span>晚上好！admin</span>
+                  <span style="border:1px solid #c3e3ff;color:#2765a3;background:#fff;border-radius:8px;padding:7px 14px">任务中心</span>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px">
+                <div style="background:#fff;border:1px solid #eff2f2;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.04);padding:14px 16px;display:flex;align-items:center;gap:12px"><div style="width:40px;height:40px;border-radius:10px;background:#edf7ff;flex:0 0 40px"></div><div><div style="font-size:24px;font-weight:700">133</div><div style="font-size:12px;color:#697070">总对话数</div></div></div>
+                <div style="background:#fff;border:1px solid #eff2f2;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.04);padding:14px 16px;display:flex;align-items:center;gap:12px"><div style="width:40px;height:40px;border-radius:10px;background:#f6ffed;flex:0 0 40px"></div><div><div style="font-size:24px;font-weight:700">131</div><div style="font-size:12px;color:#697070">活跃对话</div></div></div>
+                <div style="background:#fff;border:1px solid #eff2f2;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.04);padding:14px 16px;display:flex;align-items:center;gap:12px"><div style="width:40px;height:40px;border-radius:10px;background:#edf7ff;flex:0 0 40px"></div><div><div style="font-size:24px;font-weight:700">496</div><div style="font-size:12px;color:#697070">总消息数</div></div></div>
+                <div style="background:#fff;border:1px solid #eff2f2;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.04);padding:14px 16px;display:flex;align-items:center;gap:12px"><div style="width:40px;height:40px;border-radius:10px;background:#fffbe6;flex:0 0 40px"></div><div><div style="font-size:24px;font-weight:700">3</div><div style="font-size:12px;color:#697070">用户数</div></div></div>
+                <div style="background:#fff;border:1px solid #eff2f2;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.04);padding:14px 16px;display:flex;align-items:center;gap:12px"><div style="width:40px;height:40px;border-radius:10px;background:#e6fffb;flex:0 0 40px"></div><div><div style="font-size:24px;font-weight:700">0</div><div style="font-size:12px;color:#697070">总反馈数</div></div></div>
+                <div style="background:#fff;border:1px solid #eff2f2;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.04);padding:14px 16px;display:flex;align-items:center;gap:12px"><div style="width:40px;height:40px;border-radius:10px;background:#f6ffed;flex:0 0 40px"></div><div><div style="font-size:24px;font-weight:700">100%</div><div style="font-size:12px;color:#697070">满意度</div></div></div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:14px;flex:1;min-height:0">
+                <div style="background:#fff;border:1px solid #eff2f2;border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,.04);padding:18px 20px;overflow:hidden">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+                    <span style="font-size:17px;font-weight:700">调用统计</span>
+                    <div style="display:flex;gap:6px;align-items:center;font-size:12px;color:#697070">
+                      <span style="padding:5px 10px;border-radius:6px">近14小时</span>
+                      <span style="padding:5px 10px;border-radius:6px;background:#3781cf;color:#fff">近14天</span>
+                      <span style="padding:5px 10px;border-radius:6px">近14周</span>
+                      <span style="color:#d7d9d9">|</span>
+                      <span style="padding:5px 10px;border-radius:6px">模型调用</span>
+                      <span style="padding:5px 10px;border-radius:6px;background:#3781cf;color:#fff">智能体调用</span>
+                      <span style="padding:5px 10px;border-radius:6px">Token消耗</span>
+                      <span style="padding:5px 10px;border-radius:6px">工具调用</span>
+                    </div>
+                  </div>
+                  <svg viewBox="0 0 860 300" style="width:100%;height:290px">
+                    <line x1="52" x2="850" y1="20" y2="20" stroke="#eff2f2"></line>
+                    <line x1="52" x2="850" y1="65" y2="65" stroke="#eff2f2"></line>
+                    <line x1="52" x2="850" y1="110" y2="110" stroke="#eff2f2"></line>
+                    <line x1="52" x2="850" y1="155" y2="155" stroke="#eff2f2"></line>
+                    <line x1="52" x2="850" y1="200" y2="200" stroke="#eff2f2"></line>
+                    <line x1="52" x2="850" y1="245" y2="245" stroke="#eff2f2"></line>
+                    <text x="44" y="24" text-anchor="end" font-size="12" fill="#979999">30</text>
+                    <text x="44" y="69" text-anchor="end" font-size="12" fill="#979999">25</text>
+                    <text x="44" y="114" text-anchor="end" font-size="12" fill="#979999">20</text>
+                    <text x="44" y="159" text-anchor="end" font-size="12" fill="#979999">15</text>
+                    <text x="44" y="204" text-anchor="end" font-size="12" fill="#979999">10</text>
+                    <text x="44" y="249" text-anchor="end" font-size="12" fill="#979999">5</text>
+                    <text x="44" y="294" text-anchor="end" font-size="12" fill="#979999">0</text>
+                    <rect x="284" y="272" width="30" height="18" fill="#4f9fec"></rect>
+                    <rect x="398" y="47" width="30" height="243" fill="#4f9fec"></rect>
+                    <rect x="455" y="200" width="30" height="90" fill="#4f9fec"></rect>
+                    <rect x="512" y="200" width="30" height="90" fill="#4f9fec"></rect>
+                    <rect x="683" y="254" width="30" height="36" fill="#4f9fec"></rect>
+                    <text x="128" y="292" text-anchor="middle" font-size="12" fill="#979999" dy="16">03-31</text>
+                    <text x="299" y="292" text-anchor="middle" font-size="12" fill="#979999" dy="16">04-04</text>
+                    <text x="413" y="292" text-anchor="middle" font-size="12" fill="#979999" dy="16">04-06</text>
+                    <text x="470" y="292" text-anchor="middle" font-size="12" fill="#979999" dy="16">04-07</text>
+                    <text x="527" y="292" text-anchor="middle" font-size="12" fill="#979999" dy="16">04-08</text>
+                    <text x="698" y="292" text-anchor="middle" font-size="12" fill="#979999" dy="16">04-11</text>
+                    <text x="812" y="292" text-anchor="middle" font-size="12" fill="#979999" dy="16">04-13</text>
+                  </svg>
+                  <div style="text-align:center;font-size:12px;color:#697070;margin-top:14px"><span style="display:inline-block;width:10px;height:10px;background:#4f9fec;margin-right:6px"></span>InterviewAgent</div>
+                </div>
+                <div style="background:#fff;border:1px solid #eff2f2;border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,.04);padding:18px 20px;overflow:hidden">
+                  <div style="font-size:17px;font-weight:700;margin-bottom:16px">用户活跃度分析</div>
+                  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+                    <div style="border:1px solid #eff2f2;border-radius:12px;padding:14px 0;text-align:center"><div style="font-size:22px;font-weight:700">3</div><div style="font-size:12px;color:#697070">总用户</div></div>
+                    <div style="border:1px solid #eff2f2;border-radius:12px;padding:14px 0;text-align:center"><div style="font-size:22px;font-weight:700">0</div><div style="font-size:12px;color:#697070">24H活跃</div></div>
+                    <div style="border:1px solid #eff2f2;border-radius:12px;padding:14px 0;text-align:center"><div style="font-size:22px;font-weight:700">1</div><div style="font-size:12px;color:#697070">30天活跃</div></div>
+                  </div>
+                  <div style="border:1px solid #eff2f2;border-radius:12px;padding:14px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-weight:700;font-size:14px">活跃度趋势</span><span style="font-size:12px;background:#f5f7f7;padding:3px 8px;border-radius:4px;color:#697070">最近7天</span></div>
+                    <svg viewBox="0 0 300 140" style="width:100%;height:190px">
+                      <path d="M20 120 L62 32 L110 32 L152 120 L196 32 L242 32 L282 120 Z" fill="#c3e3ff" opacity=".5"></path>
+                      <path d="M20 120 L62 32 L110 32 L152 120 L196 32 L242 32 L282 120" fill="none" stroke="#3781cf" stroke-width="2"></path>
+                      <text x="30" y="136" font-size="9" fill="#979999">2026-04-06</text>
+                      <text x="120" y="136" font-size="9" fill="#979999">2026-04-08</text>
+                      <text x="200" y="136" font-size="9" fill="#979999">2026-04-10</text>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;flex:0 0 130px">
+                <div style="background:#fff;border:1px solid #eff2f2;border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,.04);padding:16px 18px">
+                  <div style="font-size:17px;font-weight:700;margin-bottom:14px">AI智能体分析</div>
+                  <div style="display:flex;gap:22px">
+                    <div><div style="font-size:12px;color:#697070;margin-bottom:6px">智能体总数</div><div style="font-size:22px;font-weight:700;color:#4f9fec">3 个</div></div>
+                    <div><div style="font-size:12px;color:#697070;margin-bottom:6px">总对话数</div><div style="font-size:22px;font-weight:700;color:#13c2c2">133 次</div></div>
+                    <div><div style="font-size:12px;color:#697070;margin-bottom:6px">工具调用总数</div><div style="font-size:22px;font-weight:700;color:#faad14">215 次</div></div>
+                  </div>
+                </div>
+                <div style="background:#fff;border:1px solid #eff2f2;border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,.04);padding:16px 18px">
+                  <div style="font-size:17px;font-weight:700;margin-bottom:14px">工具调用监控</div>
+                  <div style="display:flex;gap:22px">
+                    <div><div style="font-size:12px;color:#697070;margin-bottom:6px">总调用次数</div><div style="font-size:22px;font-weight:700;color:#4f9fec">215</div></div>
+                    <div><div style="font-size:12px;color:#697070;margin-bottom:6px">失败调用</div><div style="font-size:22px;font-weight:700;color:#ff4d4f">0 次</div></div>
+                    <div><div style="font-size:12px;color:#697070;margin-bottom:6px">成功率</div><div style="font-size:22px;font-weight:700;color:#52c41a">100 %</div></div>
+                  </div>
+                </div>
+                <div style="background:#fff;border:1px solid #eff2f2;border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,.04);padding:16px 18px">
+                  <div style="font-size:17px;font-weight:700;margin-bottom:14px">知识库使用情况</div>
+                  <div style="display:flex;gap:22px">
+                    <div><div style="font-size:12px;color:#697070;margin-bottom:6px">知识库总数</div><div style="font-size:22px;font-weight:700;color:#4f9fec">3 个</div></div>
+                    <div><div style="font-size:12px;color:#697070;margin-bottom:6px">文件总数</div><div style="font-size:22px;font-weight:700;color:#52c41a">236 个</div></div>
+                    <div><div style="font-size:12px;color:#697070;margin-bottom:6px">存储容量</div><div style="font-size:22px;font-weight:700;color:#faad14">0 B</div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2g 代码练习 -->
+      <div id="2g" style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:14px"><span class="id">2g</span><span style="font-size:19px;font-weight:700">代码练习</span><span style="font-size:14px;color:#5a6672">从报告的弱项进来，题目按专题分组</span></div>
+        <div class="f">
+          <dc-import name="Rail" active="practice" hint-size="260px,100%"></dc-import>
+          <div class="main">
+            <div class="top">
+              <div><h1 class="h1">代码练习</h1><p class="sub">来自 04/11 面试报告的弱项：分布式事务、JVM 调优</p></div>
+              <div style="display:flex;gap:12px"><span class="b">全部题目</span><span class="b p">随机一题</span></div>
+            </div>
+            <div style="padding:0 32px;overflow:hidden">
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #eef1f4">
+                <div style="padding:22px 20px 22px 0;border-right:1px solid #eef1f4"><div class="lab">已完成</div><div style="font-size:36px;font-weight:800;margin-top:6px">42</div></div>
+                <div style="padding:22px 20px;border-right:1px solid #eef1f4"><div class="lab">通过率</div><div style="font-size:36px;font-weight:800;margin-top:6px">68<span style="font-size:20px">%</span></div></div>
+                <div style="padding:22px 20px;border-right:1px solid #eef1f4"><div class="lab">连续天数</div><div style="font-size:36px;font-weight:800;margin-top:6px">6</div></div>
+                <div style="padding:22px 0 22px 20px"><div class="lab">待练弱项</div><div style="font-size:36px;font-weight:800;margin-top:6px;color:#3781cf">2</div></div>
+              </div>
+              <div style="padding:24px 0 14px;display:flex;border-bottom:1px solid #dfe4ea">
+                <div style="padding:10px 20px 10px 0;font-size:14px;font-weight:700;border-bottom:2px solid #3781cf;margin-bottom:-1px">按弱项推荐</div>
+                <div style="padding:10px 20px;font-size:14px;color:#5a6672">全部专题</div>
+                <div style="padding:10px 20px;font-size:14px;color:#5a6672">未通过</div>
+                <div style="padding:10px 20px;font-size:14px;color:#5a6672">收藏</div>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:baseline;padding:22px 0 10px"><span style="font-size:18px;font-weight:800">分布式事务</span><span style="font-size:13px;color:#5a6672">3 题 · 面试第 5 问失分</span></div>
+              <table style="width:100%;border-collapse:collapse">
+                <thead><tr><th style="padding-left:0;width:56px">#</th><th>题目</th><th style="width:120px">难度</th><th style="width:150px">专题</th><th style="width:120px">通过率</th><th style="width:110px;text-align:right;padding-right:0">状态</th></tr></thead>
+                <tbody>
+                  <tr><td style="padding-left:0;color:#8b97a3">1024</td><td style="font-weight:600">实现一个幂等的转账接口</td><td>中等</td><td style="color:#5a6672">分布式事务</td><td style="color:#5a6672">61%</td><td style="text-align:right;padding-right:0"><span class="badge" style="color:#8b97a3;border-color:#b6c1cc">未开始</span></td></tr>
+                  <tr><td style="padding-left:0;color:#8b97a3">1031</td><td style="font-weight:600">TCC 模式下的补偿队列设计</td><td>困难</td><td style="color:#5a6672">分布式事务</td><td style="color:#5a6672">34%</td><td style="text-align:right;padding-right:0"><span class="badge" style="color:#8b97a3;border-color:#b6c1cc">未开始</span></td></tr>
+                  <tr><td style="padding-left:0;color:#8b97a3">0987</td><td style="font-weight:600">本地消息表的重试与去重</td><td>中等</td><td style="color:#5a6672">分布式事务</td><td style="color:#5a6672">55%</td><td style="text-align:right;padding-right:0"><span class="badge" style="background:#3781cf;color:#fff;border-color:#3781cf">未通过</span></td></tr>
+                </tbody>
+              </table>
+              <div style="display:flex;justify-content:space-between;align-items:baseline;padding:26px 0 10px"><span style="font-size:18px;font-weight:800">JVM 调优</span><span style="font-size:13px;color:#5a6672">2 题 · 面试第 4 问失分</span></div>
+              <table style="width:100%;border-collapse:collapse">
+                <tbody>
+                  <tr><td style="padding-left:0;color:#8b97a3;width:56px">0765</td><td style="font-weight:600">根据 GC 日志判断内存泄漏点</td><td style="width:120px">中等</td><td style="width:150px;color:#5a6672">JVM</td><td style="width:120px;color:#5a6672">47%</td><td style="width:110px;text-align:right;padding-right:0"><span class="badge" style="color:#8b97a3;border-color:#b6c1cc">未开始</span></td></tr>
+                  <tr><td style="padding-left:0;color:#8b97a3">0771</td><td style="font-weight:600">对象晋升阈值与 Survivor 区计算</td><td>简单</td><td style="color:#5a6672">JVM</td><td style="color:#5a6672">72%</td><td style="text-align:right;padding-right:0"><span class="badge" style="background:#eef2f6;color:#10161d">已通过</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2h 语音视频面试 -->
+      <div id="2h" style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:14px"><span class="id">2h</span><span style="font-size:19px;font-weight:700">语音 / 视频面试</span><span style="font-size:14px;color:#5a6672">左栏是对话，右栏是镜头与观察，转写常驻底部</span></div>
+        <div class="f">
+          <dc-import name="Rail" active="thread" hint-size="260px,100%"></dc-import>
+          <div class="main">
+            <div class="top">
+              <div><h1 class="h1">语音面试 · 后端工程师 初试</h1><p class="sub">第 5 问 · 已回答 5 / 8 题 · 用时 22:14 · 豆包 TTS + Fun-ASR</p></div>
+              <div style="display:flex;gap:12px"><span class="b">调整配置</span><span class="b">切到文本</span><span class="b p">结束并生成报告</span></div>
+            </div>
+            <div style="flex:1;display:grid;grid-template-columns:1fr 400px;min-height:0">
+
+              <div style="border-right:1px solid #eef1f4;display:flex;flex-direction:column;min-height:0">
+                <div style="padding:18px 32px;border-bottom:1px solid #eef1f4;display:flex;align-items:center;gap:20px">
+                  <div style="display:flex;align-items:flex-end;gap:3px;height:34px">
+                    <div style="width:4px;height:12px;background:#3781cf"></div><div style="width:4px;height:26px;background:#3781cf"></div><div style="width:4px;height:34px;background:#3781cf"></div><div style="width:4px;height:20px;background:#3781cf"></div><div style="width:4px;height:30px;background:#3781cf"></div><div style="width:4px;height:14px;background:#3781cf"></div><div style="width:4px;height:24px;background:#3781cf"></div><div style="width:4px;height:9px;background:#3781cf"></div>
+                  </div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:15px;font-weight:700">面试官正在提问</div>
+                    <div style="font-size:13px;color:#8b97a3;margin-top:3px">播放中 00:07 / 00:19 · 说完后自动开始收音</div>
+                  </div>
+                  <span class="b">停止播放</span>
+                </div>
+
+                <div style="flex:1;padding:24px 32px;display:flex;flex-direction:column;gap:22px;overflow:hidden">
+                  <div style="display:flex;gap:18px">
+                    <div style="flex:0 0 60px"><div class="lab">面试官</div></div>
+                    <div style="flex:1;font-size:15px;line-height:1.75;max-width:620px">你在项目里提到用了 Seata 处理跨服务的下单扣库存。当时选的是哪种模式？为什么不用本地消息表？</div>
+                  </div>
+                  <div style="display:flex;gap:18px">
+                    <div style="flex:0 0 60px"><div class="lab" style="color:#1d4b79">我</div></div>
+                    <div style="flex:1;font-size:15px;line-height:1.75;max-width:620px;border-left:2px solid #3781cf;padding-left:18px">用的是 AT 模式，接入成本低，业务代码几乎不用改。本地消息表要每个服务自己维护表和补偿逻辑，团队当时人手不够。</div>
+                  </div>
+                  <div style="display:flex;gap:18px">
+                    <div style="flex:0 0 60px"><div class="lab">面试官</div></div>
+                    <div style="flex:1;font-size:15px;line-height:1.75;max-width:620px">AT 模式在高并发下有全局锁的问题，你们当时的 QPS 大概是多少？<span style="color:#98a2ac">…</span></div>
+                  </div>
+                </div>
+
+                <div style="border-top:1px solid #eef1f4;padding:18px 32px 22px;display:grid;grid-template-columns:1fr 1fr;gap:20px">
+                  <div>
+                    <div style="display:flex;align-items:center;justify-content:space-between"><span class="lab">实时转写</span><div style="display:flex;align-items:flex-end;gap:2px;height:12px"><div style="width:3px;height:6px;background:#b6c1cc"></div><div style="width:3px;height:11px;background:#b6c1cc"></div><div style="width:3px;height:8px;background:#b6c1cc"></div><div style="width:3px;height:4px;background:#b6c1cc"></div></div></div>
+                    <div style="margin-top:10px;border:1px solid #dfe4ea;background:#f7f9fb;padding:12px 14px;min-height:64px;font-size:14px;line-height:1.6;color:#3d4650">大概是三千多，高峰期会到五千…</div>
+                  </div>
+                  <div>
+                    <div style="display:flex;align-items:center;justify-content:space-between"><span class="lab">最终修正文案</span><span class="badge">3 秒静音后提交</span></div>
+                    <div style="margin-top:10px;border:1px solid #dfe4ea;padding:12px 14px;min-height:64px;font-size:14px;line-height:1.6;color:#98a2ac">等待本句结束…</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
+                <div style="padding:20px 24px 0">
+                  <div style="position:relative;aspect-ratio:16/9;background:#10161d;display:flex;align-items:flex-end;justify-content:space-between;padding:12px">
+                    <div style="display:flex;gap:8px">
+                      <span style="display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;background:#fff;color:#10161d;font-size:11px;font-weight:700;letter-spacing:.06em"><span style="width:6px;height:6px;background:#3781cf"></span>LIVE</span>
+                      <span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border:1px solid #3d4650;color:#a8b5c2;font-size:11px">候选人正在讲话</span>
+                    </div>
+                    <div style="display:flex;gap:6px">
+                      <span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border:1px solid #3d4650;color:#a8b5c2;font-size:11px">1280×720</span>
+                      <span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border:1px solid #3d4650;color:#a8b5c2;font-size:11px">30 FPS</span>
+                      <span style="display:inline-flex;align-items:center;height:22px;padding:0 8px;border:1px solid #3d4650;color:#a8b5c2;font-size:11px">6 AI FPS</span>
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:10px;margin-top:12px"><span class="b" style="flex:1;justify-content:flex-start">关闭摄像头</span><span class="b" style="flex:1;justify-content:flex-start">静音</span></div>
+                </div>
+
+                <div style="padding:22px 24px 0">
+                  <div style="display:flex;align-items:baseline;justify-content:space-between"><span class="lab">候选人观察摘要</span><span class="badge">每 5 秒同步</span></div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #dfe4ea;margin-top:12px">
+                    <div style="padding:12px 14px 12px 0;border-right:1px solid #eef1f4;border-bottom:1px solid #eef1f4"><div style="font-size:12px;color:#8b97a3">视线停留</div><div style="font-size:22px;font-weight:800;margin-top:3px">78<span style="font-size:13px;font-weight:600">%</span></div><div style="font-size:12px;color:#98a2ac">看向镜头</div></div>
+                    <div style="padding:12px 0 12px 14px;border-bottom:1px solid #eef1f4"><div style="font-size:12px;color:#8b97a3">语速</div><div style="font-size:22px;font-weight:800;margin-top:3px">4.1<span style="font-size:13px;font-weight:600"> 字/秒</span></div><div style="font-size:12px;color:#98a2ac">偏快</div></div>
+                    <div style="padding:12px 14px 12px 0;border-right:1px solid #eef1f4"><div style="font-size:12px;color:#8b97a3">停顿次数</div><div style="font-size:22px;font-weight:800;margin-top:3px">6</div><div style="font-size:12px;color:#98a2ac">本题内</div></div>
+                    <div style="padding:12px 0 12px 14px"><div style="font-size:12px;color:#8b97a3">情绪</div><div style="font-size:22px;font-weight:800;margin-top:3px">稳定</div><div style="font-size:12px;color:#98a2ac">无明显波动</div></div>
+                  </div>
+                </div>
+
+                <div style="padding:22px 24px 24px">
+                  <div class="lab">最近提醒</div>
+                  <div style="margin-top:12px;font-size:13px;line-height:1.6">
+                    <div style="border-top:1px solid #eef1f4;padding:10px 0;display:flex;justify-content:space-between;gap:12px"><span>语速比前一题快 18%，可以放慢</span><span style="color:#98a2ac;flex:0 0 auto">22:03</span></div>
+                    <div style="border-top:1px solid #eef1f4;padding:10px 0;display:flex;justify-content:space-between;gap:12px"><span>连续 8 秒未看向镜头</span><span style="color:#98a2ac;flex:0 0 auto">19:41</span></div>
+                    <div style="border-top:1px solid #eef1f4;padding:10px 0;display:flex;justify-content:space-between;gap:12px"><span>环境噪音偏高，已启用降噪</span><span style="color:#98a2ac;flex:0 0 auto">02:15</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2i 编程考核 -->
+      <div id="2i" style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:14px"><span class="id">2i</span><span style="font-size:19px;font-weight:700">编程考核</span><span style="font-size:14px;color:#5a6672">题面、编辑器、判题三栏，提示要主动请求才给</span></div>
+        <div class="f">
+          <dc-import name="Rail" active="thread" hint-size="260px,100%"></dc-import>
+          <div class="main">
+            <div class="top">
+              <div><h1 class="h1">编程考核 · 第 8 题</h1><p class="sub">后端工程师 · 初试 · 面试第 8 环节 · 剩余 24:30</p></div>
+              <div style="display:flex;gap:12px"><span class="b">返回面试</span><span class="b">运行样例</span><span class="b p">提交判题</span></div>
+            </div>
+            <div style="flex:1;display:grid;grid-template-columns:440px 1fr 300px;min-height:0">
+
+              <div style="border-right:1px solid #eef1f4;padding:22px 24px;overflow:hidden">
+                <div style="display:flex;align-items:baseline;justify-content:space-between">
+                  <span style="font-size:19px;font-weight:800">实现一个幂等的转账接口</span>
+                  <span class="badge">中等</span>
+                </div>
+                <div style="font-size:12px;color:#98a2ac;margin-top:6px">来源 interview-seed · 分布式事务 · 通过率 61%</div>
+                <p style="font-size:14px;line-height:1.75;color:#3d4650;margin:18px 0 0">给定账户表与转账请求，实现 <code style="font-family:ui-monospace,monospace;font-size:13px;background:#f1f4f7;padding:1px 5px">transfer(from, to, amount, requestId)</code>。同一个 requestId 重复调用只能生效一次，并发调用下账户余额不得为负。</p>
+                <div class="lab" style="margin-top:22px">输入说明</div>
+                <p style="font-size:14px;line-height:1.7;color:#3d4650;margin:8px 0 0">第一行为账户数 n 与操作数 m；随后 n 行为账户初始余额；随后 m 行为一次转账请求。</p>
+                <div class="lab" style="margin-top:18px">输出说明</div>
+                <p style="font-size:14px;line-height:1.7;color:#3d4650;margin:8px 0 0">按账户编号顺序输出最终余额，每行一个。</p>
+                <div class="lab" style="margin-top:22px">样例</div>
+                <div style="border:1px solid #dfe4ea;margin-top:10px">
+                  <div style="border-bottom:1px solid #eef1f4;padding:10px 14px"><div style="font-size:11px;color:#98a2ac;letter-spacing:.1em;font-weight:700">输入</div><pre style="margin:6px 0 0;font-family:ui-monospace,monospace;font-size:13px;line-height:1.6;color:#3d4650">2 3
+100 50
+1 2 30 r1
+1 2 30 r1
+2 1 80 r2</pre></div>
+                  <div style="padding:10px 14px"><div style="font-size:11px;color:#98a2ac;letter-spacing:.1em;font-weight:700">输出</div><pre style="margin:6px 0 0;font-family:ui-monospace,monospace;font-size:13px;line-height:1.6;color:#3d4650">150
+0</pre></div>
+                </div>
+              </div>
+
+              <div style="border-right:1px solid #eef1f4;display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid #eef1f4">
+                  <div style="display:flex;gap:10px;align-items:center">
+                    <span class="opt on" style="height:28px;font-size:12px;padding:0 12px">Java</span>
+                    <span class="opt" style="height:28px;font-size:12px;padding:0 12px">Python</span>
+                    <span class="opt" style="height:28px;font-size:12px;padding:0 12px">C++</span>
+                  </div>
+                  <span style="font-size:12px;color:#98a2ac">已自动保存 · 22:14</span>
+                </div>
+                <div style="flex:1;min-height:0;display:flex;overflow:hidden;background:#fbfcfd">
+                  <div style="flex:0 0 44px;padding:14px 0;text-align:right;font-family:ui-monospace,monospace;font-size:12px;line-height:2;color:#c2cad2;border-right:1px solid #eef1f4">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12<br>13<br>14<br>15<br>16</div>
+                  <pre style="flex:1;margin:0;padding:14px 18px;font-family:ui-monospace,monospace;font-size:12px;line-height:2;color:#10161d;overflow:hidden">public class Solution {
+    private final Set&lt;String&gt; done = ConcurrentHashMap.newKeySet();
+
+    public void transfer(int from, int to, long amount, String requestId) {
+        if (!done.add(requestId)) {
+            return;
+        }
+        int first = Math.min(from, to);
+        int second = Math.max(from, to);
+        synchronized (locks[first]) {
+            synchronized (locks[second]) {
+                if (balance[from] &lt; amount) {
+                    throw new IllegalStateException("insufficient");
+                }
+                balance[from] -= amount;
+                balance[to] += amount;
+</pre>
+                </div>
+                <div style="flex:0 0 250px;border-top:1px solid #eef1f4;display:flex;flex-direction:column;min-height:0">
+                  <div style="display:flex;border-bottom:1px solid #eef1f4;padding:0 20px">
+                    <div style="padding:12px 0;margin-right:22px;font-size:13px;font-weight:700;border-bottom:2px solid #3781cf;margin-bottom:-1px">运行结果</div>
+                    <div style="padding:12px 0;margin-right:22px;font-size:13px;color:#5a6672">测试用例</div>
+                    <div style="padding:12px 0;font-size:13px;color:#5a6672">提交结果</div>
+                  </div>
+                  <div style="padding:16px 20px;overflow:hidden">
+                    <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+                      <span class="badge" style="background:#eef2f6;color:#10161d">全部通过</span>
+                      <span style="font-size:13px;color:#5a6672">3 / 3 用例 · 用时 142 ms · 内存 38 MB</span>
+                    </div>
+                    <table style="width:100%;border-collapse:collapse">
+                      <tbody>
+                        <tr><td style="padding-left:0;width:90px;color:#8b97a3">样例 1</td><td style="width:90px">通过</td><td style="font-family:ui-monospace,monospace;color:#5a6672">150 / 0</td><td style="text-align:right;padding-right:0;color:#8b97a3">41 ms</td></tr>
+                        <tr><td style="padding-left:0;color:#8b97a3">样例 2</td><td>通过</td><td style="font-family:ui-monospace,monospace;color:#5a6672">0 / 300</td><td style="text-align:right;padding-right:0;color:#8b97a3">48 ms</td></tr>
+                        <tr><td style="padding-left:0;color:#8b97a3">并发用例</td><td>通过</td><td style="font-family:ui-monospace,monospace;color:#5a6672">余额一致</td><td style="text-align:right;padding-right:0;color:#8b97a3">53 ms</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <div style="padding:22px 24px;overflow:hidden;display:flex;flex-direction:column;gap:24px">
+                <div>
+                  <div class="lab">本题在考什么</div>
+                  <div style="margin-top:12px;font-size:13px;line-height:1.7">
+                    <div style="border-top:1px solid #eef1f4;padding:10px 0;display:flex;justify-content:space-between"><span>幂等去重</span><span style="color:#1d4b79;font-weight:700">已实现</span></div>
+                    <div style="border-top:1px solid #eef1f4;padding:10px 0;display:flex;justify-content:space-between"><span>并发安全</span><span style="color:#1d4b79;font-weight:700">已实现</span></div>
+                    <div style="border-top:1px solid #eef1f4;padding:10px 0;display:flex;justify-content:space-between"><span>余额边界</span><span style="color:#98a2ac">待验证</span></div>
+                    <div style="border-top:1px solid #eef1f4;padding:10px 0;display:flex;justify-content:space-between"><span>失败回滚</span><span style="color:#98a2ac">待验证</span></div>
+                  </div>
+                </div>
+                <div>
+                  <div style="display:flex;align-items:baseline;justify-content:space-between"><span class="lab">提示</span><span style="font-size:12px;color:#98a2ac">已用 1 次</span></div>
+                  <p style="font-size:13px;line-height:1.65;color:#5a6672;margin:10px 0 12px">只有你主动请求时，面试官才会给提示。请求次数会写进报告。</p>
+                  <div class="b" style="width:100%;justify-content:flex-start">请求提示</div>
+                  <div style="margin-top:14px;border-left:2px solid #dfe4ea;padding-left:14px">
+                    <div style="font-size:13px;font-weight:700">加锁顺序会不会死锁？</div>
+                    <div style="font-size:13px;line-height:1.65;color:#5a6672;margin-top:6px">按账户编号从小到大加锁就能避免环等待。你已经这么做了，接着看余额为负的分支。</div>
+                    <div style="font-size:12px;color:#98a2ac;margin-top:8px">22:06</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</section>
+</x-dc>
+</body>
+</html>

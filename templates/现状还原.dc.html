@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#e9eaea;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
+a{color:#3781cf;text-decoration:none}a:hover{color:#2765a3}
+</style>
+</helmet>
+
+<div style="padding:64px;display:flex;flex-direction:column;gap:80px">
+
+  <div style="max-width:900px;font-family:Archivo,sans-serif">
+    <div style="font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#ec3013;font-weight:700">Audit / 现状还原</div>
+    <h1 style="font-size:44px;line-height:1.1;margin:12px 0 8px;font-weight:800;color:#201e1d">伯乐 Bole 现有前端界面</h1>
+    <p style="font-size:16px;line-height:1.6;color:#4c4d4d;margin:0;text-wrap:pretty">按 <code style="font-family:ui-monospace,monospace;font-size:14px">web/src</code> 的实际实现还原：侧边栏 236px、<code style="font-family:ui-monospace,monospace;font-size:14px">--bg-sider #fbfdff</code>、主色 <code style="font-family:ui-monospace,monospace;font-size:14px">#3781cf</code>、卡片圆角 12–16px、Ant Design Vue 组件 + Lucide 图标。下面每一屏都对应一个路由。</p>
+  </div>
+
+  <sc-for list="{{ screens }}" as="s" hint-placeholder-count="6">
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:baseline;gap:14px;font-family:Archivo,sans-serif">
+        <span style="font-size:22px;font-weight:700;color:#201e1d">{{ s.title }}</span>
+        <span style="font-family:ui-monospace,monospace;font-size:13px;color:#ec3013">{{ s.route }}</span>
+        <span style="font-size:13px;color:#697070">{{ s.file }}</span>
+      </div>
+      <div style="width:1600px;height:900px;overflow:hidden;background:#fff;box-shadow:0 2px 18px rgba(0,0,0,.10)">
+        <div style="display:flex;height:100%;font-size:14px;color:#151616">
+
+          <!-- sidebar -->
+          <div style="flex:0 0 236px;width:236px;background:#fbfdff;border-right:1px solid #f1f8ff;padding:12px 10px;display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;min-height:36px;padding:0 2px">
+              <img src="assets/logo.png" alt="伯乐 Bole" style="height:32px;width:auto;display:block">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <sc-for list="{{ s.nav }}" as="n" hint-placeholder-count="8">
+                <div style="display:flex;align-items:center;gap:10px;min-height:42px;padding:10px 12px;border:1px solid transparent;border-radius:12px;box-sizing:border-box">
+                  <span style="display:flex;width:22px;height:22px;flex:0 0 22px">{{ n.icon }}</span>
+                  <span style="font-weight:500">{{ n.name }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="flex:1"></div>
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:8px">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#151616" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M6.2 19.4a6 6 0 0 1 11.6 0"/></svg>
+              <span style="font-size:15px">admin</span>
+            </div>
+          </div>
+
+          <!-- content -->
+          <div style="flex:1 1 auto;min-width:0;background:#f8fafa;overflow:hidden">{{ s.body }}</div>
+        </div>
+      </div>
+      <p style="max-width:1000px;margin:0;font-size:14px;line-height:1.6;color:#4c4d4d">{{ s.note }}</p>
+    </div>
+  </sc-for>
+
+  <div style="max-width:1000px;font-family:Archivo,sans-serif;border-top:2px solid #201e1d;padding-top:24px">
+    <h2 style="font-size:26px;font-weight:700;margin:0 0 16px;color:#201e1d">还原过程中记到的问题</h2>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:0;border-top:1px solid #d7d9d9">
+      <sc-for list="{{ issues }}" as="it" hint-placeholder-count="6">
+        <div style="border-bottom:1px solid #d7d9d9;padding:18px 20px 18px 0">
+          <div style="font-size:15px;font-weight:700;color:#201e1d;margin-bottom:6px">{{ it.t }}</div>
+          <div style="font-size:14px;line-height:1.55;color:#4c4d4d">{{ it.d }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const ICON = {
+  bot: 'M12 8V4H8|R4,8,16,12,2|M2 14h2|M20 14h2|M15 13v2|M9 13v2',
+};
+class Component extends DCLogic {
+  icon(name, active) {
+    const c = active ? '#3781cf' : '#151616';
+    const p = {
+      bot: ['M12 8V4H8', 'M2 14h2', 'M20 14h2', 'M15 13v2', 'M9 13v2'],
+      history: ['M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8', 'M3 3v5h5', 'M12 7v5l4 2'],
+      file: ['M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z', 'M14 2v4a2 2 0 0 0 2 2h4', 'M10 9H8', 'M16 13H8', 'M16 17H8'],
+      library: ['M7 3v18', 'M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z'],
+      blocks: ['M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H10'],
+      chart: ['M3 3v18h18', 'M18 17V9', 'M13 17V5', 'M8 17v-3'],
+      check: ['m9 12 2 2 4-4']
+    }[name] || [];
+    const extra = {
+      bot: React.createElement('rect', { key: 'r', width: 16, height: 12, x: 4, y: 8, rx: 2 }),
+      library: React.createElement('rect', { key: 'r', width: 8, height: 18, x: 3, y: 3, rx: 1 }),
+      blocks: React.createElement('rect', { key: 'r', width: 7, height: 7, x: 14, y: 3, rx: 1 }),
+      check: React.createElement('circle', { key: 'c', cx: 12, cy: 12, r: 10 })
+    }[name];
+    return React.createElement('svg', { width: 22, height: 22, viewBox: '0 0 24 24', fill: 'none', stroke: c, strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' },
+      extra || null, p.map((d, i) => React.createElement('path', { key: i, d })));
+  }
+
+  nav(activeName) {
+    const items = [['模拟面试', 'bot'], ['面试记录', 'history'], ['我的简历', 'file'], ['知识库', 'library'], ['题库管理', 'blocks'], ['Dashboard', 'chart'], ['任务中心', 'check']];
+    return items.map(([name, ic]) => {
+      const active = name === activeName;
+      return { name: React.createElement('span', { style: { fontWeight: active ? 700 : 500, color: active ? '#3781cf' : '#151616' } }, name), icon: this.icon(ic, active), active };
+    });
+  }
+
+  // ---- shared bits ----
+  card(children, style) {
+    return React.createElement('div', { style: Object.assign({ background: '#fff', border: '1px solid #eff2f2', borderRadius: 16, boxShadow: '0 1px 3px rgba(0,0,0,.04)' }, style || {}) }, children);
+  }
+  pill(text, on) {
+    return React.createElement('div', { key: text, style: { flex: '1 1 0', minHeight: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 12, border: `1px solid ${on ? '#9ccfff' : '#e4e6e6'}`, background: on ? '#edf7ff' : '#fff', color: on ? '#2765a3' : '#151616', fontWeight: on ? 700 : 400, fontSize: 15 } }, text);
+  }
+  tag(text, color) {
+    const m = { blue: ['#edf7ff', '#2765a3', '#c3e3ff'], green: ['#f6ffed', '#389e0d', '#b7eb8f'], purple: ['#f9f0ff', '#722ed1', '#e9d5ff'], gray: ['#f5f7f7', '#4c4d4d', '#e4e6e6'] }[color || 'blue'];
+    return React.createElement('span', { key: text, style: { display: 'inline-flex', alignItems: 'center', height: 26, padding: '0 10px', borderRadius: 6, fontSize: 13, background: m[0], color: m[1], border: `1px solid ${m[2]}` } }, text);
+  }
+
+  // ---- screens ----
+  agentHome() {
+    const R = React.createElement;
+    const rec = ['4/11 18:13', '4/11 10:59', '4/11 10:37', '4/11 09:55', '4/8 21:33', ''];
+    return R('div', { style: { display: 'flex', gap: 28, padding: '28px 32px', height: '100%', boxSizing: 'border-box', background: '#f8fafa' } },
+      this.card([
+        R('div', { key: 'k', style: { display: 'inline-flex', alignItems: 'center', gap: 8, background: '#edf7ff', color: '#2765a3', borderRadius: 999, padding: '7px 14px', fontSize: 13, fontWeight: 600 } }, '模拟面试配置'),
+        R('h1', { key: 'h', style: { fontSize: 32, fontWeight: 700, margin: '18px 0 8px', color: '#151616' } }, '开始一轮新的模拟面试'),
+        R('p', { key: 'p', style: { margin: '0 0 26px', fontSize: 15, color: '#697070' } }, '先选择岗位和轮次，再进入面试界面。进入后面试官会自动发起第一问。'),
+        R('div', { key: 'l1', style: { fontSize: 15, fontWeight: 700, marginBottom: 12 } }, '面试形式'),
+        R('div', { key: 'r1', style: { display: 'flex', gap: 14, marginBottom: 24 } }, [this.pill('文本面试', true), this.pill('语音对话面试', false)]),
+        R('div', { key: 'l2', style: { fontSize: 15, fontWeight: 700, marginBottom: 12 } }, '选择岗位'),
+        R('div', { key: 'r2', style: { display: 'flex', gap: 14, marginBottom: 24 } }, [R('div', { key: 'a', style: { flex: '0 0 120px' } }, this.pill('前端', false)), R('div', { key: 'b', style: { flex: '0 0 120px' } }, this.pill('后端', true))]),
+        R('div', { key: 'l3', style: { fontSize: 15, fontWeight: 700, marginBottom: 12 } }, '面试轮次'),
+        R('div', { key: 'r3', style: { display: 'flex', gap: 14, marginBottom: 24 } }, [this.pill('初试', true), this.pill('复试', false), this.pill('HR', false)]),
+        R('div', { key: 'l4', style: { fontSize: 15, fontWeight: 700, marginBottom: 12 } }, '选择简历'),
+        R('div', { key: 'r4', style: { border: '1px solid #9ccfff', background: '#f4f9ff', borderRadius: 12, padding: '16px 18px', marginBottom: 22 } }, [
+          R('div', { key: 'a', style: { fontWeight: 700, fontSize: 15, marginBottom: 6 } }, '付智彬-简历.pdf'),
+          R('div', { key: 'b', style: { fontSize: 13, color: '#979999', display: 'flex', gap: 14 } }, [R('span', { key: 1 }, '316 KB'), R('span', { key: 2 }, '4/10 12:01')])
+        ]),
+        R('div', { key: 'r5', style: { background: '#f5f7f7', borderRadius: 12, padding: '16px 18px' } }, [
+          R('div', { key: 'a', style: { fontSize: 13, color: '#979999', marginBottom: 12 } }, '当前配置'),
+          R('div', { key: 'b', style: { display: 'flex', gap: 10, flexWrap: 'wrap' } }, ['文本面试', '后端工程师', '初试', '付智彬-简历.pdf'].map(t => R('span', { key: t, style: { border: '1px solid #e4e6e6', background: '#fff', borderRadius: 999, padding: '7px 14px', fontSize: 13 } }, t)))
+        ])
+      ], { flex: '1 1 auto', padding: '32px 36px', overflow: 'hidden' }),
+      this.card([
+        R('div', { key: 'h', style: { display: 'flex', alignItems: 'center', gap: 9, fontSize: 17, fontWeight: 700, marginBottom: 20 } }, [
+          R('svg', { key: 's', width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: '#151616', strokeWidth: 2 }, [R('circle', { key: 1, cx: 12, cy: 12, r: 10 }), R('path', { key: 2, d: 'M12 6v6l4 2' })]), '最近面试记录']),
+        R('div', { key: 'l', style: { display: 'flex', flexDirection: 'column', gap: 12 } }, rec.map((t, i) => R('div', { key: i, style: { background: '#f8fafa', border: '1px solid #eff2f2', borderRadius: 12, padding: '16px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [
+          R('div', { key: 'a' }, [R('div', { key: 1, style: { fontWeight: 700, fontSize: 15, marginBottom: t ? 7 : 0 } }, '后端工程师 · 初试'), t ? R('div', { key: 2, style: { fontSize: 13, color: '#979999' } }, t) : null]),
+          R('span', { key: 'b', style: { color: '#bdbfbf' } }, '›')
+        ])))
+      ], { flex: '0 0 520px', padding: '26px 24px' })
+    );
+  }
+
+  dashboard() {
+    const R = React.createElement;
+    const stats = [['133', '总对话数', '#edf7ff'], ['131', '活跃对话', '#f6ffed'], ['496', '总消息数', '#edf7ff'], ['3', '用户数', '#fffbe6'], ['0', '总反馈数', '#e6fffb'], ['100%', '满意度', '#f6ffed']];
+    const bars = [0, 0, 0, 0, 2, 0, 27, 10, 10, 0, 0, 4, 0, 0];
+    const days = ['03-31', '04-01', '04-02', '04-03', '04-04', '04-05', '04-06', '04-07', '04-08', '04-09', '04-10', '04-11', '04-12', '04-13'];
+    return R('div', { style: { padding: '24px 28px', height: '100%', boxSizing: 'border-box', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 18 } }, [
+      R('div', { key: 'top', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' } }, [
+        R('div', { key: 'a' }, [R('div', { key: 1, style: { fontSize: 24, fontWeight: 700 } }, '伯乐 Bole'), R('div', { key: 2, style: { fontSize: 13, color: '#979999', marginTop: 4 } }, '大模型驱动的知识库智能体平台')]),
+        R('div', { key: 'b', style: { display: 'flex', alignItems: 'center', gap: 18, fontSize: 14, color: '#4c4d4d' } }, [
+          R('span', { key: 1 }, '2026年04月13日 18:46:17'), R('span', { key: 2 }, '晚上好！admin'),
+          R('span', { key: 3, style: { border: '1px solid #c3e3ff', color: '#2765a3', background: '#fff', borderRadius: 8, padding: '8px 14px' } }, '任务中心')])
+      ]),
+      R('div', { key: 'st', style: { display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 14 } }, stats.map(([n, l, bg]) => this.card(R('div', { style: { display: 'flex', alignItems: 'center', gap: 14 } }, [
+        R('div', { key: 1, style: { width: 44, height: 44, borderRadius: 10, background: bg } }),
+        R('div', { key: 2 }, [R('div', { key: 'a', style: { fontSize: 26, fontWeight: 700 } }, n), R('div', { key: 'b', style: { fontSize: 13, color: '#697070' } }, l)])
+      ]), { padding: '16px 18px' }))),
+      R('div', { key: 'mid', style: { display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16, flex: '1 1 auto', minHeight: 0 } }, [
+        this.card([
+          R('div', { key: 'h', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 } }, [
+            R('span', { key: 1, style: { fontSize: 18, fontWeight: 700 } }, '调用统计'),
+            R('div', { key: 2, style: { display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: '#697070' } }, ['近14小时', '近14天', '近14周', '|', '模型调用', '智能体调用', 'Token消耗', '工具调用'].map((t, i) => R('span', { key: i, style: { padding: '5px 10px', borderRadius: 6, background: (t === '近14天' || t === '智能体调用') ? '#3781cf' : 'transparent', color: (t === '近14天' || t === '智能体调用') ? '#fff' : '#697070' } }, t)))
+          ]),
+          R('div', { key: 'c', style: { display: 'flex', alignItems: 'flex-end', gap: 0, height: 300, borderBottom: '1px solid #e4e6e6', paddingLeft: 34 } }, bars.map((v, i) => R('div', { key: i, style: { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-end', height: '100%' } }, R('div', { style: { width: 34, height: `${v / 30 * 100}%`, background: '#4f9fec' } })))),
+          R('div', { key: 'x', style: { display: 'flex', paddingLeft: 34, fontSize: 12, color: '#979999', marginTop: 8 } }, days.map(d => R('div', { key: d, style: { flex: 1, textAlign: 'center' } }, d))),
+          R('div', { key: 'lg', style: { textAlign: 'center', marginTop: 14, fontSize: 13, color: '#697070' } }, '■ InterviewAgent')
+        ], { padding: '20px 22px', overflow: 'hidden' }),
+        this.card([
+          R('div', { key: 'h', style: { fontSize: 18, fontWeight: 700, marginBottom: 18 } }, '用户活跃度分析'),
+          R('div', { key: 'g', style: { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 18 } }, [['3', '总用户'], ['0', '24H活跃'], ['1', '30天活跃']].map(([n, l]) => R('div', { key: l, style: { border: '1px solid #eff2f2', borderRadius: 12, padding: '16px 0', textAlign: 'center' } }, [R('div', { key: 1, style: { fontSize: 24, fontWeight: 700 } }, n), R('div', { key: 2, style: { fontSize: 12, color: '#697070' } }, l)]))),
+          R('div', { key: 't', style: { border: '1px solid #eff2f2', borderRadius: 12, padding: 16, height: 250, boxSizing: 'border-box' } }, [
+            R('div', { key: 'a', style: { display: 'flex', justifyContent: 'space-between', marginBottom: 10 } }, [R('span', { key: 1, style: { fontWeight: 700 } }, '活跃度趋势'), R('span', { key: 2, style: { fontSize: 12, background: '#f5f7f7', padding: '3px 8px', borderRadius: 4, color: '#697070' } }, '最近7天')]),
+            R('svg', { key: 'b', viewBox: '0 0 300 130', style: { width: '100%', height: 180 } }, [
+              R('path', { key: 1, d: 'M20 110 L60 30 L110 30 L150 110 L190 30 L240 30 L280 110 Z', fill: '#c3e3ff', opacity: .5 }),
+              R('path', { key: 2, d: 'M20 110 L60 30 L110 30 L150 110 L190 30 L240 30 L280 110', fill: 'none', stroke: '#3781cf', strokeWidth: 2 })
+            ])
+          ])
+        ], { padding: '20px 22px', overflow: 'hidden' })
+      ]),
+      R('div', { key: 'bot', style: { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, flex: '0 0 150px' } }, [
+        ['AI智能体分析', [['智能体总数', '3 个', '#4f9fec'], ['总对话数', '133 次', '#13c2c2'], ['工具调用总数', '215 次', '#faad14']]],
+        ['工具调用监控', [['总调用次数', '215', '#4f9fec'], ['失败调用', '0 次', '#ff4d4f'], ['成功率', '100 %', '#52c41a']]],
+        ['知识库使用情况', [['知识库总数', '3 个', '#4f9fec'], ['文件总数', '236 个', '#52c41a'], ['存储容量', '0 B', '#faad14']]]
+      ].map(([title, rows]) => this.card([
+        R('div', { key: 'h', style: { fontSize: 18, fontWeight: 700, marginBottom: 16 } }, title),
+        R('div', { key: 'r', style: { display: 'flex', gap: 24 } }, rows.map(([l, v, c]) => R('div', { key: l }, [R('div', { key: 1, style: { fontSize: 13, color: '#697070', marginBottom: 8 } }, l), R('div', { key: 2, style: { fontSize: 24, fontWeight: 700, color: c } }, v)])))
+      ], { padding: '18px 20px' })))
+    ]);
+  }
+
+  records() {
+    const R = React.createElement;
+    return R('div', { style: { padding: '24px 28px', height: '100%', boxSizing: 'border-box', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 18 } }, [
+      this.card(R('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' } }, [
+        R('div', { key: 'a' }, [R('div', { key: 1, style: { fontSize: 26, fontWeight: 700 } }, '面试记录'), R('div', { key: 2, style: { fontSize: 14, color: '#979999', marginTop: 6 } }, '统一查看面试历史、配置标签与能力成长趋势')]),
+        R('div', { key: 'b', style: { display: 'flex', gap: 12 } }, [
+          R('span', { key: 1, style: { border: '1px solid #e4e6e6', borderRadius: 8, padding: '9px 16px', fontSize: 14 } }, 'admin ⌄'),
+          R('span', { key: 2, style: { border: '1px solid #e4e6e6', borderRadius: 8, padding: '9px 16px', fontSize: 14 } }, '↻ 刷新数据')])
+      ]), { padding: '24px 28px' }),
+      R('div', { key: 'm', style: { display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: 16, flex: '0 0 420px' } }, [
+        this.card([
+          R('div', { key: 1, style: { fontSize: 20, fontWeight: 700 } }, '能力成长曲线'),
+          R('div', { key: 2, style: { fontSize: 14, color: '#979999', margin: '8px 0 18px' } }, 'admin · 基于已生成评分卡的历史面试结果'),
+          R('div', { key: 3, style: { display: 'flex', gap: 20, justifyContent: 'center', fontSize: 13, color: '#4c4d4d', marginBottom: 14 } }, [['总分', '#3781cf'], ['技术能力', '#52c41a'], ['问题解决', '#faad14'], ['沟通表达', '#722ed1'], ['综合素质', '#13c2c2']].map(([l, c]) => R('span', { key: l, style: { display: 'inline-flex', alignItems: 'center', gap: 6 } }, [R('span', { key: 1, style: { width: 9, height: 9, borderRadius: 9, border: `2px solid ${c}` } }), l]))),
+          R('svg', { key: 4, viewBox: '0 0 520 220', style: { width: '100%', height: 230 } }, [
+            ...[0, 1, 2, 3, 4, 5].map(i => R('line', { key: 'g' + i, x1: 40, x2: 510, y1: 20 + i * 36, y2: 20 + i * 36, stroke: '#eff2f2' })),
+            ...['100', '80', '60', '40', '20', '0'].map((t, i) => R('text', { key: 't' + i, x: 32, y: 24 + i * 36, textAnchor: 'end', fontSize: 12, fill: '#979999' }, t)),
+            R('polyline', { key: 'p', points: '55,56 240,90 400,112 505,112', fill: 'none', stroke: '#3781cf', strokeWidth: 2 }),
+            ...[[55, 56], [240, 90], [400, 112]].map(([x, y], i) => R('circle', { key: 'c' + i, cx: x, cy: y, r: 4, fill: '#fff', stroke: '#3781cf', strokeWidth: 2 })),
+            R('circle', { key: 'd1', cx: 505, cy: 20, r: 4, fill: 'none', stroke: '#722ed1', strokeWidth: 2 }),
+            R('circle', { key: 'd2', cx: 505, cy: 56, r: 4, fill: 'none', stroke: '#13c2c2', strokeWidth: 2 }),
+            R('circle', { key: 'd3', cx: 505, cy: 92, r: 4, fill: 'none', stroke: '#faad14', strokeWidth: 2 }),
+            ...['03/26 14:51', '04/11 01:55', '04/11 02:37', '04/11 10:13'].map((t, i) => R('text', { key: 'x' + i, x: [55, 240, 400, 505][i], y: 214, textAnchor: 'middle', fontSize: 12, fill: '#697070' }, t))
+          ])
+        ], { padding: '24px 26px', overflow: 'hidden' }),
+        this.card([
+          R('div', { key: 'h', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [R('span', { key: 1, style: { fontSize: 20, fontWeight: 700 } }, '长期短板提醒'), this.tag('1 个待练习项', 'purple')]),
+          R('div', { key: 's', style: { fontSize: 14, color: '#979999', margin: '8px 0 18px' } }, '最近 5 次已完成面试中的反复薄弱点'),
+          R('div', { key: 'l', style: { fontSize: 15, fontWeight: 700, marginBottom: 12 } }, '反复偏弱维度'),
+          R('div', { key: 'g', style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 } }, [['问题解决', '60 分', '低分出现 1 次'], ['技术能力', '80 分', '低分出现 0 次'], ['综合素质', '80 分', '低分出现 0 次']].map(([a, b, c]) => R('div', { key: a, style: { background: '#f4f9ff', borderRadius: 10, padding: '14px 16px' } }, [
+            R('div', { key: 1, style: { display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 15 } }, [R('span', { key: 'a' }, a), R('span', { key: 'b', style: { color: '#2765a3' } }, b)]),
+            R('div', { key: 2, style: { fontSize: 13, color: '#697070', marginTop: 6 } }, c)]))),
+          R('div', { key: 'l2', style: { fontSize: 15, fontWeight: 700, marginBottom: 12 } }, '最近建议'),
+          R('div', { key: 'b2', style: { background: '#f8fafa', borderRadius: 10, padding: '14px 16px' } }, [
+            R('div', { key: 1, style: { fontWeight: 700, marginBottom: 7 } }, '解题思路完整度'),
+            R('div', { key: 2, style: { fontSize: 14, color: '#4c4d4d', lineHeight: 1.6 } }, '下次评估重点观察题目拆解、边界覆盖和代码实现是否更加完整。当前该维度约 60 分。')])
+        ], { padding: '24px 26px', overflow: 'hidden' })
+      ]),
+      this.card([
+        R('div', { key: 'h', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 } }, [
+          R('div', { key: 'a' }, [R('div', { key: 1, style: { fontSize: 20, fontWeight: 700 } }, '历史记录'), R('div', { key: 2, style: { fontSize: 14, color: '#979999', marginTop: 6 } }, '展示全部面试线程，成长曲线仅统计已完成结果')]),
+          R('div', { key: 'b', style: { display: 'flex', border: '1px solid #eff2f2', borderRadius: 10 } }, [['总面试', '128'], ['已完成', '4']].map(([l, v], i) => R('div', { key: l, style: { padding: '10px 22px', textAlign: 'center', borderLeft: i ? '1px solid #eff2f2' : 'none' } }, [R('div', { key: 1, style: { fontSize: 12, color: '#697070' } }, l), R('div', { key: 2, style: { fontSize: 20, fontWeight: 700, marginTop: 2 } }, v)])))
+        ]),
+        R('div', { key: 'r', style: { borderLeft: '4px solid #52c41a', background: '#f8fafa', borderRadius: '0 12px 12px 0', padding: '18px 22px' } }, [
+          R('div', { key: 1, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [
+            R('span', { key: 'a', style: { fontSize: 20, fontWeight: 700 } }, '后端工程师 · 初试'),
+            R('span', { key: 'b', style: { display: 'flex', gap: 8 } }, [this.tag('文本面试', 'gray'), this.tag('后端工程师', 'gray'), this.tag('初试', 'gray'), this.tag('已完成', 'green')])]),
+          R('div', { key: 2, style: { fontSize: 13, color: '#979999', marginTop: 8 } }, '更新：2026-04-11 14:39  ·  创建：2026-04-11 10:13')])
+      ], { padding: '24px 26px', flex: '1 1 auto', overflow: 'hidden' })
+    ]);
+  }
+
+  database() {
+    const R = React.createElement;
+    const kbs = [['Waking-Up', '6 文件', '后端面试笔记知识库，包含计网、操作系统、数据库…', '后端工程师'], ['JavaGuide', '227 文件', 'Java 面试核心知识库，包含 Java、数据库、计算机…', '后端工程师']];
+    const kb2 = [['React Interview Questions', '3 文件', 'React 面试题与答案知识库，包含核心问答和代码练…', '前端工程师']];
+    const kbCard = ([name, files, desc, pos]) => this.card([
+      R('div', { key: 'h', style: { display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 16 } }, [
+        R('div', { key: 1, style: { width: 52, height: 52, borderRadius: 12, background: '#f4f9ff', display: 'flex', alignItems: 'center', justifyContent: 'center' } }, R('svg', { width: 26, height: 26, viewBox: '0 0 24 24', fill: 'none', stroke: '#3781cf', strokeWidth: 2 }, [R('ellipse', { key: 1, cx: 12, cy: 5, rx: 9, ry: 3 }), R('path', { key: 2, d: 'M3 5v14c0 1.7 4 3 9 3' }), R('path', { key: 3, d: 'M21 5v6' }), R('path', { key: 4, d: 'm19 16-3 4h5l-3 4' })])),
+        R('div', { key: 2 }, [R('div', { key: 1, style: { fontSize: 20, fontWeight: 700, marginBottom: 8 } }, name), R('div', { key: 2, style: { display: 'flex', gap: 10, alignItems: 'center', fontSize: 13, color: '#697070' } }, [R('span', { key: 'a' }, files), R('span', { key: 'b', style: { background: '#f5f7f7', borderRadius: 5, padding: '3px 8px' } }, '3 周前创建')])])
+      ]),
+      R('div', { key: 'd', style: { fontSize: 14, color: '#697070', marginBottom: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, desc),
+      R('div', { key: 't', style: { display: 'flex', gap: 8, flexWrap: 'wrap' } }, [this.tag('Pro/BAAI/bge-m3', 'blue'), this.tag('岗位：' + pos, 'gray'), this.tag('分块：QA', 'green'), this.tag('OpenViking', 'purple')])
+    ], { padding: '22px 24px', width: 360, boxSizing: 'border-box' });
+    return R('div', { style: { height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', background: '#f8fafa' } }, [
+      R('div', { key: 'hd', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 28px', background: '#fff', borderBottom: '1px solid #eff2f2' } }, [
+        R('span', { key: 1, style: { fontSize: 20, fontWeight: 700 } }, '文档知识库'),
+        R('span', { key: 2, style: { background: '#3781cf', color: '#fff', borderRadius: 8, padding: '10px 20px', fontSize: 15, fontWeight: 500 } }, '新建知识库')
+      ]),
+      R('div', { key: 'bd', style: { padding: '26px 28px', overflow: 'hidden' } }, [
+        R('div', { key: 'g1', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16 } }, [R('span', { key: 1, style: { fontSize: 22, fontWeight: 700 } }, '后端工程师'), R('span', { key: 2, style: { fontSize: 14, color: '#979999' } }, '2 个知识库')]),
+        R('div', { key: 'c1', style: { display: 'flex', gap: 20, marginBottom: 28 } }, kbs.map(kbCard)),
+        R('div', { key: 'g2', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16 } }, [R('span', { key: 1, style: { fontSize: 22, fontWeight: 700 } }, '前端工程师'), R('span', { key: 2, style: { fontSize: 14, color: '#979999' } }, '1 个知识库')]),
+        R('div', { key: 'c2', style: { display: 'flex', gap: 20 } }, kb2.map(kbCard))
+      ])
+    ]);
+  }
+
+  resume() {
+    const R = React.createElement;
+    return R('div', { style: { height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', background: '#f8fafa' } }, [
+      R('div', { key: 'hd', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '18px 28px', background: '#fff', borderBottom: '1px solid #eff2f2' } }, [
+        R('div', { key: 1 }, [R('div', { key: 'a', style: { fontSize: 20, fontWeight: 700 } }, '我的简历'), R('div', { key: 'b', style: { fontSize: 14, color: '#697070', marginTop: 5 } }, '统一管理已上传的 PDF 简历，点击列表项可查看解析详情。')]),
+        R('div', { key: 2, style: { display: 'flex', gap: 12 } }, [
+          R('span', { key: 'a', style: { background: '#3781cf', color: '#fff', borderRadius: 8, padding: '9px 18px', fontSize: 14 } }, '上传简历'),
+          R('span', { key: 'b', style: { border: '1px solid #e4e6e6', background: '#fff', borderRadius: 8, padding: '9px 18px', fontSize: 14 } }, '刷新')])
+      ]),
+      R('div', { key: 'bd', style: { padding: '26px 28px' } }, this.card([
+        R('div', { key: 1, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 } }, [
+          R('span', { key: 'a', style: { display: 'flex', alignItems: 'center', gap: 10, fontSize: 17, fontWeight: 600 } }, [this.icon('file', false), '付智彬-简历.pdf']),
+          this.tag('mineru_official', 'blue')]),
+        R('div', { key: 2, style: { fontSize: 14, color: '#4c4d4d', marginBottom: 10 } }, '文件大小：316 KB'),
+        R('div', { key: 3, style: { fontSize: 14, color: '#4c4d4d', paddingBottom: 18, borderBottom: '1px solid #eff2f2' } }, '更新时间：2026/4/10 12:01:43'),
+        R('div', { key: 4, style: { display: 'flex', justifyContent: 'space-between', paddingTop: 16, fontSize: 14 } }, [R('span', { key: 'a', style: { color: '#3781cf' } }, '查看详情'), R('span', { key: 'b', style: { color: '#ff4d4f' } }, '删除')])
+      ], { padding: '22px 24px', width: 340, boxSizing: 'border-box' }))
+    ]);
+  }
+
+  problemsets() {
+    const R = React.createElement;
+    return R('div', { style: { height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', background: '#f8fafa' } }, [
+      R('div', { key: 'hd', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '18px 28px', background: '#fff', borderBottom: '1px solid #eff2f2' } }, [
+        R('div', { key: 1 }, [R('div', { key: 'a', style: { fontSize: 20, fontWeight: 700 } }, '题库管理'), R('div', { key: 'b', style: { fontSize: 14, color: '#697070', marginTop: 5 } }, '按前端 / 后端 / 通用分类查看已导入到 OJ 与面试题池的题目。')]),
+        R('span', { key: 2, style: { border: '1px solid #e4e6e6', background: '#fff', borderRadius: 8, padding: '9px 18px', fontSize: 14, color: '#bdbfbf' } }, '刷新')
+      ]),
+      R('div', { key: 'bd', style: { padding: '20px 28px', display: 'flex', flexDirection: 'column', gap: 16, flex: 1, minHeight: 0 } }, [
+        R('div', { key: 's', style: { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 18 } }, [['总题量', '0', '按岗位方向快速浏览'], ['题包数', '0', '已追踪 0 道题 / 0 个题包'], ['分类数', '0', '前端、后端、通用三类题库']].map(([l, v, n]) => this.card(R('div', { style: { display: 'flex', gap: 16 } }, [
+          R('div', { key: 1, style: { width: 44, height: 44, borderRadius: 10, background: '#f4f9ff' } }),
+          R('div', { key: 2 }, [R('div', { key: 'a', style: { fontSize: 14, color: '#697070' } }, l), R('div', { key: 'b', style: { fontSize: 30, fontWeight: 700, margin: '4px 0 6px' } }, v), R('div', { key: 'c', style: { fontSize: 13, color: '#979999' } }, n)])
+        ]), { padding: '18px 20px' }))),
+        this.card(R('div', { style: { height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bdbfbf' } }, '加载中…'), { flex: 1, padding: 20 })
+      ])
+    ]);
+  }
+
+  renderVals() {
+    const screens = [
+      { title: '模拟面试配置', route: '/agent', file: 'AgentView.vue', nav: this.nav('模拟面试'), body: this.agentHome(), note: '主操作区被三段等宽胶囊按钮和一张浅蓝简历卡占满，右侧「最近面试记录」六条卡片除了时间之外信息完全一致，一屏里的可读信号很少。' },
+      { title: '面试记录', route: '/agent/records', file: 'InterviewRecordsView.vue', nav: this.nav('面试记录'), body: this.records(), note: '一屏里叠了标题卡、成长曲线、短板提醒、历史记录四层圆角卡片，卡片之间没有层级差别，历史记录被挤到折叠线以下。' },
+      { title: '知识库', route: '/database', file: 'DataBaseView.vue', nav: this.nav('知识库'), body: this.database(), note: '卡片宽度固定，一行只放得下 2–3 张，右侧大片留白；每张卡片挂 4 个不同颜色的标签，颜色没有语义约定。' },
+      { title: '我的简历', route: '/resume', file: 'MyResumeView.vue', nav: this.nav('我的简历'), body: this.resume(), note: '整页只有一张 340px 的卡片，其余全是空白。简历是面试流程的入口，这里却没有任何解析结果或岗位匹配信息。' },
+      { title: '题库管理', route: '/problemsets', file: 'ProblemSetManageView.vue', nav: this.nav('题库管理'), body: this.problemsets(), note: '三个统计卡全是 0，下面是一块空的加载区。空状态没有引导，管理员看不出下一步该做什么。' },
+      { title: 'Dashboard', route: '/dashboard', file: 'DashboardView.vue', nav: this.nav('Dashboard'), body: this.dashboard(), note: '六个指标卡 + 柱状图 + 折线图 + 三块数字面板，配色用到蓝、绿、黄、红、青五套色，数值和标签的字号对比过强。' }
+    ];
+    const issues = [
+      { t: '两类用户混在一条导航里', d: '候选人用的模拟面试、面试记录、简历，和管理员用的知识库、题库、Dashboard 平铺在同一列，7 个入口没有分组。' },
+      { t: '面试主流程被切成四个独立页面', d: '配置 → 面试 → 编程 → 结果分属四个路由，页面之间只能靠顶部按钮跳转，没有进度指示，中断后不知道停在哪一步。' },
+      { t: '卡片层级失效', d: '所有内容都装在同一种白底圆角卡里，标题卡、图表卡、列表项共用一样的圆角与阴影，扫视时没有主次。' },
+      { t: '颜色缺少语义', d: 'base.css 定义了 primary / success / warning / error / accent 五套色阶，实际使用时标签颜色按位置随机分配，不表达状态。' },
+      { t: '信息密度偏低', d: '简历页整屏一张卡、题库页整屏三个 0，而 Dashboard 又在一屏里塞进 12 个数据模块，密度在页面之间不一致。' },
+      { t: '空状态没有出口', d: '题库为空时只显示加载动画和 0，没有「导入题目」的入口，也没有说明数据从哪里来。' }
+    ];
+    return { screens, issues };
+  }
+}
+</script>
+</body>
+</html>
