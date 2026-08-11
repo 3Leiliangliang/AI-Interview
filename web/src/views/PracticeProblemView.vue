@@ -305,6 +305,7 @@ import {
 } from '@ant-design/icons-vue'
 
 import { practiceApi } from '@/apis/practice_api'
+import { loadProgress, markOpened, recordResult, saveProgress } from '@/utils/practiceProgress'
 
 const route = useRoute()
 const router = useRouter()
@@ -682,6 +683,27 @@ const ensureSession = async () => {
   syncDraftFromSession()
 }
 
+// 练习进度写入（localStorage）。仅记录"打开过"与判题终态，失败不回抛。
+const localProgress = ref(loadProgress())
+
+const syncProblemOpened = () => {
+  if (!problemRef.value) return
+  localProgress.value = markOpened(localProgress.value, problemRef.value)
+  saveProgress(localProgress.value)
+}
+
+const syncJudgeResult = () => {
+  if (!problemRef.value || !session.value) return
+  const status = String(
+    session.value?.judge_status || session.value?.judge_result?.status || ''
+  )
+    .trim()
+    .toUpperCase()
+  if (!status || pendingJudgeStatuses.has(status)) return
+  localProgress.value = recordResult(localProgress.value, problemRef.value, status)
+  saveProgress(localProgress.value)
+}
+
 const loadNavigationContext = async () => {
   try {
     const data = await practiceApi.getDefaultPlan()
@@ -747,6 +769,7 @@ const startSubmissionPolling = () => {
       if (data.judge_status && !pendingJudgeStatuses.has(data.judge_status)) {
         clearPollTimer()
       }
+      syncJudgeResult()
     } catch {
       clearPollTimer()
     }
@@ -787,6 +810,7 @@ const handleSubmit = async () => {
       code: draftCode.value
     })
     session.value = data?.practice_session || session.value
+    syncJudgeResult()
     bottomTab.value = 'submission'
     startSubmissionPolling()
     message.success('代码已提交')
@@ -905,6 +929,7 @@ const initializePage = async () => {
 
   try {
     await loadProblem()
+    syncProblemOpened()
     await loadNavigationContext()
 
     if (!problem.value?.supports_online_judge) {
@@ -914,6 +939,7 @@ const initializePage = async () => {
     }
 
     await ensureSession()
+    syncJudgeResult()
     loadNote()
 
     if (session.value?.status === 'submitted' && session.value?.submission_id) {
