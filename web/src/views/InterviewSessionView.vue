@@ -148,7 +148,7 @@ async function toggleVideoMode() {
 
 const backToSetup = () => {
   router.push({
-    name: 'AgentComp',
+    name: 'InterviewWorkbench',
     query: {
       position: selectedPosition.value,
       round: selectedRound.value,
@@ -329,7 +329,7 @@ const handleThreadChange = (nextThread) => {
 onMounted(async () => {
   if (!sessionKey.value && !threadId.value) {
     router.replace({
-      name: 'AgentComp',
+      name: 'InterviewWorkbench',
       query: {
         position: selectedPosition.value,
         round: selectedRound.value,
