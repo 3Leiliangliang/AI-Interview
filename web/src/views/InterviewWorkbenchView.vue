@@ -291,11 +291,11 @@ const trendPoints = computed(() => {
   })
 })
 
-// SVG viewBox 为 0 0 560 200：x 从 80 起、点距 150；y 轴 50 分→170，100 分→20
+// SVG viewBox 为 0 0 560 200：x 从 80 起、点距 150；y 轴与网格线对齐：100 分→y20，75 分→y70，50 分→y120，≤25 分→y170
 const trendCoords = computed(() =>
   trendPoints.value.map((point, index) => ({
     x: 80 + index * 150,
-    y: 170 - ((Math.min(100, Math.max(50, point.score)) - 50) / 50) * 150,
+    y: 20 + (100 - Math.min(100, Math.max(25, point.score))) * 2,
     label: point.label
   }))
 )
@@ -565,7 +565,8 @@ onMounted(async () => {
   border: none;
   background: none;
   padding: 0 0 0 6px;
-  color: var(--main-color);
+  color: var(--gray-1000);
+  text-decoration: underline;
   font-size: 13px;
   cursor: pointer;
 }
