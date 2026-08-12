@@ -1,8 +1,6 @@
 import asyncio
 import json
-import os
 import re
-import tempfile
 import uuid
 from datetime import timedelta
 from pathlib import Path
@@ -17,7 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from server.utils.auth_middleware import get_db, get_required_user
 from src.knowledge.indexing import process_file_to_markdown
 from src.knowledge.utils import calculate_content_hash
-from src.plugins.document_processor_base import DocumentProcessorException
 from src.services.match_service import match_service
 from src.services.openviking_service import openviking_service
 from src.services.resume_summary_service import resume_summary_service
@@ -593,6 +590,82 @@ async def _trigger_summary_extraction(resume_id: int) -> None:
             logger.error(f"更新失败状态时出错，resume_id={resume_id}: {db_err}")
 
 
+async def _parse_resume_markdown_and_extract_summary(resume_id: int, job_id: int | None = None) -> None:
+    """后台执行 PDF 解析、OpenViking 同步和 LLM 摘要提取。"""
+    try:
+        async with pg_manager.get_async_session_context() as session:
+            result = await session.execute(select(UserResume).where(UserResume.id == resume_id))
+            resume_record = result.scalar_one_or_none()
+            if not resume_record:
+                logger.warning("简历后台解析跳过：记录不存在，resume_id=%s", resume_id)
+                return
+
+            file_url = resume_record.file_url
+            user_id = resume_record.user_id
+            resume_record.summary_status = "extracting"
+            resume_record.summary_error = None
+            if job_id:
+                resume_record.target_job_id = job_id
+                resume_record.match_status = "pending"
+            await session.commit()
+
+        markdown_content, _ = await process_file_to_markdown(
+            file_url,
+            params={
+                "enable_ocr": "mineru_official",
+                "db_id": f"user_resume_{user_id}_{uuid.uuid4().hex[:8]}",
+            },
+        )
+
+        if not markdown_content or not markdown_content.strip():
+            raise ValueError("PDF 解析失败：未能从文件中提取到文本内容，请检查文件是否损坏")
+
+        async with pg_manager.get_async_session_context() as session:
+            result = await session.execute(select(UserResume).where(UserResume.id == resume_id))
+            resume_record = result.scalar_one_or_none()
+            if not resume_record:
+                logger.warning("简历后台解析结果未写入：记录不存在，resume_id=%s", resume_id)
+                return
+
+            resume_record.markdown_content = markdown_content
+            await session.commit()
+            await session.refresh(resume_record)
+
+            if openviking_service.is_enabled():
+                try:
+                    await openviking_service.sync_resume(resume_record)
+                    await openviking_service.sync_resume_memory(resume_record)
+                except Exception as exc:
+                    logger.warning("Sync resume to OpenViking failed for resume %s: %s", resume_id, exc)
+
+        summary_success = await resume_summary_service.update_resume_summary(resume_id)
+
+        if job_id and summary_success:
+            await _trigger_resume_match(resume_id, job_id)
+        elif job_id:
+            async with pg_manager.get_async_session_context() as session:
+                result = await session.execute(select(UserResume).where(UserResume.id == resume_id))
+                resume_record = result.scalar_one_or_none()
+                if resume_record and resume_record.match_status in ("pending", "processing"):
+                    resume_record.match_status = "failed"
+                    await session.commit()
+
+    except Exception as exc:
+        logger.error("简历后台解析失败，resume_id=%s: %s", resume_id, exc)
+        try:
+            async with pg_manager.get_async_session_context() as session:
+                result = await session.execute(select(UserResume).where(UserResume.id == resume_id))
+                resume_record = result.scalar_one_or_none()
+                if resume_record and _is_summary_in_progress(resume_record.summary_status):
+                    resume_record.summary_status = "failed"
+                    resume_record.summary_error = str(exc)
+                    if job_id and resume_record.match_status in ("pending", "processing"):
+                        resume_record.match_status = "failed"
+                    await session.commit()
+        except Exception as db_err:
+            logger.error("更新简历后台解析失败状态时出错，resume_id=%s: %s", resume_id, db_err)
+
+
 @resume.get("")
 async def get_my_resumes(current_user: User = Depends(get_required_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(
@@ -707,8 +780,14 @@ async def retry_extract_resume(
     record.summary_error = None
     await db.commit()
 
-    # 异步触发重新提取
-    _fire_and_forget(_trigger_summary_extraction(resume_id), label=f"简历摘要提取[{resume_id}]")
+    # 解析失败时需要重新执行 mineru；仅摘要失败时沿用原有摘要重试。
+    if record.markdown_content:
+        _fire_and_forget(_trigger_summary_extraction(resume_id), label=f"简历摘要提取[{resume_id}]")
+    else:
+        _fire_and_forget(
+            _parse_resume_markdown_and_extract_summary(resume_id, record.target_job_id),
+            label=f"简历重新解析[{resume_id}]",
+        )
 
     return {"message": "success", "resume_id": resume_id}
 
@@ -731,26 +810,8 @@ async def upload_my_resume(
     if not file_bytes:
         raise HTTPException(status_code=400, detail="上传的简历文件为空")
 
-    temp_path = None
-
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-            temp_file.write(file_bytes)
-            temp_path = temp_file.name
-
         content_hash = await calculate_content_hash(file_bytes)
-        markdown_content, _ = await process_file_to_markdown(
-            temp_path,
-            params={
-                "enable_ocr": "mineru_official",
-                "db_id": f"user_resume_{current_user.id}_{uuid.uuid4().hex[:8]}",
-            },
-        )
-
-        if not markdown_content or not markdown_content.strip():
-            logger.warning(f"PDF 解析结果为空，filename={filename}, user={current_user.user_id}")
-            raise HTTPException(status_code=422, detail="PDF 解析失败：未能从文件中提取到文本内容，请检查文件是否损坏")
-
         object_name = f"{current_user.user_id}/{uuid.uuid4().hex}{Path(filename).suffix.lower()}"
         file_url = await aupload_file_to_minio("user-resumes", object_name, file_bytes, "pdf")
 
@@ -763,45 +824,31 @@ async def upload_my_resume(
             object_name=object_name,
             file_url=file_url,
             parser_name="mineru_official",
-            markdown_content=markdown_content,
+            markdown_content="",
+            summary_status="pending",
         )
+        if job_id:
+            resume_record.target_job_id = job_id
+            resume_record.match_status = "pending"
         db.add(resume_record)
 
         await db.commit()
         await db.refresh(resume_record)
 
-        if openviking_service.is_enabled():
-            try:
-                await openviking_service.sync_resume(resume_record)
-                await openviking_service.sync_resume_memory(resume_record)
-            except Exception as exc:
-                logger.warning("Sync resume to OpenViking failed for user %s: %s", current_user.user_id, exc)
-
-        # 异步触发 LLM 瑘历摘要提取（不阻塞主流程）
-        _fire_and_forget(_trigger_summary_extraction(resume_record.id), label=f"简历摘要提取[{resume_record.id}]")
-
-        # 如果指定了目标岗位，异步触发匹配
-        if job_id:
-            resume_record.target_job_id = job_id
-            resume_record.match_status = "pending"
-            await db.commit()
-            _fire_and_forget(_trigger_resume_match(resume_record.id, job_id), label=f"简历岗位匹配[{resume_record.id}:{job_id}]")
+        _fire_and_forget(
+            _parse_resume_markdown_and_extract_summary(resume_record.id, job_id),
+            label=f"简历后台解析[{resume_record.id}]",
+        )
 
         return {
             "message": "success",
             "resume": _serialize_resume(resume_record),
         }
-    except DocumentProcessorException as exc:
-        logger.error(f"Resume parsing failed for user {current_user.user_id}: {exc}")
-        raise HTTPException(status_code=502, detail=f"简历解析失败：{exc}") from exc
     except HTTPException:
         raise
     except Exception as exc:
         logger.error(f"Resume upload failed for user {current_user.user_id}: {exc}")
         raise HTTPException(status_code=500, detail=f"简历上传失败：{exc}") from exc
-    finally:
-        if temp_path and os.path.exists(temp_path):
-            os.unlink(temp_path)
 
 
 @resume.delete("/{resume_id}")
