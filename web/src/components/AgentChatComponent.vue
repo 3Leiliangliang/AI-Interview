@@ -1,5 +1,11 @@
 <template>
-  <div class="chat-container" :class="{ 'sidebar-right': props.sidebarPlacement === 'right' }">
+  <div
+    class="chat-container"
+    :class="[
+      { 'sidebar-right': props.sidebarPlacement === 'right' },
+      `conversation-variant--${props.conversationVariant}`
+    ]"
+  >
     <ChatSidebarComponent
       v-if="props.showSidebar"
       :current-chat-id="currentChatId"
@@ -26,7 +32,7 @@
       @load-more-chats="loadMoreChats"
     />
     <div class="chat">
-      <div class="chat-header">
+      <div v-if="props.showHeader" class="chat-header">
         <div class="header__left">
           <slot name="header-left" class="nav-btn"></slot>
           <div
@@ -72,19 +78,26 @@
         <div class="chat-main" ref="chatMainContainer">
           <div class="chat-box" ref="messagesContainer">
             <div class="conv-box" v-for="(conv, index) in conversations" :key="index">
-              <AgentMessageComponent
+              <div
                 v-for="(message, msgIndex) in conv.messages"
-                :message="message"
                 :key="msgIndex"
-                :is-processing="
-                  isProcessing &&
-                  conv.status === 'streaming' &&
-                  msgIndex === conv.messages.length - 1
-                "
-                :show-refs="showMsgRefs(message)"
-                @retry="retryMessage(message)"
+                class="agent-message-row"
+                :class="[`agent-message-row--${message.type}`]"
               >
-              </AgentMessageComponent>
+                <span v-if="props.conversationVariant === 'interview'" class="message-role-label">
+                  {{ message.type === 'human' ? '我' : '面试官' }}
+                </span>
+                <AgentMessageComponent
+                  :message="message"
+                  :is-processing="
+                    isProcessing &&
+                    conv.status === 'streaming' &&
+                    msgIndex === conv.messages.length - 1
+                  "
+                  :show-refs="showMsgRefs(message)"
+                  @retry="retryMessage(message)"
+                />
+              </div>
               <!-- 显示对话最后一个消息使用的模型 -->
               <RefsComponent
                 v-if="shouldShowRefs(conv)"
@@ -163,17 +176,24 @@
                 :disabled="!currentAgent"
                 :send-button-disabled="(!userInput || !currentAgent) && !isProcessing"
                 :placeholder="inputPlaceholder"
-                :supports-file-upload="supportsFileUpload"
+                :send-button-text="props.conversationVariant === 'interview' ? '发送' : ''"
+                :supports-file-upload="
+                  props.conversationVariant === 'interview' ? false : supportsFileUpload
+                "
                 :agent-id="currentAgentId"
                 :thread-id="currentChatId"
                 :ensure-thread="ensureActiveThread"
-                :has-state-content="hasAgentStateContent"
+                :has-state-content="props.showAgentPanel && hasAgentStateContent"
                 :is-panel-open="isAgentPanelOpen"
                 :mention="mentionConfig"
                 @send="handleSendOrStop"
                 @attachment-changed="handleAgentStateRefresh"
                 @toggle-panel="toggleAgentPanel"
-              />
+              >
+                <template v-if="$slots['input-actions-left']" #actions-left>
+                  <slot name="input-actions-left"></slot>
+                </template>
+              </AgentInputArea>
 
               <!-- 示例问题 -->
               <div
@@ -217,7 +237,7 @@
           }"
         >
           <AgentPanel
-            v-if="isAgentPanelOpen && hasAgentStateContent"
+            v-if="props.showAgentPanel && isAgentPanelOpen && hasAgentStateContent"
             :agent-state="currentAgentState"
             :thread-id="currentChatId"
             :panel-ratio="panelRatio"
@@ -254,7 +274,7 @@ import { useAgentStore } from '@/stores/agent'
 import { useChatUIStore } from '@/stores/chatUI'
 import { storeToRefs } from 'pinia'
 import { MessageProcessor } from '@/utils/messageProcessor'
-import { agentApi, threadApi, databaseApi, mcpApi } from '@/apis'
+import { agentApi, threadApi } from '@/apis'
 import HumanApprovalModal from '@/components/HumanApprovalModal.vue'
 import { useApproval } from '@/composables/useApproval'
 import { useAgentStreamHandler } from '@/composables/useAgentStreamHandler'
@@ -295,6 +315,18 @@ const props = defineProps({
   showSidebar: {
     type: Boolean,
     default: true
+  },
+  showHeader: {
+    type: Boolean,
+    default: true
+  },
+  showAgentPanel: {
+    type: Boolean,
+    default: true
+  },
+  conversationVariant: {
+    type: String,
+    default: 'default'
   }
 })
 const emit = defineEmits(['open-config', 'open-agent-modal', 'agent-state-change', 'thread-change'])
@@ -459,7 +491,9 @@ const hasAgentStateContent = computed(() => {
 })
 
 const hasUploadedFiles = computed(() => countFiles(currentAgentState.value?.files) > 0)
-const hasSelectedResumeContext = computed(() => Boolean(runtimeContextOverrides.value.selected_resume_id))
+const hasSelectedResumeContext = computed(() =>
+  Boolean(runtimeContextOverrides.value.selected_resume_id)
+)
 const showInterviewStartupState = computed(() => {
   return isResumeInterviewMode.value && isProcessing.value && visibleConversationCount.value === 0
 })
@@ -481,9 +515,14 @@ watch(
 )
 
 const inputPlaceholder = computed(() => {
+  if (props.conversationVariant === 'interview') {
+    return '输入你的回答，Enter 发送，Shift + Enter 换行'
+  }
   if (!isResumeInterviewMode.value) return '输入问题...'
   if (hasSelectedResumeContext.value) {
-    return isProcessing.value ? '面试正在启动，请稍候...' : '请直接回答面试问题，或补充岗位 / 公司背景...'
+    return isProcessing.value
+      ? '面试正在启动，请稍候...'
+      : '请直接回答面试问题，或补充岗位 / 公司背景...'
   }
   return hasUploadedFiles.value
     ? '请回答当前问题，或补充目标岗位 / 公司 / 面试轮次...'
@@ -519,13 +558,15 @@ const sidebarOpenIcon = computed(() =>
 const runtimeContextOverrides = computed(() => {
   const overrides = props.contextOverrides || {}
   return Object.fromEntries(
-    Object.entries(overrides).filter(([, value]) => value !== undefined && value !== null && `${value}`.trim())
+    Object.entries(overrides).filter(
+      ([, value]) => value !== undefined && value !== null && `${value}`.trim()
+    )
   )
 })
 
 // 监听 hasAgentStateContent 从 false → true 时，自动展开面板
 watch(hasAgentStateContent, (newVal, oldVal) => {
-  if (newVal && !oldVal) {
+  if (props.showAgentPanel && newVal && !oldVal) {
     // 从无状态变为有状态时，自动展开面板
     isAgentPanelOpen.value = true
   }
@@ -1877,13 +1918,6 @@ const selectPreferredThread = async () => {
   }
 }
 
-defineExpose({
-  getExportPayload: buildExportPayload,
-  startInterviewSession,
-  openThread,
-  currentChatId
-})
-
 const toggleSidebar = () => {
   chatUIStore.toggleSidebar()
 }
@@ -1916,6 +1950,14 @@ const handleAgentStateRefresh = async (threadId = null) => {
   await fetchAgentState(currentAgentId.value, chatId)
   await maybeAutoStartInterview(chatId)
 }
+
+defineExpose({
+  getExportPayload: buildExportPayload,
+  startInterviewSession,
+  openThread,
+  refreshAgentState: handleAgentStateRefresh,
+  currentChatId
+})
 
 const toggleAgentPanel = () => {
   isAgentPanelOpen.value = !isAgentPanelOpen.value
@@ -2064,30 +2106,21 @@ watch(
   { immediate: true }
 )
 
-watch(
-  currentChatId,
-  (newThreadId, oldThreadId) => {
-    if (!newThreadId || newThreadId === oldThreadId) return
-    emit('thread-change', currentThread.value || { id: newThreadId })
-  }
-)
+watch(currentChatId, (newThreadId, oldThreadId) => {
+  if (!newThreadId || newThreadId === oldThreadId) return
+  emit('thread-change', currentThread.value || { id: newThreadId })
+})
 
-watch(
-  normalizedPreferredThreadId,
-  async (newThreadId, oldThreadId) => {
-    if (!newThreadId || newThreadId === oldThreadId) return
-    await selectPreferredThread()
-  }
-)
+watch(normalizedPreferredThreadId, async (newThreadId, oldThreadId) => {
+  if (!newThreadId || newThreadId === oldThreadId) return
+  await selectPreferredThread()
+})
 
-watch(
-  currentChatId,
-  async (newThreadId) => {
-    if (!lockedThreadId.value || !newThreadId) return
-    if (newThreadId === lockedThreadId.value) return
-    await selectPreferredThread()
-  }
-)
+watch(currentChatId, async (newThreadId) => {
+  if (!lockedThreadId.value || !newThreadId) return
+  if (newThreadId === lockedThreadId.value) return
+  await selectPreferredThread()
+})
 
 watch(
   conversations,
@@ -2404,6 +2437,100 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.agent-message-row {
+  display: contents;
+}
+
+.conversation-variant--interview {
+  .chat-box {
+    max-width: none;
+    padding: 28px 32px;
+    gap: 26px;
+  }
+
+  .conv-box {
+    gap: 26px;
+  }
+
+  .agent-message-row {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 640px);
+    gap: 18px;
+    align-items: start;
+  }
+
+  .message-role-label {
+    padding-top: 3px;
+    font-size: 11px;
+    line-height: 1.2;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--gray-500);
+  }
+
+  .agent-message-row--human .message-role-label {
+    color: var(--main-800);
+  }
+
+  .agent-message-row :deep(.message-box) {
+    width: 100%;
+    max-width: 640px;
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    font-size: 16px;
+    line-height: 1.75;
+    color: var(--gray-1000);
+    align-self: auto;
+  }
+
+  .agent-message-row--human :deep(.message-box) {
+    border-left: 2px solid var(--main-color);
+    padding-left: 18px;
+  }
+
+  .bottom {
+    padding: 20px 32px 24px;
+    border-top: 1px solid var(--gray-200);
+  }
+
+  .bottom .message-input-wrapper {
+    max-width: none;
+  }
+
+  .bottom :deep(.input-box) {
+    min-height: 78px;
+    padding: 14px 16px 10px;
+    border: 1px solid var(--gray-400);
+    border-radius: 0;
+    box-shadow: none;
+    background: var(--gray-0);
+  }
+
+  .bottom :deep(.send-button.ant-btn-icon-only) {
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .bottom :deep(.send-button) {
+    width: auto;
+    min-width: 64px;
+    height: 32px;
+    padding: 0 14px;
+    border-radius: 0;
+    box-shadow: none;
+    background: var(--main-color);
+    color: var(--gray-0);
+    font-weight: 700;
+  }
+
+  .bottom .note {
+    display: none;
+  }
 }
 
 .bottom {

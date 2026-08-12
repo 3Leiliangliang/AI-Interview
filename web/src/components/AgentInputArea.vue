@@ -8,6 +8,7 @@
     :disabled="disabled"
     :send-button-disabled="sendButtonDisabled"
     :placeholder="placeholder"
+    :send-button-text="sendButtonText"
     :force-multi-line="hasStateContent"
     :mention="mention"
     @send="handleSend"
@@ -21,9 +22,8 @@
         class="image-preview-wrapper"
       />
     </template>
-    <template #options-left>
+    <template v-if="supportsFileUpload" #options-left>
       <AttachmentOptionsComponent
-        v-if="supportsFileUpload"
         :disabled="disabled"
         @upload="handleAttachmentUpload"
         @upload-image="handleImageUpload"
@@ -43,13 +43,14 @@
           <FolderCode :size="18" />
           <span>状态</span>
         </div>
+        <slot name="actions-left"></slot>
       </div>
     </template>
   </MessageInputComponent>
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import ImagePreviewComponent from '@/components/ImagePreviewComponent.vue'
@@ -65,6 +66,7 @@ const props = defineProps({
   disabled: { type: Boolean, default: false },
   sendButtonDisabled: { type: Boolean, default: false },
   placeholder: { type: String, default: '输入问题...' },
+  sendButtonText: { type: String, default: '' },
   supportsFileUpload: { type: Boolean, default: false },
   agentId: { type: String, default: '' },
   threadId: { type: String, default: null },
@@ -114,7 +116,7 @@ const handleAttachmentUpload = async (files) => {
   if (!threadId) {
     try {
       threadId = await props.ensureThread(preferredTitle)
-    } catch (e) {
+    } catch {
       return
     }
   }
@@ -125,7 +127,7 @@ const handleAttachmentUpload = async (files) => {
   }
 
   try {
-    const hide = message.loading({
+    message.loading({
       content: '正在上传附件...',
       key: 'upload-attachment',
       duration: 0
@@ -209,7 +211,6 @@ defineExpose({
     background: var(--main-50);
     font-weight: 500;
   }
-
 
   &.disabled {
     opacity: 0.5;

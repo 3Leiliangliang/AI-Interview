@@ -8,8 +8,9 @@
       <slot name="top"></slot>
     </div>
 
-    <div class="expand-options" v-if="hasOptionsLeft">
+    <div v-if="hasOptionsLeft || hasActionsLeft" class="expand-options">
       <a-popover
+        v-if="hasOptionsLeft"
         v-model:open="optionsExpanded"
         placement="bottomLeft"
         trigger="click"
@@ -102,9 +103,10 @@
           type="link"
           class="send-button"
         >
-          <template #icon>
+          <template v-if="!sendButtonText || isLoading" #icon>
             <component :is="getIcon" class="send-btn" />
           </template>
+          <span v-if="sendButtonText && !isLoading">{{ sendButtonText }}</span>
         </a-button>
       </a-tooltip>
     </div>
@@ -123,16 +125,9 @@ import {
   nextTick,
   watch,
   onBeforeUnmount,
-  useSlots,
-  onUnmounted
+  useSlots
 } from 'vue'
-import {
-  SendOutlined,
-  ArrowUpOutlined,
-  LoadingOutlined,
-  PauseOutlined,
-  PlusOutlined
-} from '@ant-design/icons-vue'
+import { SendOutlined, ArrowUpOutlined, PauseOutlined, PlusOutlined } from '@ant-design/icons-vue'
 
 // 点击外部关闭下拉框
 const mentionDropdownRef = ref(null)
@@ -168,6 +163,10 @@ const props = defineProps({
   sendButtonDisabled: {
     type: Boolean,
     default: false
+  },
+  sendButtonText: {
+    type: String,
+    default: ''
   },
   autoSize: {
     type: Object,
