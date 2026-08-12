@@ -1265,3 +1265,607 @@ Closes #2
 EOF
 )"
 ```
+
+---
+
+### Task 9: 前端 — 按更新后的 2a 设计稿重做工作台（开始面试）
+
+设计稿 `templates/新版界面 v3.dc.html` 锚点 `#2a` 被重做。页面从「面试工作台」收窄为「开始面试」：右栏删除、中栏整体替换。设计修订记录见 `docs/superpowers/specs/2026-08-12-ui3-interview-workbench-design.md` 的「修订 · 2026-08-12」一节。
+
+**Files:**
+- Modify: `web/src/views/InterviewWorkbenchView.vue`（`<script setup>` / `<template>` / `<style>` 三块都要改）
+
+**Interfaces:**
+- Consumes: `question_count` / `answered_count`（Task 1-3，尚未落地，读到 `undefined` 时由 `|| 0` 兜底）
+- Produces: 无下游任务
+
+- [ ] **Step 1: 删除被移除模块的数据层**
+
+在 `<script setup>` 中删除这些已经没有消费者的定义：`LOW_SCORE_THRESHOLD` 常量、`trendPoints`、`trendCoords`、`trendPolyline`、`weakDimensions`、`recentRecords`、`openRecord`。
+
+`chart` 与 `profile` 两个 computed 也一并删除（趋势图和偏弱是它们唯二的消费者）。`historyPayload` 保留，`records` 保留。
+
+- [ ] **Step 2: 改写顶栏摘要并新增本任务需要的 computed 与方法**
+
+把现有的 `headerSummary` 整个替换为下面这段，并把 `activeProgress` 也替换为带 `questionCount` 的版本。`activeRecord` 保持不变。
+
+```js
+const lastRecord = computed(() => records.value[0] || null)
+
+const lastScoredRecord = computed(
+  () =>
+    records.value.find((item) => item.has_result && typeof item.overall_score === 'number') || null
+)
+
+const headerSummary = computed(() => {
+  const scoreText = lastScoredRecord.value
+    ? `上次得分 ${Math.round(lastScoredRecord.value.overall_score)}`
+    : ''
+  if (activeRecord.value) {
+    return scoreText ? `有一场未结束的面试 · ${scoreText}` : '有一场未结束的面试'
+  }
+  return scoreText || '还没有面试记录'
+})
+
+const activeProgress = computed(() => {
+  const record = activeRecord.value
+  if (!record) return null
+  const answered = Math.min(Number(record.answered_count || 0), EXPECTED_QUESTION_COUNT)
+  return {
+    answered,
+    total: EXPECTED_QUESTION_COUNT,
+    remaining: EXPECTED_QUESTION_COUNT - answered,
+    questionCount: Number(record.question_count || 0),
+    duration: formatDuration(record)
+  }
+})
+
+const selectedResume = computed(
+  () => resumeOptions.value.find((item) => item.id === selectedResumeId.value) || null
+)
+
+const preflightChecks = computed(() => {
+  const resume = selectedResume.value
+  let resumeState = { text: '未选择', ready: false }
+  if (resume?.summary_status === 'completed') {
+    resumeState = { text: '就绪', ready: true }
+  } else if (resume?.summary_status === 'failed') {
+    resumeState = { text: '解析失败', ready: false }
+  } else if (resume) {
+    resumeState = { text: '解析中', ready: false }
+  }
+
+  const fileCount = matchedKnowledge.value.fileCount
+  return [
+    { key: 'resume', label: '简历已解析完成，项目经历可被追问', ...resumeState },
+    {
+      key: 'knowledge',
+      label: fileCount
+        ? `出题知识库 ${matchedKnowledge.value.names} 已索引 ${fileCount} 个文件`
+        : '出题知识库尚未配置',
+      text: fileCount ? '就绪' : '未配置',
+      ready: Boolean(fileCount)
+    },
+    { key: 'mic', label: '语音面试需要麦克风权限', text: '选语音时再申请', ready: false }
+  ]
+})
+```
+
+把 `openExportRecords` 重命名为 `openRecords`（按钮文案由「导出记录」改为「面试记录」，跳转目标不变）：
+
+```js
+const openRecords = () => router.push('/agent/records')
+```
+
+新增三个动作。`pushInterview` 抽出来是因为下面三处发起面试只有参数不同：
+
+```js
+const pushInterview = ({ mode, position, round }) => {
+  router.push({
+    name: mode === 'voice' ? 'AgentVoiceInterviewComp' : 'AgentInterviewComp',
+    query: {
+      mode,
+      position,
+      round,
+      resumeId: String(selectedResumeId.value),
+      session: `${Date.now()}`
+    }
+  })
+}
+
+const finishAndReport = () => {
+  const record = activeRecord.value
+  if (!record) return
+  router.push({
+    name: 'InterviewResultPage',
+    query: {
+      threadId: record.thread_id,
+      position: record.position,
+      round: record.round,
+      autoGenerate: '1'
+    }
+  })
+}
+
+const runQuickStart = (card) => {
+  if (card.disabled) return
+  if (!selectedResumeId.value) {
+    message.warning('请先选择一份简历')
+    return
+  }
+  pushInterview(card.config)
+}
+```
+
+把已有的 `startInterview` 改为复用 `pushInterview`（行为不变）：
+
+```js
+const startInterview = () => {
+  if (!selectedResumeId.value) {
+    message.warning('请先选择一份简历')
+    return
+  }
+  pushInterview({
+    mode: selectedInterviewMode.value,
+    position: selectedPosition.value,
+    round: selectedRound.value
+  })
+}
+```
+
+最后新增四张快速开始卡。`按弱项出题` 与 `纯编程考核` 后端能力不存在（面试 agent 无限定话题入参；无用户发起纯编程会话的入口），按设计稿完整渲染但禁用：
+
+```js
+const quickStartCards = computed(() => [
+  {
+    key: 'reuse',
+    title: '沿用上次配置',
+    badge: lastRecord.value
+      ? `${lastRecord.value.interview_mode === 'voice' ? '语音' : '文本'} · ${lastRecord.value.question_count || 0} 题`
+      : '暂无记录',
+    accent: false,
+    desc: lastRecord.value
+      ? `${lastRecord.value.position} · ${lastRecord.value.round} · ${selectedResume.value?.filename || '未选择简历'}`
+      : '完成一场面试后，这里会带出上次的岗位与轮次',
+    disabled: !lastRecord.value,
+    config: lastRecord.value
+      ? {
+          mode: lastRecord.value.interview_mode === 'voice' ? 'voice' : 'text',
+          position: lastRecord.value.position,
+          round: lastRecord.value.round
+        }
+      : null
+  },
+  {
+    key: 'weakness',
+    title: '按弱项出题',
+    badge: '即将上线',
+    accent: true,
+    desc: '只问你反复失分的知识点',
+    disabled: true,
+    config: null
+  },
+  {
+    key: 'voice',
+    title: '语音复试',
+    badge: '语音 · 复试',
+    accent: false,
+    desc: '带摄像头，练表达节奏与追问应对',
+    disabled: false,
+    config: { mode: 'voice', position: selectedPosition.value, round: '复试' }
+  },
+  {
+    key: 'coding',
+    title: '纯编程考核',
+    badge: '即将上线',
+    accent: false,
+    desc: '跳过问答，直接做题并判题',
+    disabled: true,
+    config: null
+  }
+])
+```
+
+- [ ] **Step 3: 替换模板**
+
+`<template>` 整块替换：
+
+```vue
+<template>
+  <div class="wb-root">
+    <header class="wb-top">
+      <div>
+        <h1 class="wb-title">开始面试</h1>
+        <p class="wb-sub">{{ headerSummary }}</p>
+      </div>
+      <div class="wb-top-actions">
+        <button class="wb-btn" type="button" @click="openRecords">面试记录</button>
+        <button
+          class="wb-btn wb-btn--primary"
+          type="button"
+          :disabled="!activeRecord"
+          @click="continueInterview"
+        >
+          继续未结束的面试
+        </button>
+      </div>
+    </header>
+
+    <div class="wb-grid">
+      <!-- 左栏 · 新面试配置 -->
+      <section class="wb-col wb-col--left">
+        <div class="wb-lab">新面试配置</div>
+        <div class="wb-config">
+          <div class="wb-field">
+            <div class="wb-lab">形式</div>
+            <div class="wb-seg">
+              <button
+                v-for="item in interviewModeOptions"
+                :key="item.value"
+                type="button"
+                class="wb-opt"
+                :class="{ 'is-on': selectedInterviewMode === item.value }"
+                @click="selectedInterviewMode = item.value"
+              >
+                {{ item.label }}
+              </button>
+            </div>
+          </div>
+
+          <div class="wb-field">
+            <div class="wb-lab">岗位</div>
+            <div class="wb-seg wb-seg--wrap">
+              <button
+                v-for="item in positionTypeOptions"
+                :key="item.value"
+                type="button"
+                class="wb-opt"
+                :class="{ 'is-on': selectedPosition === item.value }"
+                @click="selectedPosition = item.value"
+              >
+                {{ item.shortLabel }}
+              </button>
+            </div>
+          </div>
+
+          <div class="wb-field">
+            <div class="wb-lab">轮次</div>
+            <div class="wb-seg">
+              <button
+                v-for="item in roundOptions"
+                :key="item.value"
+                type="button"
+                class="wb-opt"
+                :class="{ 'is-on': selectedRound === item.value }"
+                @click="selectedRound = item.value"
+              >
+                {{ item.label }}
+              </button>
+            </div>
+          </div>
+
+          <div class="wb-field">
+            <div class="wb-lab">简历</div>
+            <template v-if="resumeOptions.length">
+              <button
+                v-for="item in resumeOptions"
+                :key="item.id"
+                type="button"
+                class="wb-opt wb-opt--block"
+                :class="{ 'is-on': selectedResumeId === item.id }"
+                @click="selectedResumeId = item.id"
+              >
+                <span class="wb-opt-title">{{ item.filename }}</span>
+                <span class="wb-opt-meta">
+                  {{ formatFileSize(item.file_size) }} · {{ formatUpdatedAt(item.updated_at || item.created_at) }}
+                </span>
+              </button>
+            </template>
+            <div v-else class="wb-empty">
+              还没有已上传简历
+              <button class="wb-link" type="button" @click="openResumeCenter">去上传</button>
+            </div>
+          </div>
+
+          <div class="wb-field">
+            <div class="wb-lab">出题知识库</div>
+            <div class="wb-kb">
+              <span class="wb-kb-name">{{ matchedKnowledge.names || '按岗位自动匹配' }}</span>
+              <span v-if="matchedKnowledge.fileCount" class="wb-kb-count">{{ matchedKnowledge.fileCount }} 文件</span>
+            </div>
+          </div>
+
+          <button
+            class="wb-btn wb-btn--primary wb-btn--start"
+            type="button"
+            :disabled="!canStartInterview"
+            @click="startInterview"
+          >
+            开始面试
+          </button>
+        </div>
+      </section>
+
+      <!-- 右栏 · 主线 -->
+      <section class="wb-col wb-col--main">
+        <div v-if="activeRecord" class="wb-active">
+          <div class="wb-active-info">
+            <div class="wb-lab wb-lab--accent">未结束</div>
+            <div class="wb-active-title">{{ activeRecord.position }} · {{ activeRecord.round }}</div>
+            <div class="wb-active-meta">
+              <template v-if="activeProgress.questionCount">停在第 {{ activeProgress.questionCount }} 问 · </template>
+              已答 {{ activeProgress.answered }} / {{ activeProgress.total }} 题
+              <template v-if="activeProgress.duration"> · 用时 {{ activeProgress.duration }}</template>
+            </div>
+            <div class="wb-bar">
+              <div class="wb-bar-done" :style="{ flex: activeProgress.answered || 0.01 }"></div>
+              <div class="wb-bar-rest" :style="{ flex: activeProgress.remaining || 0.01 }"></div>
+            </div>
+          </div>
+          <div class="wb-active-actions">
+            <button class="wb-btn wb-btn--primary" type="button" @click="continueInterview">继续面试</button>
+            <button class="wb-btn" type="button" @click="finishAndReport">直接结束并出报告</button>
+          </div>
+        </div>
+        <div v-else class="wb-active wb-active--empty">
+          <div class="wb-active-info">
+            <div class="wb-lab">未结束</div>
+            <div class="wb-active-title wb-active-title--empty">没有未结束的面试</div>
+            <div class="wb-active-meta">在左侧选好岗位与简历，或从下面的快速开始直接进入。</div>
+          </div>
+        </div>
+
+        <div class="wb-block">
+          <div class="wb-block-hd">
+            <span class="wb-lab">快速开始</span>
+            <span class="wb-block-hint">选一个直接进面试，不用改左边的配置</span>
+          </div>
+          <div class="wb-quick">
+            <button
+              v-for="card in quickStartCards"
+              :key="card.key"
+              type="button"
+              class="wb-quick-card"
+              :class="{ 'is-disabled': card.disabled }"
+              :disabled="card.disabled"
+              @click="runQuickStart(card)"
+            >
+              <div class="wb-quick-hd">
+                <span class="wb-quick-title">{{ card.title }}</span>
+                <span class="wb-badge" :class="{ 'is-accent': card.accent }">{{ card.badge }}</span>
+              </div>
+              <div class="wb-quick-desc">{{ card.desc }}</div>
+            </button>
+          </div>
+        </div>
+
+        <div class="wb-block">
+          <div class="wb-lab">面试前检查</div>
+          <div class="wb-check">
+            <div v-for="item in preflightChecks" :key="item.key" class="wb-check-row">
+              <span class="wb-check-label">{{ item.label }}</span>
+              <span class="wb-check-state" :class="{ 'is-ready': item.ready }">{{ item.text }}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</template>
+```
+
+- [ ] **Step 4: 替换样式**
+
+`<style lang="less" scoped>` 整块替换：
+
+```less
+.wb-root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--gray-1000);
+}
+
+.wb-top {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  border-bottom: 2px solid var(--gray-1000);
+}
+.wb-title { margin: 0; font-size: 22px; font-weight: 800; }
+.wb-sub { margin: 4px 0 0; font-size: 13px; color: var(--gray-600); }
+.wb-top-actions { display: flex; gap: 12px; flex: 0 0 auto; }
+
+.wb-btn {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--gray-200);
+  border-radius: 0;
+  background: transparent;
+  color: var(--gray-700);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  &:disabled { color: var(--gray-500); cursor: not-allowed; }
+}
+.wb-btn--primary {
+  border-color: var(--main-color);
+  background: var(--main-color);
+  color: #fff;
+  &:disabled { border-color: var(--gray-200); background: var(--gray-100); color: var(--gray-500); }
+}
+.wb-btn--start { width: 100%; height: 46px; }
+
+.wb-grid {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  min-height: 0;
+}
+.wb-col { overflow-y: auto; min-width: 0; }
+.wb-col--left { padding: 24px; border-right: 1px solid var(--gray-100); }
+.wb-col--main { padding: 24px 32px; display: flex; flex-direction: column; gap: 26px; }
+
+.wb-lab {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: var(--gray-500);
+}
+.wb-lab--accent { color: var(--main-700); }
+
+.wb-config { margin-top: 20px; display: flex; flex-direction: column; gap: 20px; }
+.wb-field { display: flex; flex-direction: column; gap: 8px; }
+
+.wb-seg { display: flex; }
+.wb-seg--wrap { flex-wrap: wrap; }
+.wb-opt {
+  flex: 1;
+  min-width: 0;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--gray-200);
+  border-radius: 0;
+  background: transparent;
+  color: var(--gray-700);
+  font-size: 13px;
+  cursor: pointer;
+  &:not(:first-child) { border-left: none; }
+  &.is-on { background: var(--gray-100); color: var(--gray-1000); font-weight: 700; }
+}
+.wb-opt--block {
+  flex: none;
+  height: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+  & + .wb-opt--block { border-top: none; border-left: 1px solid var(--gray-200); }
+}
+.wb-opt-title { font-size: 13px; word-break: break-all; }
+.wb-opt-meta { font-size: 12px; color: var(--gray-600); font-weight: 400; }
+
+.wb-kb {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--gray-200);
+  font-size: 13px;
+  color: var(--gray-700);
+}
+.wb-kb-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-kb-count { flex: 0 0 auto; font-size: 12px; color: var(--gray-500); }
+
+.wb-empty { font-size: 13px; color: var(--gray-500); line-height: 1.7; }
+.wb-link {
+  border: none;
+  background: none;
+  padding: 0 0 0 6px;
+  color: var(--gray-1000);
+  text-decoration: underline;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.wb-active {
+  border: 1px solid var(--gray-200);
+  background: var(--gray-25);
+  padding: 24px 26px;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+.wb-active-info { flex: 1; min-width: 0; }
+.wb-active-actions { display: flex; flex-direction: column; gap: 10px; flex: 0 0 auto; }
+.wb-active-title { font-size: 26px; font-weight: 800; margin: 10px 0 6px; }
+.wb-active-title--empty { font-size: 18px; font-weight: 700; color: var(--gray-600); }
+.wb-active-meta { font-size: 13px; color: var(--gray-600); }
+.wb-bar { display: flex; gap: 2px; margin-top: 16px; max-width: 420px; }
+.wb-bar-done { height: 8px; background: var(--main-color); }
+.wb-bar-rest { height: 8px; background: var(--gray-100); }
+
+.wb-block { display: flex; flex-direction: column; gap: 10px; }
+.wb-block-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.wb-block-hint { font-size: 12px; color: var(--gray-500); }
+
+.wb-quick {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid var(--gray-200);
+  margin-top: 2px;
+}
+.wb-quick-card {
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  padding: 18px 24px 18px 0;
+  &:nth-child(odd) { border-right: 1px solid var(--gray-100); }
+  &:nth-child(even) { padding: 18px 0 18px 24px; }
+  &:nth-child(1),
+  &:nth-child(2) { border-bottom: 1px solid var(--gray-100); }
+  &.is-disabled { cursor: not-allowed; }
+  &.is-disabled .wb-quick-title,
+  &.is-disabled .wb-quick-desc { color: var(--gray-500); }
+}
+.wb-quick-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.wb-quick-title { font-size: 16px; font-weight: 700; color: var(--gray-1000); }
+.wb-quick-desc { font-size: 13px; color: var(--gray-600); margin-top: 7px; line-height: 1.6; }
+
+.wb-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--gray-200);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--gray-600);
+  flex: 0 0 auto;
+  &.is-accent { border-color: var(--main-color); color: var(--main-700); }
+}
+
+.wb-check { font-size: 13px; line-height: 1.6; }
+.wb-check-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 0;
+  border-top: 1px solid var(--gray-100);
+}
+.wb-check-label { color: var(--gray-1000); }
+.wb-check-state { flex: 0 0 auto; color: var(--gray-500); }
+.wb-check-state.is-ready { color: var(--main-700); font-weight: 700; }
+</style>
+```
+
+- [ ] **Step 5: 验证**
+
+Run: `cd /home/fzb/code/AI-Interview/web && pnpm run lint`
+Expected: `InterviewWorkbenchView.vue` 零 error。**特别确认没有 `no-unused-vars`** —— 有的话说明 Step 1 有该删没删的定义，或模板漏用了某个变量。
+
+Run: `cd /home/fzb/code/AI-Interview/web && pnpm run build`
+Expected: 成功
+
+Run: `grep -nE "border-radius:\s*[1-9]|box-shadow|linear-gradient|translateY|translateX|#[0-9a-fA-F]{3,6}" web/src/views/InterviewWorkbenchView.vue`
+Expected: 只有 `.wb-btn--primary` 的 `color: #fff`
+
+Run: `grep -n "trendPoints\|trendCoords\|trendPolyline\|weakDimensions\|recentRecords\|openExportRecords\|LOW_SCORE_THRESHOLD" web/src/views/InterviewWorkbenchView.vue`
+Expected: 无输出（全部已删除）
+
+- [ ] **Step 6: 提交**
+
+```bash
+git add web/src/views/InterviewWorkbenchView.vue
+git commit -m "feat(web): 工作台按更新后的 2a 设计稿重做为「开始面试」"
+```
