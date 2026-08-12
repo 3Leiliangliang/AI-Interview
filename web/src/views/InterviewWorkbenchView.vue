@@ -2,13 +2,18 @@
   <div class="wb-root">
     <header class="wb-top">
       <div>
-        <h1 class="wb-title">面试工作台</h1>
+        <h1 class="wb-title">开始面试</h1>
         <p class="wb-sub">{{ headerSummary }}</p>
       </div>
       <div class="wb-top-actions">
-        <button class="wb-btn" type="button" @click="openExportRecords">导出记录</button>
-        <button class="wb-btn wb-btn--primary" type="button" :disabled="!activeRecord" @click="continueInterview">
-          继续面试
+        <button class="wb-btn" type="button" @click="openRecords">面试记录</button>
+        <button
+          class="wb-btn wb-btn--primary"
+          type="button"
+          :disabled="!activeRecord"
+          @click="continueInterview"
+        >
+          继续未结束的面试
         </button>
       </div>
     </header>
@@ -97,101 +102,79 @@
             </div>
           </div>
 
-          <button class="wb-btn wb-btn--primary wb-btn--start" type="button" :disabled="!canStartInterview" @click="startInterview">
+          <button
+            class="wb-btn wb-btn--primary wb-btn--start"
+            type="button"
+            :disabled="!canStartInterview"
+            @click="startInterview"
+          >
             开始面试
           </button>
         </div>
       </section>
 
-      <!-- 中栏 · 主线 -->
+      <!-- 右栏 · 主线 -->
       <section class="wb-col wb-col--main">
-        <div v-if="activeRecord" class="wb-active" @click="continueInterview">
-          <div class="wb-lab wb-lab--accent">进行中</div>
-          <div class="wb-active-title">{{ activeRecord.position }} · {{ activeRecord.round }}</div>
-          <div class="wb-active-meta">
-            已回答 {{ activeProgress.answered }} / {{ activeProgress.total }} 题
-            <template v-if="activeProgress.duration"> · 用时 {{ activeProgress.duration }}</template>
+        <div v-if="activeRecord" class="wb-active">
+          <div class="wb-active-info">
+            <div class="wb-lab wb-lab--accent">未结束</div>
+            <div class="wb-active-title">{{ activeRecord.position }} · {{ activeRecord.round }}</div>
+            <div class="wb-active-meta">
+              <template v-if="activeProgress.questionCount">停在第 {{ activeProgress.questionCount }} 问 · </template>
+              已答 {{ activeProgress.answered }} / {{ activeProgress.total }} 题
+              <template v-if="activeProgress.duration"> · 用时 {{ activeProgress.duration }}</template>
+            </div>
+            <div class="wb-bar">
+              <div class="wb-bar-done" :style="{ flex: activeProgress.answered || 0.01 }"></div>
+              <div class="wb-bar-rest" :style="{ flex: activeProgress.remaining || 0.01 }"></div>
+            </div>
           </div>
-          <div class="wb-bar">
-            <div class="wb-bar-done" :style="{ flex: activeProgress.answered || 0.01 }"></div>
-            <div class="wb-bar-rest" :style="{ flex: activeProgress.remaining || 0.01 }"></div>
+          <div class="wb-active-actions">
+            <button class="wb-btn wb-btn--primary" type="button" @click="continueInterview">继续面试</button>
+            <button class="wb-btn" type="button" @click="finishAndReport">直接结束并出报告</button>
           </div>
         </div>
         <div v-else class="wb-active wb-active--empty">
-          <div class="wb-lab">进行中</div>
-          <div class="wb-active-title wb-active-title--empty">还没有进行中的面试</div>
-          <div class="wb-active-meta">在左侧选好岗位与简历，点「开始面试」即可开始一轮。</div>
+          <div class="wb-active-info">
+            <div class="wb-lab">未结束</div>
+            <div class="wb-active-title wb-active-title--empty">没有未结束的面试</div>
+            <div class="wb-active-meta">在左侧选好岗位与简历，或从下面的快速开始直接进入。</div>
+          </div>
         </div>
 
         <div class="wb-block">
-          <div class="wb-lab">能力趋势 · 近 {{ trendPoints.length || 4 }} 场</div>
-          <svg v-if="trendPoints.length >= 2" class="wb-chart" viewBox="0 0 560 200" preserveAspectRatio="none">
-            <line x1="40" x2="550" y1="20" y2="20" class="wb-chart-grid" />
-            <line x1="40" x2="550" y1="70" y2="70" class="wb-chart-grid" />
-            <line x1="40" x2="550" y1="120" y2="120" class="wb-chart-grid" />
-            <line x1="40" x2="550" y1="170" y2="170" class="wb-chart-axis" />
-            <text x="30" y="24" text-anchor="end" class="wb-chart-tick">100</text>
-            <text x="30" y="74" text-anchor="end" class="wb-chart-tick">75</text>
-            <text x="30" y="124" text-anchor="end" class="wb-chart-tick">50</text>
-            <polyline :points="trendPolyline" class="wb-chart-line" />
-            <rect
-              v-for="(point, index) in trendCoords"
-              :key="`dot-${index}`"
-              :x="point.x - 4"
-              :y="point.y - 4"
-              width="8"
-              height="8"
-              class="wb-chart-dot"
-            />
-            <text
-              v-for="(point, index) in trendCoords"
-              :key="`label-${index}`"
-              :x="point.x"
-              y="192"
-              text-anchor="middle"
-              class="wb-chart-label"
+          <div class="wb-block-hd">
+            <span class="wb-lab">快速开始</span>
+            <span class="wb-block-hint">选一个直接进面试，不用改左边的配置</span>
+          </div>
+          <div class="wb-quick">
+            <button
+              v-for="card in quickStartCards"
+              :key="card.key"
+              type="button"
+              class="wb-quick-card"
+              :class="{ 'is-disabled': card.disabled }"
+              :disabled="card.disabled"
+              @click="runQuickStart(card)"
             >
-              {{ point.label }}
-            </text>
-          </svg>
-          <div v-else class="wb-empty">完成至少 2 场并生成报告后，这里会显示能力趋势。</div>
+              <div class="wb-quick-hd">
+                <span class="wb-quick-title">{{ card.title }}</span>
+                <span class="wb-badge" :class="{ 'is-accent': card.accent }">{{ card.badge }}</span>
+              </div>
+              <div class="wb-quick-desc">{{ card.desc }}</div>
+            </button>
+          </div>
         </div>
 
         <div class="wb-block">
-          <div class="wb-lab">反复偏弱</div>
-          <div v-if="weakDimensions.length" class="wb-weak">
-            <div v-for="item in weakDimensions" :key="item.key" class="wb-weak-cell">
-              <div class="wb-weak-label">{{ item.label }}</div>
-              <div class="wb-weak-score" :class="{ 'is-low': item.isLow }">{{ item.score }}</div>
-              <div class="wb-weak-hint">低分 {{ item.lowCount }} 次</div>
+          <div class="wb-lab">面试前检查</div>
+          <div class="wb-check">
+            <div v-for="item in preflightChecks" :key="item.key" class="wb-check-row">
+              <span class="wb-check-label">{{ item.label }}</span>
+              <span class="wb-check-state" :class="{ 'is-ready': item.ready }">{{ item.text }}</span>
             </div>
           </div>
-          <div v-else class="wb-empty">还没有足够数据判断薄弱维度。</div>
         </div>
-      </section>
-
-      <!-- 右栏 · 最近记录 -->
-      <section class="wb-col wb-col--right">
-        <div class="wb-lab">最近记录</div>
-        <div v-if="recentRecords.length" class="wb-records">
-          <button
-            v-for="item in recentRecords"
-            :key="item.threadId"
-            type="button"
-            class="wb-record"
-            @click="openRecord(item.raw)"
-          >
-            <div class="wb-record-hd">
-              <span class="wb-record-title">{{ item.title }}</span>
-              <span v-if="item.score !== null && item.score !== undefined" class="wb-record-score">
-                {{ Math.round(item.score) }}
-              </span>
-              <span v-else class="wb-record-undone">未完成</span>
-            </div>
-            <div class="wb-record-meta">{{ item.meta }}</div>
-          </button>
-        </div>
-        <div v-else class="wb-empty">还没有面试记录。</div>
       </section>
     </div>
   </div>
@@ -214,8 +197,6 @@ import { parseToShanghai } from '@/utils/time'
 // 面试 agent 只有固定 6 步 todo，实际题量随对话浮动，接口没有「计划题量」。
 // 这是一个展示约定，不是从数据推导出来的值。
 const EXPECTED_QUESTION_COUNT = 8
-// 与后端 interview_result_service.LOW_SCORE_THRESHOLD 对齐
-const LOW_SCORE_THRESHOLD = 75
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -242,18 +223,6 @@ const selectedRound = ref('初试')
 const selectedResumeId = ref(null)
 
 const records = computed(() => historyPayload.value?.records || [])
-const profile = computed(() => historyPayload.value?.profile || {})
-const chart = computed(() => historyPayload.value?.chart || {})
-
-const headerSummary = computed(() => {
-  const total = records.value.length
-  const reported = records.value.filter((item) => item.has_result).length
-  const scores = records.value
-    .map((item) => item.overall_score)
-    .filter((score) => typeof score === 'number' && Number.isFinite(score))
-  const average = scores.length ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) : null
-  return `${total} 场 · 已出报告 ${reported} 场 · 平均 ${average === null ? '—' : `${average} 分`}`
-})
 
 const activeRecord = computed(() => records.value.find((item) => item.status === 'in_progress') || null)
 
@@ -265,6 +234,23 @@ const formatDuration = (record) => {
   return minutes < 1 ? '不到 1 分钟' : `${minutes} 分钟`
 }
 
+const lastRecord = computed(() => records.value[0] || null)
+
+const lastScoredRecord = computed(
+  () =>
+    records.value.find((item) => item.has_result && typeof item.overall_score === 'number') || null
+)
+
+const headerSummary = computed(() => {
+  const scoreText = lastScoredRecord.value
+    ? `上次得分 ${Math.round(lastScoredRecord.value.overall_score)}`
+    : ''
+  if (activeRecord.value) {
+    return scoreText ? `有一场未结束的面试 · ${scoreText}` : '有一场未结束的面试'
+  }
+  return scoreText || '还没有面试记录'
+})
+
 const activeProgress = computed(() => {
   const record = activeRecord.value
   if (!record) return null
@@ -273,62 +259,13 @@ const activeProgress = computed(() => {
     answered,
     total: EXPECTED_QUESTION_COUNT,
     remaining: EXPECTED_QUESTION_COUNT - answered,
+    questionCount: Number(record.question_count || 0),
     duration: formatDuration(record)
   }
 })
 
-// 只有总分这条线，取最近 4 场
-const trendPoints = computed(() => {
-  const categories = chart.value.categories || []
-  const overall = (chart.value.series || []).find((item) => item.key === 'overall')
-  if (!overall) return []
-  const points = categories
-    .map((category, index) => ({ category, score: overall.data?.[index] }))
-    .filter((item) => typeof item.score === 'number' && Number.isFinite(item.score))
-  return points.slice(-4).map((item) => {
-    const parsed = parseToShanghai(item.category)
-    return { label: parsed ? parsed.format('MM/DD') : '', score: item.score }
-  })
-})
-
-// SVG viewBox 为 0 0 560 200：x 从 80 起、点距 150；y 轴与网格线对齐：100 分→y20，75 分→y70，50 分→y120，≤25 分→y170
-const trendCoords = computed(() =>
-  trendPoints.value.map((point, index) => ({
-    x: 80 + index * 150,
-    y: 20 + (100 - Math.min(100, Math.max(25, point.score))) * 2,
-    label: point.label
-  }))
-)
-
-const trendPolyline = computed(() => trendCoords.value.map((point) => `${point.x},${point.y}`).join(' '))
-
-const weakDimensions = computed(() =>
-  (profile.value.top_weakness_dimensions || []).slice(0, 3).map((item) => ({
-    key: item.dimension_key,
-    label: item.label,
-    score: item.average_score,
-    lowCount: item.low_score_count,
-    isLow: Number(item.average_score) <= LOW_SCORE_THRESHOLD
-  }))
-)
-
-const recentRecords = computed(() =>
-  records.value.slice(0, 6).map((record) => {
-    const parsed = parseToShanghai(record.updated_at || record.created_at)
-    return {
-      threadId: record.thread_id,
-      title: `${record.position} · ${record.round}`,
-      score: record.has_result ? record.overall_score : null,
-      meta: [
-        parsed ? parsed.format('MM/DD HH:mm') : '',
-        record.interview_mode === 'voice' ? '语音' : '文本',
-        `${record.question_count || 0} 题`
-      ]
-        .filter(Boolean)
-        .join(' · '),
-      raw: record
-    }
-  })
+const selectedResume = computed(
+  () => resumeOptions.value.find((item) => item.id === selectedResumeId.value) || null
 )
 
 const currentPositionKey = computed(() => normalizePositionType(selectedPosition.value, positionTypes.value).key)
@@ -344,6 +281,32 @@ const matchedKnowledge = computed(() => {
     names: list.map((item) => item.name).filter(Boolean).join(' · '),
     fileCount: list.reduce((sum, item) => sum + Number(item.file_count || 0), 0)
   }
+})
+
+const preflightChecks = computed(() => {
+  const resume = selectedResume.value
+  let resumeState = { text: '未选择', ready: false }
+  if (resume?.summary_status === 'completed') {
+    resumeState = { text: '就绪', ready: true }
+  } else if (resume?.summary_status === 'failed') {
+    resumeState = { text: '解析失败', ready: false }
+  } else if (resume) {
+    resumeState = { text: '解析中', ready: false }
+  }
+
+  const fileCount = matchedKnowledge.value.fileCount
+  return [
+    { key: 'resume', label: '简历已解析完成，项目经历可被追问', ...resumeState },
+    {
+      key: 'knowledge',
+      label: fileCount
+        ? `出题知识库 ${matchedKnowledge.value.names} 已索引 ${fileCount} 个文件`
+        : '出题知识库尚未配置',
+      text: fileCount ? '就绪' : '未配置',
+      ready: Boolean(fileCount)
+    },
+    { key: 'mic', label: '语音面试需要麦克风权限', text: '选语音时再申请', ready: false }
+  ]
 })
 
 const canStartInterview = computed(() => Boolean(selectedResumeId.value))
@@ -365,20 +328,28 @@ const formatUpdatedAt = (value) => {
   return parsed ? `更新于 ${parsed.format('M/D HH:mm')}` : ''
 }
 
+const pushInterview = ({ mode, position, round }) => {
+  router.push({
+    name: mode === 'voice' ? 'AgentVoiceInterviewComp' : 'AgentInterviewComp',
+    query: {
+      mode,
+      position,
+      round,
+      resumeId: String(selectedResumeId.value),
+      session: `${Date.now()}`
+    }
+  })
+}
+
 const startInterview = () => {
   if (!selectedResumeId.value) {
     message.warning('请先选择一份简历')
     return
   }
-  router.push({
-    name: selectedInterviewMode.value === 'voice' ? 'AgentVoiceInterviewComp' : 'AgentInterviewComp',
-    query: {
-      mode: selectedInterviewMode.value,
-      position: selectedPosition.value,
-      round: selectedRound.value,
-      resumeId: String(selectedResumeId.value),
-      session: `${Date.now()}`
-    }
+  pushInterview({
+    mode: selectedInterviewMode.value,
+    position: selectedPosition.value,
+    round: selectedRound.value
   })
 }
 
@@ -399,18 +370,79 @@ const continueInterview = () => {
   resumeRecord(activeRecord.value)
 }
 
-const openRecord = (record) => {
-  if (record.has_result) {
-    router.push({
-      name: 'InterviewResultPage',
-      query: { threadId: record.thread_id, position: record.position, round: record.round }
-    })
-    return
-  }
-  resumeRecord(record)
+const finishAndReport = () => {
+  const record = activeRecord.value
+  if (!record) return
+  router.push({
+    name: 'InterviewResultPage',
+    query: {
+      threadId: record.thread_id,
+      position: record.position,
+      round: record.round,
+      autoGenerate: '1'
+    }
+  })
 }
 
-const openExportRecords = () => router.push('/agent/records')
+const runQuickStart = (card) => {
+  if (card.disabled) return
+  if (!selectedResumeId.value) {
+    message.warning('请先选择一份简历')
+    return
+  }
+  pushInterview(card.config)
+}
+
+const quickStartCards = computed(() => [
+  {
+    key: 'reuse',
+    title: '沿用上次配置',
+    badge: lastRecord.value
+      ? `${lastRecord.value.interview_mode === 'voice' ? '语音' : '文本'} · ${lastRecord.value.question_count || 0} 题`
+      : '暂无记录',
+    accent: false,
+    desc: lastRecord.value
+      ? `${lastRecord.value.position} · ${lastRecord.value.round} · ${selectedResume.value?.filename || '未选择简历'}`
+      : '完成一场面试后，这里会带出上次的岗位与轮次',
+    disabled: !lastRecord.value,
+    config: lastRecord.value
+      ? {
+          mode: lastRecord.value.interview_mode === 'voice' ? 'voice' : 'text',
+          position: lastRecord.value.position,
+          round: lastRecord.value.round
+        }
+      : null
+  },
+  {
+    key: 'weakness',
+    title: '按弱项出题',
+    badge: '即将上线',
+    accent: true,
+    desc: '只问你反复失分的知识点',
+    disabled: true,
+    config: null
+  },
+  {
+    key: 'voice',
+    title: '语音复试',
+    badge: '语音 · 复试',
+    accent: false,
+    desc: '带摄像头，练表达节奏与追问应对',
+    disabled: false,
+    config: { mode: 'voice', position: selectedPosition.value, round: '复试' }
+  },
+  {
+    key: 'coding',
+    title: '纯编程考核',
+    badge: '即将上线',
+    accent: false,
+    desc: '跳过问答，直接做题并判题',
+    disabled: true,
+    config: null
+  }
+])
+
+const openRecords = () => router.push('/agent/records')
 const openResumeCenter = () => router.push('/resume')
 
 const loadResumes = async () => {
@@ -477,11 +509,11 @@ onMounted(async () => {
 
 .wb-btn {
   height: 34px;
-  padding: 0 16px;
+  padding: 0 14px;
   border: 1px solid var(--gray-200);
   border-radius: 0;
   background: transparent;
-  color: var(--gray-1000);
+  color: var(--gray-700);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -493,17 +525,17 @@ onMounted(async () => {
   color: #fff;
   &:disabled { border-color: var(--gray-200); background: var(--gray-100); color: var(--gray-500); }
 }
-.wb-btn--start { width: 100%; height: 46px; justify-content: flex-start; }
+.wb-btn--start { width: 100%; height: 46px; }
 
 .wb-grid {
   flex: 1 1 auto;
   display: grid;
-  grid-template-columns: 340px 1fr 320px;
+  grid-template-columns: 340px 1fr;
   min-height: 0;
 }
-.wb-col { padding: 24px; overflow-y: auto; min-width: 0; }
-.wb-col--left, .wb-col--main { border-right: 1px solid var(--gray-100); }
-.wb-col--main { display: flex; flex-direction: column; gap: 22px; }
+.wb-col { overflow-y: auto; min-width: 0; }
+.wb-col--left { padding: 24px; border-right: 1px solid var(--gray-100); }
+.wb-col--main { padding: 24px 32px; display: flex; flex-direction: column; gap: 26px; }
 
 .wb-lab {
   font-size: 11px;
@@ -574,56 +606,71 @@ onMounted(async () => {
 .wb-active {
   border: 1px solid var(--gray-200);
   background: var(--gray-25);
-  padding: 22px 24px;
-  cursor: pointer;
+  padding: 24px 26px;
+  display: flex;
+  align-items: center;
+  gap: 28px;
 }
-.wb-active--empty { cursor: default; }
+.wb-active-info { flex: 1; min-width: 0; }
+.wb-active-actions { display: flex; flex-direction: column; gap: 10px; flex: 0 0 auto; }
 .wb-active-title { font-size: 26px; font-weight: 800; margin: 10px 0 6px; }
 .wb-active-title--empty { font-size: 18px; font-weight: 700; color: var(--gray-600); }
 .wb-active-meta { font-size: 13px; color: var(--gray-600); }
-.wb-bar { display: flex; gap: 2px; margin-top: 18px; }
+.wb-bar { display: flex; gap: 2px; margin-top: 16px; max-width: 420px; }
 .wb-bar-done { height: 8px; background: var(--main-color); }
 .wb-bar-rest { height: 8px; background: var(--gray-100); }
 
 .wb-block { display: flex; flex-direction: column; gap: 10px; }
-.wb-chart { width: 100%; height: 210px; }
-.wb-chart-grid { stroke: var(--gray-200); }
-.wb-chart-axis { stroke: var(--gray-1000); stroke-width: 2; }
-.wb-chart-tick, .wb-chart-label { font-size: 11px; fill: var(--gray-500); }
-.wb-chart-label { fill: var(--gray-600); }
-.wb-chart-line { fill: none; stroke: var(--main-color); stroke-width: 2; }
-.wb-chart-dot { fill: var(--main-color); }
+.wb-block-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.wb-block-hint { font-size: 12px; color: var(--gray-500); }
 
-.wb-weak {
+.wb-quick {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1fr 1fr;
   border-top: 1px solid var(--gray-200);
+  margin-top: 2px;
 }
-.wb-weak-cell {
-  padding: 14px 16px;
-  &:not(:last-child) { border-right: 1px solid var(--gray-100); }
-  &:first-child { padding-left: 0; }
-  &:last-child { padding-right: 0; }
-}
-.wb-weak-label { font-size: 13px; color: var(--gray-600); }
-.wb-weak-score { font-size: 28px; font-weight: 800; margin-top: 4px; }
-.wb-weak-score.is-low { color: var(--main-color); }
-.wb-weak-hint { font-size: 12px; color: var(--gray-500); }
-
-.wb-records { display: flex; flex-direction: column; margin-top: 14px; }
-.wb-record {
-  width: 100%;
-  padding: 14px 0;
+.wb-quick-card {
   border: none;
-  border-top: 1px solid var(--gray-100);
   background: none;
   text-align: left;
   cursor: pointer;
-  &:first-child { border-top-color: var(--gray-200); }
+  padding: 18px 24px 18px 0;
+  &:nth-child(odd) { border-right: 1px solid var(--gray-100); }
+  &:nth-child(even) { padding: 18px 0 18px 24px; }
+  &:nth-child(1),
+  &:nth-child(2) { border-bottom: 1px solid var(--gray-100); }
+  &.is-disabled { cursor: not-allowed; }
+  &.is-disabled .wb-quick-title,
+  &.is-disabled .wb-quick-desc { color: var(--gray-500); }
 }
-.wb-record-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.wb-record-title { font-size: 15px; font-weight: 700; color: var(--gray-1000); }
-.wb-record-score { font-size: 19px; font-weight: 800; color: var(--gray-1000); }
-.wb-record-undone { font-size: 13px; color: var(--gray-500); }
-.wb-record-meta { font-size: 12px; color: var(--gray-500); margin-top: 5px; }
+.wb-quick-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.wb-quick-title { font-size: 16px; font-weight: 700; color: var(--gray-1000); }
+.wb-quick-desc { font-size: 13px; color: var(--gray-600); margin-top: 7px; line-height: 1.6; }
+
+.wb-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--gray-200);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--gray-600);
+  flex: 0 0 auto;
+  &.is-accent { border-color: var(--main-color); color: var(--main-700); }
+}
+
+.wb-check { font-size: 13px; line-height: 1.6; }
+.wb-check-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 0;
+  border-top: 1px solid var(--gray-100);
+}
+.wb-check-label { color: var(--gray-1000); }
+.wb-check-state { flex: 0 0 auto; color: var(--gray-500); }
+.wb-check-state.is-ready { color: var(--main-700); font-weight: 700; }
 </style>
