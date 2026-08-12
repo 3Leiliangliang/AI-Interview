@@ -402,7 +402,14 @@ const quickStartCards = computed(() => [
       : '暂无记录',
     accent: false,
     desc: lastRecord.value
-      ? `${lastRecord.value.position} · ${lastRecord.value.round} · ${selectedResume.value?.filename || '未选择简历'}`
+      ? [
+          lastRecord.value.position,
+          lastRecord.value.round,
+          selectedResume.value?.filename || '未选择简历',
+          matchedKnowledge.value.names
+        ]
+          .filter(Boolean)
+          .join(' · ')
       : '完成一场面试后，这里会带出上次的岗位与轮次',
     disabled: !lastRecord.value,
     config: lastRecord.value
@@ -517,6 +524,9 @@ onMounted(async () => {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
   &:disabled { color: var(--gray-500); cursor: not-allowed; }
 }
 .wb-btn--primary {
