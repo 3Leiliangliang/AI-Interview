@@ -164,3 +164,60 @@ async def count_messages_by_role_for_thread_ids(
 - `src/repositories/conversation_repository.py`
 - `src/services/interview_result_service.py`
 - `test/unit/test_interview_result_service.py`（新字段断言）
+
+---
+
+## 修订 · 2026-08-12（设计稿更新）
+
+`templates/新版界面 v3.dc.html` 锚点 `#2a` 被重做：页面从「面试工作台」收窄为「开始面试」，定位改为**只做一件事：让人尽快进入面试**，记录归记录页与侧边栏。以下取代上文中与之冲突的部分，其余（路由、后端补字段、样式约束）不变。
+
+### 布局变更
+
+栅格 `340px 1fr 320px` → `340px 1fr`。左栏「新面试配置」保持不变。
+
+**删除**（已实现，本次移除，含其数据层）：能力趋势 SVG 折线图、反复偏弱三格、右栏最近记录六行。这些内容在 `/agent/records` 面试记录页已经具备。随之删除 `trendPoints` / `trendCoords` / `trendPolyline` / `weakDimensions` / `recentRecords` / `openRecord` / `LOW_SCORE_THRESHOLD`。
+
+### 顶栏
+
+标题「开始面试」。副标题按状态：有未结束会话且有历史分数 → `有一场未结束的面试 · 上次得分 {n}`；无未结束会话但有分数 → `上次得分 {n}`；都没有 → `还没有面试记录`。
+
+右侧按钮：`面试记录`（次要，跳 `/agent/records`）+ `继续未结束的面试`（主，无未结束会话时禁用）。
+
+### 中栏（三块，gap 26px，padding 24px 32px）
+
+**1. 未结束卡片**（横向：左信息 + 右侧两个竖排按钮）
+
+- 小标签「未结束」用 `--main-700`
+- 26px 大字 `{position} · {round}`
+- 说明行 `停在第 {question_count} 问 · 已答 {answered_count} / 8 题 · 用时 {M} 分钟`
+  - **偏离设计稿**：设计稿写作 `停在第 5 问「分布式事务」`。引号里的话题名没有数据源——最后一条 assistant 消息是完整的面试官发言（长句散文），不是话题标签，截断展示会很难看。省略引号部分。
+- 两段式进度条，`max-width: 420px`
+- 右侧按钮：`继续面试`（主）+ `直接结束并出报告`（次，跳 `InterviewResultPage` 并带 `autoGenerate=1`，与 `InterviewSessionView` 面试完成时的跳转一致）
+- 无未结束会话时整块换成空态
+
+**2. 快速开始**（表头行 + 2×2 网格四张卡）
+
+| 卡 | 状态 | 行为 |
+|---|---|---|
+| 沿用上次配置 | 可用 | 用 `records[0]` 的 position / round / interview_mode 直接发起 |
+| 按弱项出题（推荐） | **置灰禁用** | 面试 agent 走 SEP 自适应选题，没有限定话题的入参；`personalized_path.weaknesses[].title` 是维度级描述而非知识点，且无处传入 |
+| 语音复试 | 可用 | 预设 mode=voice / round=复试 发起 |
+| 纯编程考核 | **置灰禁用** | `start_code_assessment` 是 agent 在面试第 4 阶段自行调用的工具，没有用户发起纯编程会话的入口；`InterviewCodingWorkbench` 依赖 agent 已建好的 coding session |
+
+两张禁用卡按设计稿完整渲染（标题、badge、描述），加 `即将上线` 标记，`cursor: not-allowed`，不可点击。宁可诚实置灰，也不做假交互。
+
+badge 文案对齐真实数据：沿用上次配置 → `{文本|语音} · {question_count} 题`；语音复试 → `语音 · 复试`；另两张沿用设计稿文案。
+
+**3. 面试前检查**（三行，左说明 + 右状态）
+
+| 行 | 数据源 | 就绪判据 |
+|---|---|---|
+| 简历已解析完成，项目经历可被追问 | 选中简历的 `summary_status` | `completed` → 就绪；`pending`/`processing` → 解析中；`failed` → 解析失败；未选简历 → 未选择 |
+| 出题知识库 {names} 已索引 {n} 个文件 | `matchedKnowledge` | `fileCount > 0` → 就绪，否则 未配置 |
+| 语音面试需要麦克风权限 | 静态 | 恒为 `选语音时再申请`（弱化色） |
+
+「就绪」用 `--main-700`，非就绪用 `--gray-500`。
+
+### 主色使用（取代上文的四处约束）
+
+主色允许出现的位置：主操作按钮（`开始面试` / `继续未结束的面试` / `继续面试`）、未结束卡片的「未结束」标签与进度条、「推荐」badge 的描边与文字、面试前检查的「就绪」状态字。趋势图与偏弱分数随模块一并删除。
