@@ -930,7 +930,7 @@ const scrollMessagesToBottom = async () => {
 
 const backToSetup = () => {
   router.push({
-    name: 'AgentComp',
+    name: 'InterviewWorkbench',
     query: {
       mode: 'voice',
       position: selectedPosition.value,
@@ -1179,7 +1179,7 @@ onBeforeUnmount(() => {
 onMounted(async () => {
   if (!sessionKey.value && !routeThreadId.value) {
     router.replace({
-      name: 'AgentComp',
+      name: 'InterviewWorkbench',
       query: {
         mode: 'voice',
         position: selectedPosition.value,

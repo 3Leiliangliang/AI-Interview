@@ -95,9 +95,9 @@ const sidebarBrand = computed(() => {
 const mainList = computed(() => [
   {
     name: '开始面试',
-    path: '/agent',
+    path: '/interview',
     matchNames: [
-      'AgentComp',
+      'InterviewWorkbench',
       'AgentInterviewComp',
       'AgentVoiceInterviewComp',
       'InterviewCodingWorkbench',

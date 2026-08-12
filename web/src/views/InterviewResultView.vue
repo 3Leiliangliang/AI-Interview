@@ -797,7 +797,7 @@ const finalizeResult = async (force = false) => {
 
 onMounted(async () => {
   if (!threadId.value) {
-    router.replace({ name: 'AgentComp', query: { position: selectedPosition.value, round: selectedRound.value } })
+    router.replace({ name: 'InterviewWorkbench', query: { position: selectedPosition.value, round: selectedRound.value } })
     return
   }
   await loadResult()

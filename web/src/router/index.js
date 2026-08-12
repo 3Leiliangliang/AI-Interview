@@ -33,9 +33,7 @@ const router = createRouter({
       children: [
         {
           path: '',
-          name: 'AgentComp',
-          component: () => import('../views/AgentView.vue'),
-          meta: { keepAlive: true, requiresAuth: true }
+          redirect: '/interview'
         },
         {
           path: 'interview',
@@ -70,6 +68,19 @@ const router = createRouter({
         {
           path: ':agent_id',
           redirect: '/agent'
+        }
+      ]
+    },
+    {
+      path: '/interview',
+      name: 'interview',
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'InterviewWorkbench',
+          component: () => import('../views/InterviewWorkbenchView.vue'),
+          meta: { keepAlive: false, requiresAuth: true }
         }
       ]
     },
