@@ -163,6 +163,7 @@ import InterviewKnowledgeLearnModal from '@/components/interview/InterviewKnowle
 import { interviewHistoryApi } from '@/apis/interview_history'
 import { useUserStore } from '@/stores/user'
 import { formatDateTime, parseToShanghai } from '@/utils/time'
+import { decodeHtmlEntities } from '@/utils/html'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -205,7 +206,6 @@ const externalResourceCount = computed(() => prioritizedResources.value.filter((
 const weaknessGapSummary = computed(() => { const w = topWeaknessDimensions.value[0]; const s = topStrengthDimensions.value[0]; if (!w && !s) return { title: '等待更多轮面试数据', gapText: '--', description: '完成至少 2 轮以上面试并生成报告后，这里会自动分析你的强弱项差距。' }; if (!w || !s) return { title: `${w?.label || s?.label || '核心能力'}需要持续观察`, gapText: `${w?.average_score || s?.average_score || '--'} 分`, description: '当前样本还不够，先继续积累几轮数据。' }; const gap = Math.max(0, Number(s.average_score || 0) - Number(w.average_score || 0)); return { title: `${w.label} 与 ${s.label} 差了 ${gap} 分`, gapText: `${gap} 分差距`, description: `你的${s.label}已经比较稳定了。现在最值得投入时间的是把${w.label}提上来——补短板比拉长板见效更快。` } })
 const actionLoopNodes = computed(() => { const fc = { learn: { fill: '#edf7ff', stroke: '#4f9fec', badgeColor: '#143254' }, practice: { fill: '#f5f7f7', stroke: '#697070', badgeColor: '#151616' }, recheck: { fill: '#def0ff', stroke: '#2765a3', badgeColor: '#091a30' } }; const pos = { learn: { x: 82, y: 76 }, practice: { x: 248, y: 84 }, recheck: { x: 160, y: 168 } }; return (personalizedPath.value.action_plan?.steps || []).map((step, index) => { const t = String(step?.step_type || '').trim(); const token = String(index + 1).padStart(2, '0'); const c = fc[t] || fc.learn; const p = pos[t] || { x: 70 + index * 80, y: 90 + index * 12 }; return { key: `${t}-${step.title}`, token, label: getActionStepShortLabel(t), title: step.title, minutes: step.estimated_minutes || '--', fill: c.fill, stroke: c.stroke, badgeColor: c.badgeColor, x: p.x, y: p.y } }) })
 
-const decodeHtmlEntities = (value) => { const text = String(value || ''); if (typeof window === 'undefined' || !text.includes('&')) return text; const doc = new DOMParser().parseFromString(text, 'text/html'); return doc.body.textContent || '' }
 const getStatusLabel = (s) => ({ in_progress: '进行中', generating: '报告生成中', completed: '已完成', failed: '生成失败' })[s] || s || '进行中'
 const getInterviewModeLabel = (m) => String(m || '').trim() === 'voice' ? '语音面试' : '文本面试'
 const formatOverallScore = (s) => (typeof s === 'number' && Number.isFinite(s)) ? `${Math.round(s)}` : '--'
