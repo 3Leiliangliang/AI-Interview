@@ -167,6 +167,118 @@ async def get_accessible_databases(current_user: User = Depends(get_required_use
         return {"message": f"获取可访问知识库列表失败: {str(e)}", "databases": []}
 
 
+@knowledge.get("/databases/upstream-sources")
+async def get_upstream_sources(current_user: User = Depends(get_admin_user)):
+    """获取上游面试资料源的导入状态"""
+    try:
+        from scripts.interview_knowledge_sources import build_source_catalog, CURATED_MANIFEST_PATH
+
+        catalog = build_source_catalog()
+        upstream_repos = [
+            {
+                "key": repo.key,
+                "name": repo.repo_web_url.rstrip("/").rsplit("/", 1)[-1] if repo.repo_web_url else repo.key,
+                "url": repo.repo_web_url,
+                "license": repo.license_name,
+            }
+            for repo in catalog
+        ]
+
+        databases_result = await knowledge_base.get_databases_by_user_id(current_user.user_id)
+        existing_databases = databases_result.get("databases", []) if isinstance(databases_result, dict) else []
+        existing_names = {db.get("name", "").strip() for db in existing_databases}
+
+        try:
+            from scripts.import_interview_knowledge import get_managed_interview_database_names
+            managed_names = set(get_managed_interview_database_names())
+        except Exception:
+            managed_names = set()
+
+        imported = sorted(managed_names & existing_names)
+        unimported = sorted(managed_names - existing_names)
+
+        has_manifest = CURATED_MANIFEST_PATH.exists()
+
+        return {
+            "upstream_repos": upstream_repos,
+            "total_repos": len(upstream_repos),
+            "managed_database_names": sorted(managed_names),
+            "imported": imported,
+            "unimported": unimported,
+            "unimported_count": len(unimported),
+            "has_manifest": has_manifest,
+            "all_imported": len(unimported) == 0,
+        }
+    except Exception as e:
+        logger.error(f"获取上游资料源状态失败: {e}, {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取上游资料源状态失败: {e}")
+
+
+@knowledge.post("/databases/import-upstream")
+async def import_upstream_sources(current_user: User = Depends(get_admin_user)):
+    """触发上游面试资料导入（后台执行）"""
+    try:
+        async def _run_import(ctx: TaskContext):
+            import sys
+            from pathlib import Path
+
+            root = Path(__file__).resolve().parents[2]
+            if str(root) not in sys.path:
+                sys.path.insert(0, str(root))
+
+            try:
+                await ctx.set_progress(5, "正在同步上游面试资料...")
+
+                from scripts.interview_knowledge_sources import ensure_interview_knowledge_sources
+                ensure_interview_knowledge_sources(force=False)
+
+                await ctx.set_progress(10, "正在构建导入计划...")
+
+                from scripts.import_interview_knowledge import build_import_plan, import_knowledge_plan
+                from scripts.import_interview_knowledge import ApiClient as ImportApiClient
+                from scripts.import_interview_knowledge import read_default_credentials
+
+                plans = build_import_plan()
+
+                username, password = read_default_credentials()
+                if not username or not password:
+                    username = os.getenv("AI_INTERVIEW_SUPER_ADMIN_NAME")
+                    password = os.getenv("AI_INTERVIEW_SUPER_ADMIN_PASSWORD")
+                if not username or not password:
+                    raise RuntimeError(
+                        "缺少管理员凭据，请在 .env 中配置 AI_INTERVIEW_SUPER_ADMIN_NAME / "
+                        "AI_INTERVIEW_SUPER_ADMIN_PASSWORD"
+                    )
+
+                base_url = "http://127.0.0.1:5050/api"
+
+                async with ImportApiClient(base_url, username, password) as api:
+                    total = len(plans)
+                    for idx, plan in enumerate(plans):
+                        progress_pct = 10 + int((idx / total) * 80) if total > 0 else 90
+                        await ctx.set_progress(progress_pct, f"正在导入: {plan.name} ({idx + 1}/{total})")
+                        await import_knowledge_plan(api, plan, batch_size=20, force_reindex=False)
+
+                await ctx.set_progress(100, f"导入完成：共 {total} 个知识库")
+                await ctx.set_result({"total": total, "status": "success"})
+            except Exception as exc:
+                logger.error(f"上游资料导入失败: {exc}, {traceback.format_exc()}")
+                await ctx.set_progress(0, f"导入失败: {exc}")
+                raise
+
+        task = await tasker.enqueue(
+            name="导入上游面试资料",
+            task_type="knowledge_import_upstream",
+            payload={},
+            coroutine=_run_import,
+        )
+
+        return {"task_id": task.id, "status": "queued", "message": "导入任务已提交"}
+    except Exception as e:
+        logger.error(f"触发上游资料导入失败: {e}, {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"触发导入失败: {e}")
+
+
 @knowledge.get("/databases/{db_id}")
 async def get_database_info(db_id: str, current_user: User = Depends(get_admin_user)):
     """获取知识库详细信息"""
@@ -1459,3 +1571,10 @@ async def generate_description(
     except Exception as e:
         logger.error(f"生成描述失败: {e}, {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"生成描述失败: {e}")
+
+
+# =============================================================================
+# === 上游面试资料导入分组 ===
+# =============================================================================
+
+
