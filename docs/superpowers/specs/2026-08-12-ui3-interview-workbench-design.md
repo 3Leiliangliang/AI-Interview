@@ -122,7 +122,7 @@ async def count_messages_by_role_for_thread_ids(
 
 能力趋势：手写 SVG 折线（`viewBox="0 0 560 200"`），方块数据点，横轴日期。不引 echarts——只有 4 个点的单条折线，引图表库不划算，且 echarts 的默认样式与零圆角规范冲突。少于 2 个点时显示空态（一个点连不成趋势）。
 
-反复偏弱：三格，`标签 / 分数 / 低分 N 次`。分数 `<= 70`（后端 `LOW_SCORE_THRESHOLD`）时用 `--main-color`，否则墨色。无数据时空态。
+反复偏弱：三格，`标签 / 分数 / 低分 N 次`。分数 `<= 75`（对齐后端 `LOW_SCORE_THRESHOLD = 75`）时用 `--main-color`，否则墨色。无数据时空态。
 
 ### 右栏 · 最近记录
 
