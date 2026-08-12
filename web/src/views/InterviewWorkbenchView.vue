@@ -504,14 +504,14 @@ onMounted(async () => {
 .wb-top {
   flex: 0 0 auto;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  padding: 20px 24px;
-  border-bottom: 2px solid var(--gray-1000);
+  padding: 20px 32px 16px;
+  border-bottom: 1px solid var(--gray-100);
 }
-.wb-title { margin: 0; font-size: 22px; font-weight: 800; }
-.wb-sub { margin: 4px 0 0; font-size: 13px; color: var(--gray-600); }
+.wb-title { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
+.wb-sub { margin: 6px 0 0; font-size: 13px; color: var(--gray-500); }
 .wb-top-actions { display: flex; gap: 12px; flex: 0 0 auto; }
 
 .wb-btn {
