@@ -182,7 +182,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 
 import { interviewHistoryApi } from '@/apis/interview_history'
@@ -199,6 +199,7 @@ import { parseToShanghai } from '@/utils/time'
 const EXPECTED_QUESTION_COUNT = 8
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 const { positionTypes, positionTypeOptions, defaultPositionType, loadPositionTypes } = usePositionTypes()
 
@@ -455,6 +456,11 @@ const openResumeCenter = () => router.push('/resume')
 const loadResumes = async () => {
   const data = await resumeApi.getMyResumes()
   resumeOptions.value = Array.isArray(data?.resumes) ? data.resumes : []
+  const routeResumeId = Number(route.query.resumeId)
+  if (Number.isFinite(routeResumeId) && resumeOptions.value.some((item) => item.id === routeResumeId)) {
+    selectedResumeId.value = routeResumeId
+    return
+  }
   if (!resumeOptions.value.some((item) => item.id === selectedResumeId.value)) {
     selectedResumeId.value = resumeOptions.value[0]?.id || null
   }
