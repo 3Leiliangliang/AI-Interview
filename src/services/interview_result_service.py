@@ -4024,6 +4024,7 @@ def _build_finalize_prompt(
     problem_title = str((coding_session or {}).get("problem_title") or "").strip()
     difficulty = str((coding_session or {}).get("difficulty_level") or "").strip()
     submitted_at = str((coding_session or {}).get("submitted_at") or "").strip()
+    hint_count = int((coding_session or {}).get("hint_count") or 0)
 
     lines = [
         "代码考核已经结束，请你现在直接完成第 6、7 阶段，不要继续追问用户，也不要要求用户再返回聊天作答。",
@@ -4042,6 +4043,8 @@ def _build_finalize_prompt(
         lines.append(f"代码题得分：{coding_score}")
     if submitted_at:
         lines.append(f"提交时间：{submitted_at}")
+    if hint_count:
+        lines.append(f"提示请求次数：{hint_count}")
 
     lines.extend(
         [

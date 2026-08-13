@@ -359,7 +359,6 @@ watch(
     resetGraphStats()
     store.stopAutoRefresh()
     await store.getDatabaseInfo(newId, false) // Explicitly load query params on initial load
-    store.startAutoRefresh()
   },
   { immediate: true }
 )
@@ -436,7 +435,6 @@ onMounted(() => {
   store.databaseId = route.params.database_id
   resetFileSelectionState()
   store.getDatabaseInfo()
-  store.startAutoRefresh()
 
   // 添加拖拽事件监听（仅水平方向）
   if (resizeHandle.value) {

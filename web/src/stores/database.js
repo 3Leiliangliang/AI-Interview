@@ -37,8 +37,6 @@ export const useDatabaseStore = defineStore('database', () => {
   })
 
   let refreshInterval = null
-  let autoRefreshSource = null // Tracks whether auto-refresh was user-triggered or automatic
-  let autoRefreshManualOverride = false // Indicates user explicitly disabled auto-refresh
 
   // Actions
   async function loadDatabases() {
@@ -102,8 +100,13 @@ export const useDatabaseStore = defineStore('database', () => {
     }
     try {
       const data = await databaseApi.getDatabaseInfo(db_id)
+
+      // 后台轮询时若数据未变化，跳过整体替换，避免页面组件因引用变化频繁重渲染
+      if (isBackground && database.value && JSON.stringify(data) === JSON.stringify(database.value)) {
+        return
+      }
+
       database.value = data
-      ensureAutoRefreshForProcessing(data?.files)
 
       // Only load query parameters if explicitly requested or if not loaded yet
       if (!skipQueryParams && queryParams.value.length === 0) {
@@ -252,38 +255,42 @@ export const useDatabaseStore = defineStore('database', () => {
     })
   }
 
-  const processingStatuses = new Set(['processing', 'waiting', 'parsing', 'indexing'])
+  // ===== 任务驱动的数据刷新：轻量轮询任务状态，任务结束后刷新一次数据 =====
+  const watchedTaskIds = new Set()
+  let taskPollTimer = null
+  let taskPolling = false
 
-  function enableAutoRefresh(source = 'auto') {
-    if (autoRefreshManualOverride && source === 'auto') {
-      return
-    }
-
-    if (!state.autoRefresh) {
-      state.autoRefresh = true
-      autoRefreshSource = source
-      autoRefreshManualOverride = false
-      startAutoRefresh()
-      return
-    }
-
-    if (source === 'auto' && autoRefreshSource !== 'manual') {
-      autoRefreshSource = 'auto'
+  function watchTask(taskId) {
+    if (!taskId || watchedTaskIds.has(taskId)) return
+    watchedTaskIds.add(taskId)
+    if (!taskPollTimer) {
+      taskPollTimer = setInterval(pollWatchedTasks, 3000)
     }
   }
 
-  function ensureAutoRefreshForProcessing(filesMap) {
-    const files = Object.values(filesMap || {})
-    const hasPending = files.some((file) => file && processingStatuses.has(file.status))
-    if (hasPending) {
-      enableAutoRefresh('auto')
-    } else if (autoRefreshSource === 'auto' && state.autoRefresh) {
-      state.autoRefresh = false
-      autoRefreshSource = null
-      autoRefreshManualOverride = false
-      stopAutoRefresh()
+  async function pollWatchedTasks() {
+    if (taskPolling) return
+    taskPolling = true
+    try {
+      const finished = []
+      for (const taskId of [...watchedTaskIds]) {
+        await taskerStore.refreshTask(taskId)
+        const task = taskerStore.tasks.find((t) => t.id === taskId)
+        if (task && ['success', 'failed', 'cancelled'].includes(task.status)) {
+          finished.push(taskId)
+        }
+      }
+      if (finished.length > 0) {
+        finished.forEach((id) => watchedTaskIds.delete(id))
+        await getDatabaseInfo(undefined, true) // 任务结束后刷新一次知识库数据
+      }
+    } finally {
+      taskPolling = false
+      if (watchedTaskIds.size === 0 && taskPollTimer) {
+        clearInterval(taskPollTimer)
+        taskPollTimer = null
+      }
     }
-    return hasPending
   }
 
   async function moveFile(fileId, newParentId) {
@@ -331,7 +338,6 @@ export const useDatabaseStore = defineStore('database', () => {
       const data = await documentApi.addDocuments(databaseId.value, items, requestParams)
       if (data.status === 'success' || data.status === 'queued') {
         const itemType = contentType === 'file' ? '文件' : 'URL'
-        enableAutoRefresh('auto')
         message.success(data.message || `${itemType}已提交处理，请在任务中心查看进度`)
         if (data.task_id) {
           taskerStore.registerQueuedTask({
@@ -345,8 +351,8 @@ export const useDatabaseStore = defineStore('database', () => {
               content_type: contentType
             }
           })
+          watchTask(data.task_id)
         }
-        await delayedRefresh() // 延迟1秒后刷新
         return true // Indicate success
       } else {
         message.error(data.message || '处理失败')
@@ -367,7 +373,6 @@ export const useDatabaseStore = defineStore('database', () => {
     try {
       const data = await documentApi.parseDocuments(databaseId.value, fileIds)
       if (data.status === 'success' || data.status === 'queued') {
-        enableAutoRefresh('auto')
         message.success(data.message || '解析任务已提交')
         if (data.task_id) {
           taskerStore.registerQueuedTask({
@@ -377,8 +382,8 @@ export const useDatabaseStore = defineStore('database', () => {
             message: data.message,
             payload: { db_id: databaseId.value, count: fileIds.length }
           })
+          watchTask(data.task_id)
         }
-        await delayedRefresh() // 延迟1秒后刷新
         return true
       } else {
         message.error(data.message || '提交失败')
@@ -399,7 +404,6 @@ export const useDatabaseStore = defineStore('database', () => {
     try {
       const data = await documentApi.indexDocuments(databaseId.value, fileIds, params)
       if (data.status === 'success' || data.status === 'queued') {
-        enableAutoRefresh('auto')
         message.success(data.message || '入库任务已提交')
         if (data.task_id) {
           taskerStore.registerQueuedTask({
@@ -409,8 +413,8 @@ export const useDatabaseStore = defineStore('database', () => {
             message: data.message,
             payload: { db_id: databaseId.value, count: fileIds.length }
           })
+          watchTask(data.task_id)
         }
-        await delayedRefresh() // 延迟1秒后刷新
         return true
       } else {
         message.error(data.message || '提交失败')
@@ -492,7 +496,7 @@ export const useDatabaseStore = defineStore('database', () => {
     if (state.autoRefresh && !refreshInterval) {
       refreshInterval = setInterval(() => {
         getDatabaseInfo(undefined, true, true) // Skip loading query params during auto-refresh
-      }, 1000)
+      }, 3000)
     }
   }
 
@@ -503,22 +507,11 @@ export const useDatabaseStore = defineStore('database', () => {
     }
   }
 
-  // 延时刷新文件理解（延迟1秒后刷新）
-  async function delayedRefresh() {
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    await getDatabaseInfo(undefined, true)
-  }
-
   function toggleAutoRefresh() {
-    const nextState = !state.autoRefresh
-    state.autoRefresh = nextState
-    if (nextState) {
-      autoRefreshSource = 'manual'
-      autoRefreshManualOverride = false
+    state.autoRefresh = !state.autoRefresh
+    if (state.autoRefresh) {
       startAutoRefresh()
     } else {
-      autoRefreshManualOverride = true
-      autoRefreshSource = null
       stopAutoRefresh()
     }
   }
