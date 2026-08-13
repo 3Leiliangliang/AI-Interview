@@ -76,6 +76,31 @@ export const databaseApi = {
    */
   getAccessibleDatabases: async () => {
     return apiAdminGet('/api/knowledge/databases/accessible')
+  },
+
+  /**
+   * 获取上游面试资料源的导入状态
+   * @returns {Promise} - 上游资料源状态
+   */
+  getUpstreamSources: async () => {
+    return apiAdminGet('/api/knowledge/databases/upstream-sources')
+  },
+
+  /**
+   * 触发上游面试资料导入
+   * @returns {Promise} - 任务信息
+   */
+  importUpstreamSources: async () => {
+    return apiAdminPost('/api/knowledge/databases/import-upstream')
+  },
+
+  /**
+   * 查询后台任务状态
+   * @param {string} taskId - 任务ID
+   * @returns {Promise} - 任务详情
+   */
+  getTask: async (taskId) => {
+    return apiAdminGet(`/api/tasks/${taskId}`)
   }
 }
 

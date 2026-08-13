@@ -641,18 +641,19 @@ class OpenVikingService:
         if not target_uri:
             return 0
 
-        _, _, _, _, vector_store, _ = await self._get_runtime_handles()
+        _, _, _, request_ctx, vector_store, _ = await self._get_runtime_handles()
         from openviking.storage.expr import PathScope
 
         records = await vector_store.filter(
             PathScope("uri", target_uri, depth=-1),
             limit=100000,
             output_fields=["uri"],
+            ctx=request_ctx,
         )
         ids = [record.get("id") for record in records if record.get("id")]
         if not ids:
             return 0
-        return await vector_store.delete(ids)
+        return await vector_store.delete(ids, ctx=request_ctx)
 
     async def upsert_resource_vector(
         self,
@@ -693,7 +694,8 @@ class OpenVikingService:
                 "abstract": abstract,
                 "account_id": account_id,
                 "owner_space": owner_space,
-            }
+            },
+            ctx=request_ctx,
         )
 
     async def sync_resume(self, resume: UserResume) -> str:
