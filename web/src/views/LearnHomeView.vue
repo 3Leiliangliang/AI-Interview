@@ -1,186 +1,204 @@
 <template>
   <div class="learn-home">
-    <section class="hero-card enter-fade-up">
-      <div class="hero-copy">
-        <span class="hero-badge">知识学习</span>
-        <div class="hero-title-wrap">
-          <span class="title-accent"></span>
-          <h1>
-            按专题学习管理员维护的
-            <span>知识库内容</span>
-          </h1>
-        </div>
-        <p>面向面试者的轻学习入口，支持按岗位筛选、专题浏览和文档学习。</p>
-        <div class="hero-sub-meta">当前共 {{ databases.length }} 个专题，筛选后 {{ visibleDatabases.length }} 个</div>
+    <!-- 顶栏 -->
+    <div class="page-topbar">
+      <div class="topbar-left">
+        <h1 class="page-title">知识学习</h1>
+        <p class="page-subtitle">{{ subtitleText }}</p>
       </div>
-
-      <div class="hero-search">
-        <a-input
-          v-model:value="keyword"
-          size="large"
-          allow-clear
-          placeholder="搜索知识库名称或简介"
+      <div class="topbar-actions">
+        <a-button
+          v-if="totalReadLater > 0"
+          class="btn-secondary"
+          :class="{ 'btn-secondary--on': readLaterOnly }"
+          @click="readLaterOnly = !readLaterOnly"
         >
-          <template #prefix>
-            <SearchOutlined />
-          </template>
-        </a-input>
-
-        <div class="hot-search">
-          <span class="hot-search__label">热门搜索</span>
-          <div class="hot-search__pills">
-            <button
-              v-for="term in hotKeywords"
-              :key="term"
-              type="button"
-              :class="['hot-pill', { active: isHotKeywordActive(term) }]"
-              @click="applyHotKeyword(term)"
-            >
-              {{ term }}
-            </button>
-          </div>
-        </div>
+          稍后读 {{ totalReadLater }}
+        </a-button>
+        <a-button type="primary" class="btn-primary" :disabled="!lastDoc" @click="continueLearning">
+          {{ lastDoc ? '继续上次学习' : '尚无学习记录' }}
+        </a-button>
       </div>
-    </section>
-
-    <section class="filter-card enter-fade-up enter-delay-1">
-      <div class="filter-header">
-        <div class="filter-label">岗位分类</div>
-        <a-popover trigger="click" placement="bottomRight" overlay-class-name="learn-more-filter-popover">
-          <template #content>
-            <div class="more-filter-panel">
-              <div class="more-filter-item">
-                <span>难度</span>
-                <a-select v-model:value="selectedDifficulty" size="small" :options="difficultyOptions" />
-              </div>
-              <div class="more-filter-item">
-                <span>更新时间</span>
-                <a-select v-model:value="selectedUpdateRange" size="small" :options="updateRangeOptions" />
-              </div>
-              <div class="more-filter-item">
-                <span>排序</span>
-                <a-select v-model:value="sortMode" size="small" :options="sortOptions" />
-              </div>
-              <a-button type="link" size="small" class="reset-link" @click="resetAdvancedFilters">
-                重置高级筛选
-              </a-button>
-            </div>
-          </template>
-          <a-button class="more-filter-btn">
-            更多筛选
-            <DownOutlined />
-          </a-button>
-        </a-popover>
-      </div>
-
-      <div class="filter-pills">
-        <button
-          type="button"
-          :class="['pill', { active: selectedPosition === 'all' }]"
-          @click="selectedPosition = 'all'"
-        >
-          全部
-        </button>
-        <button
-          v-for="item in positionOptions"
-          :key="item.value"
-          type="button"
-          :class="['pill', { active: selectedPosition === item.value }]"
-          @click="selectedPosition = item.value"
-        >
-          {{ item.shortLabel || item.label }}
-        </button>
-      </div>
-    </section>
-
-    <div v-if="loading" class="state-panel">
-      <a-spin size="large" />
-      <p>正在加载可学习知识库...</p>
     </div>
 
-    <a-result
-      v-else-if="errorMessage"
-      status="warning"
-      title="知识库加载失败"
-      :sub-title="errorMessage"
-    />
+    <div class="page-body">
+      <!-- 搜索 + 排序 -->
+      <div class="search-bar">
+        <div class="search-bar__input">
+          <SearchOutlined class="search-icon" />
+          <input v-model="keyword" class="search-input" placeholder="搜索专题、文档或知识点" />
+        </div>
+        <div class="search-bar__tools">
+          <a-select
+            v-model:value="sortMode"
+            :options="sortOptions"
+            :bordered="false"
+            size="small"
+            class="flat-select"
+          />
+          <span class="tools-divider">·</span>
+          <a-popover
+            trigger="click"
+            placement="bottomRight"
+            overlay-class-name="learn-more-filter-popover"
+          >
+            <template #content>
+              <div class="more-filter-panel">
+                <div class="more-filter-item">
+                  <span>难度</span>
+                  <a-select
+                    v-model:value="selectedDifficulty"
+                    size="small"
+                    :options="difficultyOptions"
+                  />
+                </div>
+                <div class="more-filter-item">
+                  <span>更新时间</span>
+                  <a-select
+                    v-model:value="selectedUpdateRange"
+                    size="small"
+                    :options="updateRangeOptions"
+                  />
+                </div>
+                <a-button type="link" size="small" class="reset-link" @click="resetAdvancedFilters">
+                  重置高级筛选
+                </a-button>
+              </div>
+            </template>
+            <button type="button" class="tools-link">更多筛选</button>
+          </a-popover>
+        </div>
+      </div>
 
-    <template v-else>
-      <transition-group v-if="visibleDatabases.length" name="database-list" tag="div" class="database-grid">
-        <article
-          v-for="(database, index) in visibleDatabases"
-          :key="database.db_id"
-          class="database-card"
-          :style="{ '--stagger-index': index }"
-          @click="goToDatabase(database.db_id)"
-        >
-          <div class="database-card__top">
-            <div
-              class="database-card__icon"
-              :style="{ background: database._theme.softBg, color: database._theme.color }"
-            >
-              <component :is="database._theme.icon" :size="20" />
+      <!-- 岗位分类 -->
+      <div class="filter-row">
+        <span class="lab">岗位分类</span>
+        <div class="filter-opts">
+          <button
+            type="button"
+            :class="['opt', { on: selectedPosition === 'all' }]"
+            @click="selectedPosition = 'all'"
+          >
+            全部 {{ enrichedDatabases.length }}
+          </button>
+          <button
+            v-for="item in positionTabs"
+            :key="item.value"
+            type="button"
+            :class="['opt', { on: selectedPosition === item.value }]"
+            @click="selectedPosition = item.value"
+          >
+            {{ item.label }} {{ item.count }}
+          </button>
+        </div>
+        <div class="filter-row__spacer"></div>
+        <div class="hot-row">
+          <span class="lab">热门</span>
+          <button
+            v-for="term in hotKeywords"
+            :key="term"
+            type="button"
+            :class="['hot-link', { on: isHotKeywordActive(term) }]"
+            @click="applyHotKeyword(term)"
+          >
+            {{ term }}
+          </button>
+        </div>
+      </div>
+
+      <div v-if="loading" class="state-panel">
+        <a-spin size="large" />
+        <p>正在加载可学习知识库...</p>
+      </div>
+
+      <a-result
+        v-else-if="errorMessage"
+        status="warning"
+        title="知识库加载失败"
+        :sub-title="errorMessage"
+      />
+
+      <template v-else>
+        <!-- 专题网格 -->
+        <div v-if="visibleDatabases.length" class="topic-grid">
+          <article
+            v-for="database in visibleDatabases"
+            :key="database.db_id"
+            class="topic-cell"
+            @click="goToDatabase(database.db_id)"
+          >
+            <div class="topic-cell__head">
+              <span class="topic-name">{{ database.name }}</span>
+              <span class="badge">{{ database._positionLabel }}</span>
             </div>
-
-            <div class="database-card__meta">
-              <h3>{{ database.name }}</h3>
-              <p>{{ database.description || '进入专题后查看详细知识内容。' }}</p>
-            </div>
-          </div>
-
-          <div class="database-card__progress">
-            <div class="progress-head">
+            <p class="topic-desc">{{ database.description || '进入专题后查看详细知识内容。' }}</p>
+            <div class="topic-progress__head">
               <span>学习进度</span>
-              <span>{{ database._progress }}%</span>
+              <span :class="['topic-progress__value', { muted: database._progress === 0 }]">
+                {{ database._progress > 0 ? `${database._progress}%` : '未开始' }}
+              </span>
             </div>
-            <div class="progress-track">
-              <span class="progress-fill" :style="{ width: `${database._progress}%`, background: database._theme.color }"></span>
+            <div class="bar">
+              <span
+                v-if="database._progress > 0"
+                class="bar__fill"
+                :style="{ width: `${database._progress}%` }"
+              ></span>
             </div>
-          </div>
+            <div class="topic-meta">
+              <span>{{ database.file_count || 0 }} 篇文档</span>
+              <span>已读 {{ database._masteredCount }} 篇</span>
+              <span v-if="database._readLaterCount">稍后读 {{ database._readLaterCount }}</span>
+            </div>
+          </article>
+        </div>
 
-          <div class="database-card__footer">
-            <span
-              class="role-tag"
-              :style="{ '--role-color': database._theme.color, '--role-bg': database._theme.tagBg }"
+        <div v-else class="empty-panel">
+          <p>没有符合条件的专题，试试调整关键词或筛选条件。</p>
+          <a-button v-if="hasActiveFilters" class="btn-secondary" @click="resetAllFilters"
+            >清空全部筛选</a-button
+          >
+        </div>
+
+        <!-- 从面试弱项接着学 -->
+        <section v-if="weakSpots.length" class="weak-section">
+          <div class="weak-section__head">
+            <span class="lab">从面试弱项接着学</span>
+            <span class="weak-section__hint">{{ weakSourceText }}</span>
+          </div>
+          <div class="weak-grid">
+            <button
+              v-for="item in weakSpots"
+              :key="item.key"
+              type="button"
+              class="weak-cell"
+              @click="goToWeakSpot(item)"
             >
-              <span class="dot"></span>
-              {{ database._position.short_label || database._position.label || '未分类' }}
-            </span>
-            <span class="doc-count">
-              <FileText :size="14" />
-              {{ database.file_count || 0 }}
-            </span>
+              <div class="weak-title">{{ item.title }}</div>
+              <div class="weak-sub">{{ item.subtitle }}</div>
+            </button>
           </div>
-        </article>
-      </transition-group>
-
-      <a-empty v-else>
-        <template #description>
-          <div class="empty-state">
-            <p>没有符合条件的专题，试试调整关键词或筛选条件。</p>
-            <a-button v-if="hasActiveFilters" type="link" @click="resetAllFilters">清空全部筛选</a-button>
-          </div>
-        </template>
-      </a-empty>
-    </template>
-
-    <a-tooltip title="返回顶部">
-      <button type="button" class="floating-action" @click="scrollToTop">
-        <UpOutlined />
-      </button>
-    </a-tooltip>
+        </section>
+      </template>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DownOutlined, SearchOutlined, UpOutlined } from '@ant-design/icons-vue'
-import { BookOpen, BrainCircuit, Code2, Database, FileText, Network, Sparkles } from 'lucide-vue-next'
+import { SearchOutlined } from '@ant-design/icons-vue'
 
 import { learnApi } from '@/apis/learn_api'
+import { interviewHistoryApi } from '@/apis/interview_history'
 import { usePositionTypes } from '@/composables/usePositionTypes'
 import { normalizePositionType } from '@/utils/position_utils'
+import {
+  computeDbProgress,
+  countMastered,
+  countReadLater,
+  readGlobalLastDoc
+} from '@/utils/learn_progress'
 
 const router = useRouter()
 const route = useRoute()
@@ -194,8 +212,12 @@ const keyword = ref(String(route.query.q || '').trim())
 const selectedPosition = ref('all')
 const selectedDifficulty = ref('all')
 const selectedUpdateRange = ref('all')
-const sortMode = ref('default')
+const sortMode = ref('progress')
+const readLaterOnly = ref(false)
 const databases = ref([])
+const lastDoc = ref(null)
+const weakSpots = ref([])
+const weakSourceText = ref('')
 
 const hotKeywords = ['前端', '后端', '算法', 'RAG', '系统设计']
 const difficultyOptions = [
@@ -210,54 +232,13 @@ const updateRangeOptions = [
   { label: '最近 90 天', value: '90d' }
 ]
 const sortOptions = [
-  { label: '默认排序', value: 'default' },
+  { label: '按学习进度', value: 'progress' },
   { label: '最近更新优先', value: 'updated_desc' },
   { label: '文档数优先', value: 'files_desc' },
   { label: '名称 A-Z', value: 'name_asc' }
 ]
 
-const POSITION_THEME_MAP = {
-  frontend: {
-    color: '#F59E0B',
-    softBg: 'rgba(245, 158, 11, 0.16)',
-    tagBg: 'rgba(245, 158, 11, 0.12)',
-    icon: Code2
-  },
-  backend: {
-    color: '#10B981',
-    softBg: 'rgba(16, 185, 129, 0.16)',
-    tagBg: 'rgba(16, 185, 129, 0.12)',
-    icon: Database
-  },
-  algorithm: {
-    color: '#8B5CF6',
-    softBg: 'rgba(139, 92, 246, 0.16)',
-    tagBg: 'rgba(139, 92, 246, 0.12)',
-    icon: BrainCircuit
-  },
-  ai_app: {
-    color: '#EC4899',
-    softBg: 'rgba(236, 72, 153, 0.16)',
-    tagBg: 'rgba(236, 72, 153, 0.12)',
-    icon: Sparkles
-  },
-  system_design: {
-    color: '#3B82F6',
-    softBg: 'rgba(59, 130, 246, 0.16)',
-    tagBg: 'rgba(59, 130, 246, 0.12)',
-    icon: Network
-  },
-  unclassified: {
-    color: '#64748B',
-    softBg: 'rgba(100, 116, 139, 0.16)',
-    tagBg: 'rgba(100, 116, 139, 0.12)',
-    icon: BookOpen
-  }
-}
-
 const DAY_MS = 24 * 60 * 60 * 1000
-
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
 const parseTime = (value) => {
   const timestamp = Date.parse(String(value || ''))
@@ -270,81 +251,99 @@ const inferDifficulty = (fileCount) => {
   return 'basic'
 }
 
-const positionOptions = computed(() => positionTypeOptions.value || [])
-
-const maxFileCount = computed(() =>
-  databases.value.reduce((max, item) => Math.max(max, Number(item.file_count || 0)), 0)
-)
-
-const toProgressPercent = (item) => {
-  const rawProgress = Number(item.learning_progress ?? item.progress)
-  if (Number.isFinite(rawProgress)) {
-    return clamp(Math.round(rawProgress), 0, 100)
-  }
-
-  const fileCount = Number(item.file_count || 0)
-  if (fileCount <= 0 || maxFileCount.value <= 0) {
-    return 0
-  }
-
-  const normalized = Math.round((fileCount / maxFileCount.value) * 100)
-  return clamp(Math.max(20, normalized), 0, 100)
-}
+const matchesPosition = (item, position) =>
+  item.position === position || item._positionKey === position || item._positionLabel === position
 
 const enrichedDatabases = computed(() =>
   databases.value.map((item) => {
     const normalizedPosition = normalizePositionType(item.position, positionTypes.value, {
       fallbackToDefault: false
     })
-    const theme = POSITION_THEME_MAP[normalizedPosition?.key] || POSITION_THEME_MAP.unclassified
     const fileCount = Number(item.file_count || 0)
 
     return {
       ...item,
-      _position: normalizedPosition,
-      _theme: theme,
+      _positionKey: normalizedPosition?.key || '',
+      _positionLabel: normalizedPosition?.short_label || normalizedPosition?.label || '未分类',
       _difficulty: inferDifficulty(fileCount),
-      _progress: toProgressPercent(item)
+      _progress: computeDbProgress(item.db_id, fileCount),
+      _masteredCount: countMastered(item.db_id),
+      _readLaterCount: countReadLater(item.db_id)
     }
   })
 )
 
+const positionTabs = computed(() =>
+  (positionTypeOptions.value || [])
+    .map((option) => ({
+      value: option.value,
+      label: option.shortLabel || option.label,
+      count: enrichedDatabases.value.filter((item) => matchesPosition(item, option.value)).length
+    }))
+    .filter((tab) => tab.count > 0 || selectedPosition.value === tab.value)
+)
+
+const totalDocuments = computed(() =>
+  enrichedDatabases.value.reduce((sum, item) => sum + Number(item.file_count || 0), 0)
+)
+const totalMastered = computed(() =>
+  enrichedDatabases.value.reduce((sum, item) => sum + item._masteredCount, 0)
+)
+const totalReadLater = computed(() =>
+  enrichedDatabases.value.reduce((sum, item) => sum + item._readLaterCount, 0)
+)
+
+const subtitleText = computed(() => {
+  if (loading.value) return '正在加载...'
+  return `${enrichedDatabases.value.length} 个专题 · ${totalDocuments.value} 篇文档 · 已读 ${totalMastered.value} 篇`
+})
+
 const visibleDatabases = computed(() => {
   const search = keyword.value.trim().toLowerCase()
   const now = Date.now()
-  const recentDays = selectedUpdateRange.value === '30d' ? 30 : selectedUpdateRange.value === '90d' ? 90 : 0
+  const recentDays =
+    selectedUpdateRange.value === '30d' ? 30 : selectedUpdateRange.value === '90d' ? 90 : 0
 
   const filtered = enrichedDatabases.value.filter((item) => {
-    const matchesPosition =
-      selectedPosition.value === 'all' ||
-      item.position === selectedPosition.value ||
-      item._position?.label === selectedPosition.value ||
-      item._position?.short_label === selectedPosition.value
+    const matchedPosition =
+      selectedPosition.value === 'all' || matchesPosition(item, selectedPosition.value)
 
-    const matchesKeyword =
+    const matchedKeyword =
       !search ||
-      [item.name, item.description, item._position?.label, item._position?.short_label].some((value) =>
+      [item.name, item.description, item._positionLabel].some((value) =>
         String(value || '')
           .toLowerCase()
           .includes(search)
       )
 
-    const matchesDifficulty = selectedDifficulty.value === 'all' || item._difficulty === selectedDifficulty.value
+    const matchedDifficulty =
+      selectedDifficulty.value === 'all' || item._difficulty === selectedDifficulty.value
 
     const updatedAt = parseTime(item.updated_at)
-    const matchesUpdate = !recentDays || !updatedAt || now - updatedAt <= recentDays * DAY_MS
+    const matchedUpdate = !recentDays || !updatedAt || now - updatedAt <= recentDays * DAY_MS
 
-    return matchesPosition && matchesKeyword && matchesDifficulty && matchesUpdate
+    const matchedReadLater = !readLaterOnly.value || item._readLaterCount > 0
+
+    return (
+      matchedPosition && matchedKeyword && matchedDifficulty && matchedUpdate && matchedReadLater
+    )
   })
 
+  if (sortMode.value === 'progress') {
+    return [...filtered].sort((a, b) => b._progress - a._progress)
+  }
   if (sortMode.value === 'updated_desc') {
-    return [...filtered].sort((a, b) => (parseTime(b.updated_at) || 0) - (parseTime(a.updated_at) || 0))
+    return [...filtered].sort(
+      (a, b) => (parseTime(b.updated_at) || 0) - (parseTime(a.updated_at) || 0)
+    )
   }
   if (sortMode.value === 'files_desc') {
     return [...filtered].sort((a, b) => Number(b.file_count || 0) - Number(a.file_count || 0))
   }
   if (sortMode.value === 'name_asc') {
-    return [...filtered].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hans-CN'))
+    return [...filtered].sort((a, b) =>
+      String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hans-CN')
+    )
   }
   return filtered
 })
@@ -355,7 +354,7 @@ const hasActiveFilters = computed(
     selectedPosition.value !== 'all' ||
     selectedDifficulty.value !== 'all' ||
     selectedUpdateRange.value !== 'all' ||
-    sortMode.value !== 'default'
+    readLaterOnly.value
 )
 
 const loadDatabases = async () => {
@@ -372,6 +371,38 @@ const loadDatabases = async () => {
   }
 }
 
+// 面试报告里的弱项：优先用带知识库定位的推荐资料，其次退回弱项标题搜索。
+const loadWeakSpots = async () => {
+  try {
+    const path = await interviewHistoryApi.getPersonalizedPath()
+    const resources = Array.isArray(path?.recommended_resources) ? path.recommended_resources : []
+    const located = resources
+      .filter((item) => item?.locator?.db_id && item?.locator?.file_id)
+      .slice(0, 3)
+      .map((item, index) => ({
+        key: `resource-${index}`,
+        title: String(item.title || '推荐资料').trim(),
+        subtitle: String(item.source_ref || item.summary || '来自面试报告推荐').trim(),
+        locator: item.locator
+      }))
+
+    const weaknesses = Array.isArray(path?.weaknesses) ? path.weaknesses : []
+    const fallback = weaknesses.slice(0, 3).map((item, index) => ({
+      key: `weakness-${index}`,
+      title: String(item.title || '').trim(),
+      subtitle: '在知识库中搜索相关文档',
+      searchText: String(item.title || '').trim()
+    }))
+
+    weakSpots.value = (located.length ? located : fallback).filter((item) => item.title)
+    weakSourceText.value = path?.source_round_count
+      ? `来自最近 ${path.source_round_count} 轮面试`
+      : '来自面试报告'
+  } catch {
+    weakSpots.value = []
+  }
+}
+
 const applyHotKeyword = (term) => {
   keyword.value = term
 }
@@ -381,12 +412,12 @@ const isHotKeywordActive = (term) => keyword.value.trim().toLowerCase() === term
 const resetAdvancedFilters = () => {
   selectedDifficulty.value = 'all'
   selectedUpdateRange.value = 'all'
-  sortMode.value = 'default'
 }
 
 const resetAllFilters = () => {
   keyword.value = ''
   selectedPosition.value = 'all'
+  readLaterOnly.value = false
   resetAdvancedFilters()
 }
 
@@ -394,264 +425,209 @@ const goToDatabase = (dbId) => {
   router.push(`/learn/${dbId}`)
 }
 
-const scrollToTop = () => {
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+const continueLearning = () => {
+  if (!lastDoc.value?.dbId || !lastDoc.value?.fileId) return
+  router.push(`/learn/${lastDoc.value.dbId}/doc/${lastDoc.value.fileId}`)
+}
+
+const goToWeakSpot = (item) => {
+  if (item.locator) {
+    router.push(`/learn/${item.locator.db_id}/doc/${item.locator.file_id}`)
+    return
+  }
+  keyword.value = item.searchText || ''
 }
 
 onMounted(() => {
+  lastDoc.value = readGlobalLastDoc()
   loadDatabases()
+  loadWeakSpots()
 })
 </script>
 
 <style scoped lang="less">
+// 设计稿 [UI v3][2k] 知识学习 · 一级
 .learn-home {
-  position: relative;
-  min-height: 100%;
-  padding: 28px;
-  background: linear-gradient(180deg, #f5f9ff 0%, #eef4ff 42%, #f8fafc 100%);
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0 0 auto 0;
-    height: 220px;
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.14), rgba(59, 130, 246, 0));
-    pointer-events: none;
-  }
-
-  &::after {
-    content: '';
-    position: absolute;
-    right: -120px;
-    top: 120px;
-    width: 360px;
-    height: 360px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(99, 102, 241, 0.14) 0%, rgba(99, 102, 241, 0) 70%);
-    pointer-events: none;
-  }
-
-  > * {
-    position: relative;
-    z-index: 1;
-  }
-}
-
-.enter-fade-up {
-  animation: fade-up-in 0.4s ease both;
-}
-
-.enter-delay-1 {
-  animation-delay: 0.08s;
-}
-
-.hero-card,
-.filter-card {
-  position: relative;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.62);
-  border: 1px solid rgba(255, 255, 255, 0.74);
-  border-radius: 24px;
-  box-shadow:
-    0 10px 28px rgba(15, 23, 42, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(16px) saturate(145%);
-  -webkit-backdrop-filter: blur(16px) saturate(145%);
-}
-
-.hero-card::before,
-.filter-card::before,
-.database-card::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 44%;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
-  pointer-events: none;
-}
-
-.hero-card {
   display: flex;
-  justify-content: space-between;
-  gap: 28px;
-  padding: 30px 32px;
-  margin-bottom: 20px;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
 
-.hero-copy {
-  max-width: 760px;
+// ===================== 顶栏 =====================
+.page-topbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 20px 32px 16px;
+  border-bottom: 1px solid var(--gray-100);
+  flex-shrink: 0;
+}
 
-  p {
-    margin: 0;
+.page-title {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--gray-1000);
+}
+
+.page-subtitle {
+  font-size: 13px;
+  color: var(--gray-500);
+  margin: 6px 0 0;
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.topbar-actions,
+.empty-panel {
+  :deep(.btn-secondary.ant-btn) {
+    display: inline-flex;
+    align-items: center;
+    height: 34px;
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid var(--gray-200);
+    background: var(--gray-0);
+    color: var(--gray-700);
+    border-radius: 0;
+    box-shadow: none;
+
+    &:hover,
+    &:focus {
+      border-color: var(--gray-500) !important;
+      color: var(--gray-1000) !important;
+    }
+  }
+
+  :deep(.btn-secondary--on.ant-btn) {
+    background: var(--gray-100);
+    color: var(--gray-1000);
+    font-weight: 700;
+  }
+
+  :deep(.btn-primary.ant-btn) {
+    display: inline-flex;
+    align-items: center;
+    height: 34px;
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 0;
+    background: var(--main-color);
+    border-color: var(--main-color);
+    color: #fff;
+    box-shadow: none;
+
+    &:hover,
+    &:focus {
+      background: var(--main-700) !important;
+      border-color: var(--main-700) !important;
+      color: #fff !important;
+    }
+  }
+
+  :deep(.btn-primary.ant-btn[disabled]) {
+    background: var(--gray-100);
+    border-color: var(--gray-200);
+    color: var(--gray-500);
+  }
+}
+
+// ===================== 主体 =====================
+.page-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px 32px;
+}
+
+.lab {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: var(--gray-500);
+  white-space: nowrap;
+}
+
+// ===================== 搜索栏 =====================
+.search-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  border: 1px solid var(--gray-200);
+}
+
+.search-bar__input {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 46px;
+  padding: 0 18px;
+  border-right: 1px solid var(--gray-100);
+
+  .search-icon {
+    color: var(--gray-500);
     font-size: 15px;
-    line-height: 1.8;
+  }
+
+  .search-input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 14px;
+    color: var(--gray-1000);
+
+    &::placeholder {
+      color: var(--gray-500);
+    }
+  }
+}
+
+.search-bar__tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 0 14px;
+}
+
+.flat-select {
+  min-width: 128px;
+
+  :deep(.ant-select-selector) {
+    padding-right: 0 !important;
+  }
+
+  :deep(.ant-select-selection-item) {
+    font-size: 13px;
     color: var(--gray-600);
   }
 }
 
-.hero-title-wrap {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  margin: 12px 0 10px;
-
-  h1 {
-    margin: 0;
-    font-size: 32px;
-    line-height: 1.2;
-    color: var(--gray-2000);
-  }
-
-  span {
-    background: linear-gradient(90deg, #2563eb, #7c3aed);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-}
-
-.title-accent {
-  width: 4px;
-  height: 36px;
-  border-radius: 999px;
-  background: var(--main-400);
-  margin-top: 2px;
-}
-
-.hero-sub-meta {
-  margin-top: 14px;
-  font-size: 14px;
-  color: var(--gray-500);
-}
-
-.hero-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: var(--main-50);
-  color: var(--main-700);
+.tools-divider {
+  color: var(--gray-400);
   font-size: 13px;
-  font-weight: 600;
 }
 
-.hero-search {
-  width: 420px;
-  max-width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  align-items: stretch;
-
-  :deep(.ant-input-affix-wrapper) {
-    min-height: 46px;
-    border-radius: 14px;
-    border-color: var(--gray-200);
-    background: var(--gray-0);
-    transition:
-      border-color 0.2s ease,
-      box-shadow 0.2s ease,
-      background-color 0.2s ease;
-  }
-
-  :deep(.ant-input-prefix) {
-    color: var(--gray-500);
-  }
-
-  :deep(.ant-input-affix-wrapper-focused) {
-    border-color: var(--main-300);
-    box-shadow: 0 0 0 2px var(--main-50);
-  }
-}
-
-.hot-search {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.72);
-  background: rgba(255, 255, 255, 0.46);
-  box-shadow:
-    0 8px 18px rgba(15, 23, 42, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px) saturate(130%);
-  -webkit-backdrop-filter: blur(10px) saturate(130%);
-}
-
-.hot-search__label {
-  margin: 0;
-  color: var(--gray-700);
+.tools-link {
+  border: none;
+  background: transparent;
+  padding: 0 4px;
   font-size: 13px;
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.hot-search__pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.hot-pill {
-  border: 1px solid var(--gray-200);
-  border-radius: 999px;
-  background: var(--gray-0);
   color: var(--gray-600);
-  font-size: 12px;
-  font-weight: 500;
-  padding: 5px 12px;
-  line-height: 1;
   cursor: pointer;
-  transition:
-    color 0.2s ease,
-    border-color 0.2s ease,
-    background-color 0.2s ease,
-    box-shadow 0.2s ease;
 
   &:hover {
-    border-color: var(--main-200);
-    color: var(--main-700);
-    box-shadow: 0 4px 12px var(--shadow-0);
+    color: var(--gray-1000);
   }
-
-  &.active {
-    color: var(--main-800);
-    border-color: var(--main-300);
-    background: var(--main-50);
-    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.18);
-  }
-}
-
-.filter-card {
-  padding: 18px 20px;
-  margin-bottom: 24px;
-}
-
-.filter-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.filter-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--gray-800);
-}
-
-.more-filter-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border-radius: 10px;
-  color: var(--gray-700);
-}
-
-:deep(.learn-more-filter-popover .ant-popover-inner) {
-  border-radius: 14px;
 }
 
 .more-filter-panel {
@@ -677,281 +653,326 @@ onMounted(() => {
   padding: 0;
 }
 
-.filter-pills {
+// ===================== 岗位分类 =====================
+.filter-row {
   display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 18px 0 0;
+}
+
+.filter-row__spacer {
+  flex: 1;
+}
+
+.filter-opts {
+  display: flex;
+  gap: 10px;
   flex-wrap: wrap;
+}
+
+.opt {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--gray-200);
+  background: var(--gray-0);
+  font-size: 13px;
+  color: var(--gray-700);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--gray-1000);
+  }
+
+  &.on {
+    background: var(--gray-100);
+    color: var(--gray-1000);
+    font-weight: 700;
+  }
+}
+
+.hot-row {
+  display: flex;
+  align-items: center;
   gap: 10px;
 }
 
-.pill {
-  border: 1px solid var(--gray-200);
-  border-radius: 999px;
-  background: var(--gray-10);
-  color: var(--gray-700);
-  padding: 8px 16px;
-  font-size: 14px;
+.hot-link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 13px;
+  color: var(--gray-600);
   cursor: pointer;
-  transition:
-    border-color 0.2s ease,
-    background-color 0.2s ease,
-    color 0.2s ease;
-
-  &.active {
-    border-color: var(--main-300);
-    background: var(--main-50);
-    color: var(--main-700);
-  }
-}
-
-.database-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 24px;
-}
-
-.database-card {
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-height: 248px;
-  padding: 22px;
-  border-radius: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.55);
-  box-shadow:
-    0 12px 26px rgba(15, 23, 42, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-  cursor: pointer;
-  transition:
-    transform 0.22s ease,
-    border-color 0.22s ease,
-    box-shadow 0.22s ease;
 
   &:hover {
-    transform: translateY(-4px);
-    border-color: rgba(147, 197, 253, 0.9);
-    box-shadow:
-      0 20px 40px rgba(59, 130, 246, 0.14),
-      inset 0 1px 0 rgba(255, 255, 255, 0.82);
+    color: var(--gray-1000);
+  }
+
+  &.on {
+    color: var(--main-color);
+    font-weight: 700;
   }
 }
 
-.database-card__top {
-  display: flex;
-  gap: 14px;
+// ===================== 专题网格 =====================
+.topic-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--gray-200);
+  margin-top: 20px;
 }
 
-.database-card__icon {
-  width: 50px;
-  height: 50px;
-  border-radius: 14px;
+.topic-cell {
+  padding: 24px 26px 26px;
+  border-right: 1px solid var(--gray-100);
+  border-bottom: 1px solid var(--gray-100);
+  cursor: pointer;
+
+  &:nth-child(3n) {
+    border-right: none;
+    padding-right: 0;
+  }
+
+  &:nth-child(3n + 1) {
+    padding-left: 0;
+  }
+
+  &:hover .topic-name {
+    color: var(--main-color);
+  }
+}
+
+.topic-cell__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.topic-name {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--gray-1000);
+  line-height: 1.3;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--gray-200);
+  color: var(--gray-600);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.topic-desc {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--gray-600);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.topic-progress__head {
   display: flex;
   align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--gray-500);
+  margin-top: 20px;
 }
 
-.database-card__meta {
-  min-width: 0;
+.topic-progress__value {
+  color: var(--gray-1000);
+  font-weight: 700;
 
-  h3 {
-    margin: 0 0 8px;
-    font-size: 19px;
-    color: var(--gray-2000);
+  &.muted {
+    color: var(--gray-500);
   }
+}
+
+.bar {
+  height: 6px;
+  background: var(--gray-100);
+  margin-top: 8px;
+}
+
+.bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--main-color);
+}
+
+.topic-meta {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--gray-600);
+  margin-top: 16px;
+}
+
+// ===================== 面试弱项 =====================
+.weak-section {
+  border-top: 1px solid var(--gray-200);
+  margin-top: 8px;
+  padding: 24px 0 0;
+}
+
+.weak-section__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.weak-section__hint {
+  font-size: 12px;
+  color: var(--gray-500);
+}
+
+.weak-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 14px;
+}
+
+.weak-cell {
+  border: none;
+  border-right: 1px solid var(--gray-100);
+  background: transparent;
+  text-align: left;
+  padding: 14px 24px;
+  cursor: pointer;
+
+  &:first-child {
+    padding-left: 0;
+  }
+
+  &:last-child {
+    border-right: none;
+    padding-right: 0;
+  }
+
+  &:hover .weak-title {
+    color: var(--main-color);
+  }
+}
+
+.weak-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--gray-1000);
+}
+
+.weak-sub {
+  font-size: 13px;
+  color: var(--gray-600);
+  margin-top: 5px;
+}
+
+// ===================== 状态 =====================
+.state-panel {
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--gray-600);
+}
+
+.empty-panel {
+  border-top: 1px solid var(--gray-200);
+  margin-top: 20px;
+  padding: 40px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: var(--gray-600);
 
   p {
     margin: 0;
-    color: var(--gray-600);
-    line-height: 1.7;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+    font-size: 14px;
   }
 }
 
-.database-card__progress {
-  margin-top: 16px;
-}
-
-.progress-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-  color: var(--gray-600);
-  font-size: 12px;
-}
-
-.progress-track {
-  width: 100%;
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.68);
-  overflow: hidden;
-}
-
-.progress-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  transition: width 0.25s ease;
-}
-
-.database-card__footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-top: 16px;
-}
-
-.role-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border-radius: 999px;
-  padding: 4px 10px;
-  color: var(--role-color);
-  background: var(--role-bg);
-  font-size: 12px;
-}
-
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--role-color);
-}
-
-.doc-count {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--gray-600);
-  font-size: 13px;
-}
-
-.database-list-enter-active {
-  transition:
-    opacity 0.28s ease,
-    transform 0.28s ease,
-    filter 0.28s ease;
-  transition-delay: calc(var(--stagger-index, 0) * 0.03s);
-}
-
-.database-list-enter-from {
-  opacity: 0;
-  transform: translateY(10px);
-  filter: blur(2px);
-}
-
-.database-list-leave-active {
-  transition: opacity 0.15s ease;
-}
-
-.database-list-leave-to {
-  opacity: 0;
-}
-
-.state-panel {
-  min-height: 320px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  color: var(--gray-600);
-}
-
-.empty-state {
-  color: var(--gray-600);
-
-  p {
-    margin: 0 0 6px;
-  }
-}
-
-.floating-action {
-  position: fixed;
-  right: 30px;
-  bottom: 30px;
-  width: 42px;
-  height: 42px;
-  border: 0;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  background: var(--main-600);
-  color: var(--gray-0);
-  box-shadow: 0 12px 26px rgba(59, 130, 246, 0.32);
-  transition:
-    background-color 0.2s ease,
-    transform 0.2s ease;
-
-  &:hover {
-    background: var(--main-700);
-    transform: translateY(-2px);
-  }
-}
-
-@keyframes fade-up-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
+@media (max-width: 1280px) {
+  .topic-grid,
+  .weak-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  to {
-    opacity: 1;
-    transform: translateY(0);
+  .topic-cell {
+    &:nth-child(3n),
+    &:nth-child(3n + 1) {
+      padding-left: 26px;
+      padding-right: 26px;
+      border-right: 1px solid var(--gray-100);
+    }
+
+    &:nth-child(2n) {
+      border-right: none;
+      padding-right: 0;
+    }
+
+    &:nth-child(2n + 1) {
+      padding-left: 0;
+    }
   }
 }
 
 @media (max-width: 900px) {
-  .learn-home {
-    padding: 18px;
+  .page-topbar,
+  .page-body {
+    padding-left: 18px;
+    padding-right: 18px;
   }
 
-  .hero-card {
-    flex-direction: column;
-    padding: 22px;
+  .search-bar {
+    grid-template-columns: 1fr;
   }
 
-  .hero-title-wrap h1 {
-    font-size: 28px;
+  .search-bar__input {
+    border-right: none;
+    border-bottom: 1px solid var(--gray-100);
   }
 
-  .hero-search {
-    width: 100%;
+  .filter-row {
+    flex-wrap: wrap;
+    gap: 12px;
   }
 
-  .hot-search {
-    padding: 10px;
+  .topic-grid,
+  .weak-grid {
+    grid-template-columns: 1fr;
   }
 
-  .database-grid {
-    gap: 16px;
+  .topic-cell {
+    &:nth-child(n) {
+      padding: 20px 0;
+      border-right: none;
+    }
   }
-}
 
-@media (prefers-reduced-motion: reduce) {
-  .enter-fade-up,
-  .database-list-enter-active,
-  .database-list-leave-active,
-  .database-card,
-  .floating-action,
-  .progress-fill,
-  .hero-search :deep(.ant-input-affix-wrapper) {
-    animation: none !important;
-    transition: none !important;
-    transform: none !important;
+  .weak-cell {
+    &:nth-child(n) {
+      padding: 14px 0;
+      border-right: none;
+      border-bottom: 1px solid var(--gray-100);
+    }
   }
 }
 </style>
