@@ -165,6 +165,7 @@ class OJProblem:
     allowed_languages: list[str]
     statement_language: str
     difficulty_tag: str
+    topic_tags: list[str]
 
 
 def _utc_now() -> str:
@@ -1336,6 +1337,14 @@ def _normalize_problem(problem_data: dict[str, Any]) -> OJProblem:
             )
             or statement_language
         )
+    topic_tags = _dedupe_preserve_order(
+        [
+            str(tag).strip()
+            for entry in manifest_entries
+            for tag in (entry.get("topic_tags") or [])
+            if str(tag).strip()
+        ]
+    )
     return OJProblem(
         id=int(problem_data["id"]),
         display_id=display_id,
@@ -1356,6 +1365,7 @@ def _normalize_problem(problem_data: dict[str, Any]) -> OJProblem:
         allowed_languages=allowed_languages,
         statement_language=statement_language,
         difficulty_tag=difficulty_tag,
+        topic_tags=topic_tags,
     )
 
 
@@ -1373,6 +1383,7 @@ def _serialize_problem(problem: OJProblem) -> dict[str, Any]:
         "starter_code": problem.starter_code,
         "statement_language": problem.statement_language,
         "difficulty_tag": problem.difficulty_tag,
+        "topic_tags": problem.topic_tags,
     }
 
 
@@ -1805,6 +1816,7 @@ async def start_coding_session(
         "started_at": _utc_now(),
         "submitted_at": "",
         "requested_hints": [],
+        "hint_count": 0,
         "sample_run": _build_sample_run_state(),
         "problem": _serialize_problem(problem),
         "oj_problem_pk": problem.id,
@@ -2163,6 +2175,7 @@ async def start_practice_session(
         allowed_languages=list(problem_detail.get("allowed_languages") or []),
         statement_language=str(problem_detail.get("statement_language") or "zh"),
         difficulty_tag=str(problem_detail.get("difficulty_tag") or "medium"),
+        topic_tags=list(problem_detail.get("topic_tags") or []),
     )
     language = _resolve_default_language(problem)
     drafts = _build_initial_drafts(problem)
@@ -2190,6 +2203,7 @@ async def start_practice_session(
         "started_at": _utc_now(),
         "submitted_at": "",
         "requested_hints": [],
+        "hint_count": 0,
         "sample_run": _build_sample_run_state(),
         "problem": {
             **_serialize_problem(problem),
@@ -2415,6 +2429,7 @@ async def request_coding_hint(
     requested_hints = list(coding_session.get("requested_hints") or [])
     requested_hints.append({"question": question, "hint": hint, "created_at": _utc_now()})
     coding_session["requested_hints"] = requested_hints[-10:]
+    coding_session["hint_count"] = len(requested_hints)
     drafts = dict(coding_session.get("drafts") or {})
     drafts[current_language] = draft_code
     coding_session["drafts"] = drafts
@@ -2425,7 +2440,7 @@ async def request_coding_hint(
         current_user_id=current_user_id,
         coding_session=coding_session,
     )
-    return {"hint": hint, "history": coding_session["requested_hints"]}
+    return {"hint": hint, "history": coding_session["requested_hints"], "hint_count": len(requested_hints)}
 
 
 async def start_coding_session_from_tool(
