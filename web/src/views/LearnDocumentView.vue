@@ -1,293 +1,277 @@
 <template>
-  <div class="learn-document-page">
-    <div class="page-shell">
-      <aside class="tree-sidebar desktop-only">
-        <div class="tree-header">
-          <div class="tree-header__title">
-            <BookOutlined />
-            <span>{{ database?.name || '知识库' }}</span>
-          </div>
-          <div class="tree-progress">
-            <div class="tree-progress__meta">
-              <span>学习进度</span>
-              <span>{{ learningProgress }}%</span>
-            </div>
-            <div class="tree-progress__track">
-              <span class="tree-progress__fill" :style="{ width: `${learningProgress}%` }"></span>
-            </div>
-          </div>
+  <div class="learn-document">
+    <!-- 左：专题目录 -->
+    <aside class="doc-tree desktop-only">
+      <div class="doc-tree__head">
+        <div class="doc-tree__title">{{ database?.name || '知识库' }}</div>
+        <div class="doc-tree__progress-head">
+          <span>专题进度</span>
+          <span class="strong">{{ learningProgress }}%</span>
         </div>
-
-        <div class="tree-groups">
-          <section v-for="group in groupedDocuments" :key="group.key" class="tree-group">
-            <button type="button" class="tree-group__head" @click="toggleGroup(group.key)">
-              <span class="tree-group__left">
-                <component :is="expandedGroups[group.key] ? FolderOpen : Folder" :size="14" />
-                <span>{{ group.label }}</span>
-              </span>
-              <span>{{ group.items.length }}</span>
-            </button>
-
-            <div v-if="expandedGroups[group.key]" class="tree-group__body">
-              <button
-                v-for="item in group.items"
-                :key="item.file_id"
-                type="button"
-                :class="['tree-doc', `status-${item.status}`, { active: item.file_id === currentFileId }]"
-                @click="goToDocument(item.file_id)"
-              >
-                <span class="tree-doc__status">
-                  <AimOutlined v-if="item.status === 'current'" />
-                  <CheckCircleFilled v-else-if="item.status === 'mastered'" />
-                  <ExclamationCircleOutlined v-else-if="item.status === 'review'" />
-                  <MinusCircleOutlined v-else />
-                </span>
-                <span class="tree-doc__title">{{ item.displayName }}</span>
-              </button>
-            </div>
-          </section>
+        <div class="bar">
+          <span
+            v-if="learningProgress > 0"
+            class="bar__fill"
+            :style="{ width: `${learningProgress}%` }"
+          ></span>
         </div>
-      </aside>
+      </div>
 
-      <main class="content-panel">
-        <div class="content-header">
-          <div class="content-header__left">
-            <a-button type="text" class="back-btn" @click="router.push(`/learn/${dbId}`)">返回专题</a-button>
-            <a-button type="text" class="mobile-btn" @click="treeDrawerOpen = true">目录</a-button>
-            <a-button type="text" class="mobile-btn" @click="outlineDrawerOpen = true">大纲</a-button>
-            <div class="breadcrumbs">
-              <span>{{ database?.name || '知识专题' }}</span>
-              <span>/</span>
-              <span>{{ currentCategory }}</span>
-              <span>/</span>
-              <span>{{ currentDocTitle }}</span>
-            </div>
-          </div>
-
-          <a-segmented v-if="viewOptions.length > 1" v-model:value="viewMode" :options="viewOptions" />
-        </div>
-
-        <div v-if="loading" class="state-panel">
-          <a-spin size="large" />
-          <p>正在加载学习内容...</p>
-        </div>
-
-        <a-result
-          v-else-if="errorMessage"
-          status="warning"
-          title="学习内容加载失败"
-          :sub-title="errorMessage"
-        />
-
-        <template v-else-if="documentPayload">
-          <section class="hero-card">
-            <div class="hero-card__topline">
-              <span class="hero-badge">{{ database?.position || '知识学习' }}</span>
-              <span class="hero-estimate">预计 {{ estimatedMinutes }} 分钟</span>
-              <span class="hero-estimate">已读 {{ readMinutes }} 分钟</span>
-            </div>
-
-            <h1>{{ currentDocTitle }}</h1>
-            <p>{{ currentDocument?.summary || '掌握核心要点，支持正文阅读与导读卡片模式切换。' }}</p>
-
-            <div class="hero-tags">
-              <span v-for="tag in topicTags" :key="tag" class="hero-tag">{{ tag }}</span>
-            </div>
-
-            <div class="hero-actions">
-              <a-button :type="isFavorite ? 'primary' : 'default'" size="small" @click="toggleFavoriteCurrent">
-                <template #icon>
-                  <StarFilled v-if="isFavorite" />
-                  <StarOutlined v-else />
-                </template>
-                收藏
-              </a-button>
-              <a-button size="small" @click="notesDrawerOpen = true">
-                <template #icon><EditOutlined /></template>
-                记笔记
-              </a-button>
-              <a-button size="small" @click="askQuestion()">
-                <template #icon><QuestionCircleOutlined /></template>
-                提问
-              </a-button>
-              <a-button size="small" @click="shareCurrent">
-                <template #icon><ShareAltOutlined /></template>
-                分享
-              </a-button>
-              <a-button size="small" @click="printCurrent">
-                <template #icon><PrinterOutlined /></template>
-                打印
-              </a-button>
-            </div>
-
-            <div class="hero-reading-progress">
-              <span class="hero-reading-progress__label">阅读进度</span>
-              <span class="hero-reading-progress__value">{{ currentProgress }}%</span>
-            </div>
-            <div class="hero-reading-progress__track">
-              <span class="hero-reading-progress__fill" :style="{ width: `${currentProgress}%` }"></span>
-            </div>
-          </section>
-
-          <section class="reading-shell">
-            <div class="reading-main">
-              <section v-if="viewMode === 'chunks'" ref="chunksContainerRef" class="chunk-list">
-                <article
-                  v-for="chunk in parsedChunks"
-                  :key="chunk.id || chunk.chunk_order_index"
-                  :data-chunk-index="chunk.chunk_order_index"
-                  :class="['chunk-card', { active: activeChunkIndex === chunk.chunk_order_index }]"
-                >
-                  <div class="chunk-card__top">
-                    <span class="chunk-index">优化要点 #{{ chunk.chunk_order_index }}</span>
-                    <a-tag v-if="activeChunkIndex === chunk.chunk_order_index" color="processing">当前阅读</a-tag>
-                  </div>
-
-                  <template v-if="chunk.isQaStructured">
-                    <div class="qa-section">
-                      <span class="qa-label">问题</span>
-                      <div class="qa-content">{{ chunk.question }}</div>
-                    </div>
-                    <div v-if="chunk.answer" class="qa-section answer">
-                      <span class="qa-label">回答与要点</span>
-                      <MdPreview
-                        :model-value="chunk.answer"
-                        :theme="theme"
-                        preview-theme="github"
-                        class="markdown-preview"
-                      />
-                    </div>
-                  </template>
-
-                  <div v-else class="chunk-card__content">{{ chunk.preview }}</div>
-                </article>
-              </section>
-
-              <section v-else ref="articleContainerRef" class="markdown-panel">
-                <div class="reading-article">
-                  <MdPreview
-                    :model-value="documentPayload.content || ''"
-                    :theme="theme"
-                    preview-theme="github"
-                    class="markdown-preview"
-                  />
-                </div>
-              </section>
-
-              <section v-if="relatedQaCards.length" class="qa-panel">
-                <div class="qa-panel__head">
-                  <span>相关面试题（{{ relatedQaCards.length }}）</span>
-                </div>
-                <div class="qa-panel__list">
-                  <article v-for="card in relatedQaCards" :key="card.id" class="qa-panel__item">
-                    <h4>{{ card.question }}</h4>
-                    <p>{{ card.answerPreview }}</p>
-                    <a-button type="link" @click="openQaCard(card)">查看完整答案</a-button>
-                  </article>
-                </div>
-              </section>
-
-              <section class="study-footer">
-                <div class="study-footer__top">
-                  <span>已读完本节？</span>
-                  <div class="study-footer__actions">
-                    <a-button size="small" type="primary" @click="setMastery('mastered')">掌握了</a-button>
-                    <a-button size="small" @click="setMastery('review')">标记复习</a-button>
-                    <a-button size="small" @click="askQuestion('我对这节还有疑问：')">有疑问，去提问</a-button>
-                  </div>
-                </div>
-                <div class="study-footer__next">
-                  <span v-if="nextDocument">下一节：{{ formatDisplayName(nextDocument.filename) }}</span>
-                  <span v-else>已到本专题最后一篇</span>
-                  <a-button v-if="nextDocument" type="primary" @click="goToDocument(nextDocument.file_id)">
-                    继续学习
-                  </a-button>
-                </div>
-              </section>
-            </div>
-
-            <aside class="tool-rail desktop-only">
-              <a-tooltip title="文档大纲" placement="left">
-                <button type="button" class="tool-btn" @click="outlineDrawerOpen = true">
-                  <MenuOutlined />
-                </button>
-              </a-tooltip>
-              <a-tooltip title="我的笔记" placement="left">
-                <button type="button" class="tool-btn" @click="notesDrawerOpen = true">
-                  <EditOutlined />
-                </button>
-              </a-tooltip>
-              <a-tooltip title="相关问答" placement="left">
-                <button type="button" class="tool-btn" @click="focusQaPanel">
-                  <QuestionCircleOutlined />
-                </button>
-              </a-tooltip>
-              <a-tooltip title="重点标记" placement="left">
-                <button type="button" class="tool-btn" @click="toggleReviewMark">
-                  <PushpinOutlined />
-                </button>
-              </a-tooltip>
-              <a-tooltip title="回到顶部" placement="left">
-                <button type="button" class="tool-btn" @click="scrollToTop">
-                  <VerticalAlignTopOutlined />
-                </button>
-              </a-tooltip>
-            </aside>
-          </section>
-        </template>
-      </main>
-    </div>
-
-    <a-drawer v-model:open="treeDrawerOpen" title="知识目录" placement="left" width="320">
-      <div class="drawer-tree">
-        <section v-for="group in groupedDocuments" :key="group.key" class="tree-group">
-          <button type="button" class="tree-group__head" @click="toggleGroup(group.key)">
-            <span class="tree-group__left">
-              <component :is="expandedGroups[group.key] ? FolderOpen : Folder" :size="14" />
-              <span>{{ group.label }}</span>
-            </span>
-            <span>{{ group.items.length }}</span>
+      <div class="doc-tree__body">
+        <section v-for="group in groupedDocuments" :key="group.key">
+          <button type="button" class="tree-group" @click="toggleGroup(group.key)">
+            <span>{{ group.label }}</span>
+            <span class="tree-group__count"
+              >{{ group.masteredCount }} / {{ group.items.length }}</span
+            >
           </button>
-
-          <div v-if="expandedGroups[group.key]" class="tree-group__body">
+          <template v-if="expandedGroups[group.key]">
             <button
               v-for="item in group.items"
               :key="item.file_id"
               type="button"
-              :class="['tree-doc', { active: item.file_id === currentFileId }]"
+              :class="['tree-doc', { on: item.file_id === currentFileId }]"
+              @click="goToDocument(item.file_id)"
+            >
+              <span class="tree-doc__title">{{ item.displayName }}</span>
+              <span v-if="item.file_id === currentFileId" class="tree-doc__dot"></span>
+              <span v-else-if="item.status === 'mastered'" class="tree-doc__tag">已读</span>
+              <span v-else-if="item.status === 'review'" class="tree-doc__tag">复习</span>
+            </button>
+          </template>
+        </section>
+      </div>
+    </aside>
+
+    <!-- 右：正文 -->
+    <div class="doc-main">
+      <div class="page-topbar">
+        <div class="topbar-left">
+          <div class="breadcrumbs">
+            <span>知识学习</span>
+            <span>/</span>
+            <span>{{ database?.name || '知识专题' }}</span>
+            <span>/</span>
+            <span>{{ currentCategory }}</span>
+          </div>
+          <h1 class="page-title">{{ currentDocTitle }}</h1>
+          <p class="page-subtitle">{{ subtitleText }}</p>
+        </div>
+        <div class="topbar-actions">
+          <a-button class="btn-secondary mobile-only" @click="treeDrawerOpen = true">目录</a-button>
+          <a-button class="btn-secondary mobile-only" @click="sideDrawerOpen = true"
+            >大纲与笔记</a-button
+          >
+          <a-button class="btn-secondary" @click="router.push(`/learn/${dbId}`)">返回专题</a-button>
+          <a-button
+            class="btn-secondary"
+            :class="{ 'btn-secondary--on': currentMastery === 'review' }"
+            @click="toggleReviewMark"
+          >
+            标记复习
+          </a-button>
+          <a-button type="primary" class="btn-primary" @click="setMastery('mastered')">
+            {{ currentMastery === 'mastered' ? '已掌握' : '掌握了' }}
+          </a-button>
+        </div>
+      </div>
+
+      <div v-if="loading" class="state-panel">
+        <a-spin size="large" />
+        <p>正在加载学习内容...</p>
+      </div>
+
+      <a-result
+        v-else-if="errorMessage"
+        status="warning"
+        title="学习内容加载失败"
+        :sub-title="errorMessage"
+      />
+
+      <div v-else-if="documentPayload" class="doc-body">
+        <!-- 阅读区 -->
+        <div class="reading-col">
+          <div class="reading-col__bar">
+            <div class="mode-tabs">
+              <button
+                v-for="option in viewOptions"
+                :key="option.value"
+                type="button"
+                :class="['opt', { on: viewMode === option.value }]"
+                @click="viewMode = option.value"
+              >
+                {{ option.label }}
+              </button>
+            </div>
+            <div class="reading-progress">
+              <span class="reading-progress__label">阅读进度</span>
+              <div class="bar bar--wide">
+                <span
+                  v-if="currentProgress > 0"
+                  class="bar__fill"
+                  :style="{ width: `${currentProgress}%` }"
+                ></span>
+              </div>
+              <span class="reading-progress__value">{{ currentProgress }}%</span>
+            </div>
+          </div>
+
+          <div ref="readingScrollRef" class="reading-col__content" @scroll="handleContentScroll">
+            <section v-if="viewMode === 'chunks'" ref="chunksContainerRef" class="chunk-list">
+              <article
+                v-for="chunk in parsedChunks"
+                :key="chunk.id || chunk.chunk_order_index"
+                :data-chunk-index="chunk.chunk_order_index"
+                :class="['chunk-card', { active: activeChunkIndex === chunk.chunk_order_index }]"
+              >
+                <div class="chunk-card__top">
+                  <span class="lab">要点 #{{ chunk.chunk_order_index }}</span>
+                  <span
+                    v-if="activeChunkIndex === chunk.chunk_order_index"
+                    class="badge badge--current"
+                    >当前阅读</span
+                  >
+                </div>
+
+                <template v-if="chunk.isQaStructured">
+                  <div class="lab">问题</div>
+                  <div class="qa-question">{{ chunk.question }}</div>
+                  <div class="lab">回答与要点</div>
+                  <MdPreview
+                    :model-value="chunk.answer"
+                    :theme="theme"
+                    preview-theme="github"
+                    class="markdown-preview"
+                  />
+                </template>
+
+                <div v-else class="chunk-card__content">{{ chunk.preview }}</div>
+              </article>
+            </section>
+
+            <section v-else ref="articleContainerRef" class="markdown-panel">
+              <MdPreview
+                :model-value="documentPayload.content || ''"
+                :theme="theme"
+                preview-theme="github"
+                class="markdown-preview"
+              />
+            </section>
+          </div>
+
+          <div class="reading-col__footer">
+            <div class="footer-actions">
+              <button type="button" class="row-btn" @click="askQuestion('我对这节还有疑问：')">
+                有疑问，去提问
+              </button>
+              <button type="button" class="row-btn" @click="toggleFavoriteCurrent">
+                {{ isFavorite ? '取消收藏' : '收藏本篇' }}
+              </button>
+              <button type="button" class="row-btn" @click="shareCurrent">复制链接</button>
+              <button type="button" class="row-btn" @click="printCurrent">打印</button>
+            </div>
+            <div class="footer-next">
+              <span class="footer-next__hint">
+                {{
+                  nextDocument
+                    ? `下一篇：${formatDisplayName(nextDocument.filename)}`
+                    : '已到本专题最后一篇'
+                }}
+              </span>
+              <button
+                type="button"
+                class="row-btn row-btn--primary"
+                :disabled="!nextDocument"
+                @click="nextDocument && goToDocument(nextDocument.file_id)"
+              >
+                下一篇
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 大纲 / 相关题 / 笔记 -->
+        <aside class="side-col" :class="{ 'side-col--open': sideDrawerOpen }">
+          <button type="button" class="side-col__close mobile-only" @click="sideDrawerOpen = false">
+            收起
+          </button>
+
+          <div class="side-block">
+            <div class="lab">本页大纲</div>
+            <div v-if="outlineItems.length" class="outline-list">
+              <button
+                v-for="item in outlineItems"
+                :key="item.id"
+                type="button"
+                :class="[
+                  'outline-item',
+                  `level-${item.level}`,
+                  { on: item.id === activeOutlineId }
+                ]"
+                @click="handleOutlineClick(item)"
+              >
+                {{ item.text }}
+              </button>
+            </div>
+            <p v-else class="side-empty">本篇没有可用的小标题</p>
+          </div>
+
+          <div v-if="relatedQaCards.length" class="side-block">
+            <div class="side-block__head">
+              <span class="lab">相关面试题</span>
+              <span class="side-block__hint">{{ relatedQaCards.length }} 道</span>
+            </div>
+            <div class="qa-list">
+              <button
+                v-for="card in relatedQaCards"
+                :key="card.id"
+                type="button"
+                class="qa-item"
+                @click="openQaCard(card)"
+              >
+                <span class="qa-item__q">{{ card.question }}</span>
+                <span class="qa-item__a">{{ card.answerPreview }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="side-block side-block--notes">
+            <div class="side-block__head">
+              <span class="lab">我的笔记</span>
+              <span class="side-block__hint">自动保存</span>
+            </div>
+            <textarea
+              v-model="currentNote"
+              class="notes-input"
+              maxlength="3000"
+              placeholder="记录你的理解、疑问或面试答题思路..."
+            ></textarea>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <a-drawer v-model:open="treeDrawerOpen" title="知识目录" placement="left" width="320">
+      <div class="drawer-tree">
+        <section v-for="group in groupedDocuments" :key="group.key">
+          <button type="button" class="tree-group" @click="toggleGroup(group.key)">
+            <span>{{ group.label }}</span>
+            <span class="tree-group__count"
+              >{{ group.masteredCount }} / {{ group.items.length }}</span
+            >
+          </button>
+          <template v-if="expandedGroups[group.key]">
+            <button
+              v-for="item in group.items"
+              :key="item.file_id"
+              type="button"
+              :class="['tree-doc', { on: item.file_id === currentFileId }]"
               @click="handleTreeDrawerDocClick(item.file_id)"
             >
               <span class="tree-doc__title">{{ item.displayName }}</span>
             </button>
-          </div>
+          </template>
         </section>
-      </div>
-    </a-drawer>
-
-    <a-drawer v-model:open="outlineDrawerOpen" title="文档大纲" placement="right" width="320">
-      <div class="outline-drawer">
-        <button
-          v-for="item in outlineItems"
-          :key="item.id"
-          type="button"
-          :class="['outline-item', { active: item.id === activeOutlineId }]"
-          @click="handleOutlineClick(item)"
-        >
-          <span :class="['outline-item__text', `level-${item.level}`]">{{ item.text }}</span>
-        </button>
-      </div>
-    </a-drawer>
-
-    <a-drawer v-model:open="notesDrawerOpen" title="我的笔记" placement="right" width="420">
-      <div class="notes-drawer">
-        <a-textarea
-          v-model:value="currentNote"
-          :rows="14"
-          show-count
-          :maxlength="3000"
-          placeholder="记录你的理解、疑问或面试答题思路..."
-        />
-        <p class="notes-hint">笔记会自动保存到本地。</p>
       </div>
     </a-drawer>
   </div>
@@ -297,29 +281,24 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import {
-  AimOutlined,
-  BookOutlined,
-  CheckCircleFilled,
-  EditOutlined,
-  ExclamationCircleOutlined,
-  MenuOutlined,
-  MinusCircleOutlined,
-  PrinterOutlined,
-  PushpinOutlined,
-  QuestionCircleOutlined,
-  ShareAltOutlined,
-  StarFilled,
-  StarOutlined,
-  VerticalAlignTopOutlined
-} from '@ant-design/icons-vue'
-import { FileCode2, FileText, Folder, FolderOpen } from 'lucide-vue-next'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 
 import { learnApi } from '@/apis/learn_api'
 import { interviewCodeApi } from '@/apis/interview_code'
 import { useThemeStore } from '@/stores/theme'
+import {
+  persistFavoriteIds,
+  persistGlobalLastDoc,
+  persistLastDoc,
+  persistMasteryMap,
+  persistNotesMap,
+  persistSecondsMap,
+  readFavoriteIds,
+  readMasteryMap,
+  readNotesMap,
+  readSecondsMap
+} from '@/utils/learn_progress'
 
 const route = useRoute()
 const router = useRouter()
@@ -328,24 +307,22 @@ const themeStore = useThemeStore()
 const loading = ref(false)
 const errorMessage = ref('')
 const treeDrawerOpen = ref(false)
-const outlineDrawerOpen = ref(false)
-const notesDrawerOpen = ref(false)
+const sideDrawerOpen = ref(false)
 const viewMode = ref('markdown')
 const database = ref(null)
 const documentPayload = ref(null)
 const chunksContainerRef = ref(null)
 const articleContainerRef = ref(null)
+const readingScrollRef = ref(null)
 const activeChunkIndex = ref(null)
-const activeHeadingId = ref('')
 const activeOutlineId = ref('')
 const readingProgress = ref(0)
 const expandedGroups = ref({})
-const scrollContainer = ref(null)
 
 const favoriteIds = ref(new Set())
 const masteryMap = ref({})
 const notesMap = ref({})
-const readSecondsMap = ref({})
+const readSeconds = ref({})
 const liveReadSeconds = ref(0)
 const sessionStartedAt = ref(0)
 
@@ -353,46 +330,34 @@ let readTimer = null
 
 const formatDisplayName = (value) => String(value || '').replace(/\.md$/i, '')
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
-const getScrollContainer = () => scrollContainer.value || document.getElementById('app-router-view')
 
 const dbId = computed(() => String(route.params.db_id || '').trim())
 const currentFileId = computed(() => String(route.params.file_id || '').trim())
-const documents = computed(() => (Array.isArray(database.value?.documents) ? database.value.documents : []))
-const currentDocument = computed(() => documents.value.find((item) => item.file_id === currentFileId.value) || null)
+const documents = computed(() =>
+  Array.isArray(database.value?.documents) ? database.value.documents : []
+)
+const currentDocument = computed(
+  () => documents.value.find((item) => item.file_id === currentFileId.value) || null
+)
 const theme = computed(() => (themeStore.isDark ? 'dark' : 'light'))
 const currentDocTitle = computed(() =>
-  formatDisplayName(documentPayload.value?.file_name || currentDocument.value?.filename || '文档学习')
+  formatDisplayName(
+    documentPayload.value?.file_name || currentDocument.value?.filename || '文档学习'
+  )
 )
 const currentCategory = computed(() => {
   const folder = String(currentDocument.value?.folder_path || '').trim()
   if (!folder) return '根目录'
   return folder.split('/').filter(Boolean)[0] || '根目录'
 })
-const currentTagsText = computed(
-  () => `${currentDocTitle.value} ${currentDocument.value?.summary || ''} ${currentDocument.value?.filename || ''}`
-)
 const isFavorite = computed(() => favoriteIds.value.has(currentFileId.value))
+const currentMastery = computed(() => masteryMap.value[currentFileId.value] || 'todo')
+
 const readMinutes = computed(() => {
-  const stored = Number(readSecondsMap.value[currentFileId.value] || 0)
+  const stored = Number(readSeconds.value[currentFileId.value] || 0)
   const totalSeconds = stored + liveReadSeconds.value
   if (!totalSeconds) return 0
   return Math.max(1, Math.round(totalSeconds / 60))
-})
-const estimatedMinutes = computed(() => {
-  const source = String(documentPayload.value?.content || '').trim()
-  const fallback = parsedChunks.value.map((chunk) => chunk.preview).join('\n')
-  const text = source || fallback
-  const minutes = Math.round(text.length / 420)
-  return clamp(minutes || 5, 5, 60)
-})
-
-const topicTags = computed(() => {
-  const text = currentTagsText.value.toLowerCase()
-  const tags = [currentCategory.value]
-  if (text.includes('sql') || text.includes('mysql')) tags.push('MySQL')
-  if (text.includes('优化') || text.includes('performance')) tags.push('性能优化')
-  if (text.includes('索引') || text.includes('index')) tags.push('索引')
-  return [...new Set(tags)].slice(0, 4)
 })
 
 const parseFrontmatter = (raw) => {
@@ -428,7 +393,9 @@ const parseQaChunk = (content) => {
   const preview = raw.replace(/\n+/g, ' ').trim()
   const { fields, body } = parseFrontmatter(raw)
 
-  const questionMatch = raw.match(/(?:问题|question)\s*[:：]\s*([\s\S]*?)(?=(?:回答|answer)\s*[:：]|$)/i)
+  const questionMatch = raw.match(
+    /(?:问题|question)\s*[:：]\s*([\s\S]*?)(?=(?:回答|answer)\s*[:：]|$)/i
+  )
   const answerMatch = raw.match(/(?:回答|answer)\s*[:：]\s*([\s\S]*)$/i)
 
   const question = questionMatch?.[1]?.trim() || fields.title || fields.question || ''
@@ -449,16 +416,34 @@ const parsedChunks = computed(() =>
   }))
 )
 
-const qaStructuredCount = computed(() => parsedChunks.value.filter((chunk) => chunk.isQaStructured).length)
+const qaStructuredCount = computed(
+  () => parsedChunks.value.filter((chunk) => chunk.isQaStructured).length
+)
 const hasQaStructured = computed(() => qaStructuredCount.value > 0)
 const viewOptions = computed(() =>
   hasQaStructured.value
     ? [
-        { label: '阅读正文', value: 'markdown' },
-        { label: '导读卡片', value: 'chunks' }
+        { label: 'QA 分块', value: 'chunks' },
+        { label: '整篇阅读', value: 'markdown' }
       ]
-    : [{ label: '阅读正文', value: 'markdown' }]
+    : [{ label: '整篇阅读', value: 'markdown' }]
 )
+
+const estimatedMinutes = computed(() => {
+  const source = String(documentPayload.value?.content || '').trim()
+  const fallback = parsedChunks.value.map((chunk) => chunk.preview).join('\n')
+  const text = source || fallback
+  const minutes = Math.round(text.length / 420)
+  return clamp(minutes || 5, 5, 60)
+})
+
+const subtitleText = computed(() => {
+  const parts = [`预计 ${estimatedMinutes.value} 分钟`, `已读 ${readMinutes.value} 分钟`]
+  if (qaStructuredCount.value) {
+    parts.push(`QA 分块 ${qaStructuredCount.value} 个`)
+  }
+  return parts.join(' · ')
+})
 
 const groupedDocuments = computed(() => {
   const groups = new Map()
@@ -472,20 +457,14 @@ const groupedDocuments = computed(() => {
     groups.get(key).items.push({
       ...item,
       displayName: formatDisplayName(item.filename),
-      status:
-        item.file_id === currentFileId.value
-          ? 'current'
-          : masteryMap.value[item.file_id] === 'mastered'
-            ? 'mastered'
-            : masteryMap.value[item.file_id] === 'review'
-              ? 'review'
-              : 'todo'
+      status: masteryMap.value[item.file_id] || 'todo'
     })
   })
 
   return [...groups.values()]
     .map((group) => ({
       ...group,
+      masteredCount: group.items.filter((item) => item.status === 'mastered').length,
       items: group.items.sort((a, b) => a.displayName.localeCompare(b.displayName, 'zh-Hans-CN'))
     }))
     .sort((a, b) => a.label.localeCompare(b.label, 'zh-Hans-CN'))
@@ -493,7 +472,9 @@ const groupedDocuments = computed(() => {
 
 const masteredCount = computed(() => {
   const docIds = new Set(documents.value.map((item) => item.file_id))
-  return Object.entries(masteryMap.value).filter(([id, status]) => docIds.has(id) && status === 'mastered').length
+  return Object.entries(masteryMap.value).filter(
+    ([id, status]) => docIds.has(id) && status === 'mastered'
+  ).length
 })
 const learningProgress = computed(() => {
   if (!documents.value.length) return 0
@@ -506,7 +487,7 @@ const outlineItems = computed(() => {
   if (viewMode.value === 'chunks') {
     return parsedChunks.value.map((chunk) => ({
       id: `chunk-${chunk.chunk_order_index}`,
-      text: chunk.question || chunk.preview || `导读卡片 ${chunk.chunk_order_index}`,
+      text: chunk.question || chunk.preview || `要点 ${chunk.chunk_order_index}`,
       level: 2,
       chunkIndex: chunk.chunk_order_index,
       type: 'chunk'
@@ -529,7 +510,9 @@ const relatedQaCards = computed(() =>
 
 const currentProgress = computed(() => {
   if (viewMode.value === 'chunks') {
-    const index = parsedChunks.value.findIndex((chunk) => chunk.chunk_order_index === activeChunkIndex.value)
+    const index = parsedChunks.value.findIndex(
+      (chunk) => chunk.chunk_order_index === activeChunkIndex.value
+    )
     if (index < 0 || !parsedChunks.value.length) return 0
     return Math.round(((index + 1) / parsedChunks.value.length) * 100)
   }
@@ -549,32 +532,16 @@ const currentNote = computed({
       ...notesMap.value,
       [currentFileId.value]: value
     }
-    persistJson(storageKey('notes'), notesMap.value)
+    persistNotesMap(dbId.value, notesMap.value)
   }
 })
 
-const storageKey = (name) => `learn-doc-${dbId.value}-${name}`
-
-const readJson = (key, fallback) => {
-  try {
-    const raw = localStorage.getItem(key)
-    if (!raw) return fallback
-    return JSON.parse(raw)
-  } catch {
-    return fallback
-  }
-}
-
-const persistJson = (key, value) => {
-  localStorage.setItem(key, JSON.stringify(value))
-}
-
 const initLocalState = () => {
   if (!dbId.value) return
-  favoriteIds.value = new Set(readJson(storageKey('favorites'), []))
-  masteryMap.value = readJson(storageKey('mastery'), {})
-  notesMap.value = readJson(storageKey('notes'), {})
-  readSecondsMap.value = readJson(storageKey('read-seconds'), {})
+  favoriteIds.value = readFavoriteIds(dbId.value)
+  masteryMap.value = readMasteryMap(dbId.value)
+  notesMap.value = readNotesMap(dbId.value)
+  readSeconds.value = readSecondsMap(dbId.value)
 }
 
 const startReadSession = () => {
@@ -592,11 +559,11 @@ const commitReadDuration = (fileId = currentFileId.value) => {
   if (!fileId || !sessionStartedAt.value) return
   const elapsed = Math.floor((Date.now() - sessionStartedAt.value) / 1000)
   if (elapsed > 2) {
-    readSecondsMap.value = {
-      ...readSecondsMap.value,
-      [fileId]: Number(readSecondsMap.value[fileId] || 0) + elapsed
+    readSeconds.value = {
+      ...readSeconds.value,
+      [fileId]: Number(readSeconds.value[fileId] || 0) + elapsed
     }
-    persistJson(storageKey('read-seconds'), readSecondsMap.value)
+    persistSecondsMap(dbId.value, readSeconds.value)
   }
   sessionStartedAt.value = Date.now()
   liveReadSeconds.value = 0
@@ -641,8 +608,7 @@ const scrollToHeading = async (id) => {
     await nextTick()
   }
   const target = document.getElementById(id)
-  if (!target) return
-  target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 const scrollToChunk = async (chunkIndex, { smooth = true } = {}) => {
@@ -664,39 +630,30 @@ const scrollToChunk = async (chunkIndex, { smooth = true } = {}) => {
 
 const updateReadingProgress = () => {
   if (viewMode.value !== 'markdown') return
-  const container = articleContainerRef.value
-  if (!container) return
-  const scroller = getScrollContainer()
+  const scroller = readingScrollRef.value
   if (!scroller) return
-
-  const rect = container.getBoundingClientRect()
-  const scrollerRect = scroller.getBoundingClientRect()
-  const viewportHeight = scrollerRect.height || window.innerHeight
-  const total = container.offsetHeight + viewportHeight * 0.5
-  const seen = scrollerRect.bottom - rect.top
-  readingProgress.value = clamp(Math.round((seen / total) * 100), 0, 100)
+  const scrollable = scroller.scrollHeight - scroller.clientHeight
+  readingProgress.value =
+    scrollable > 0 ? clamp(Math.round((scroller.scrollTop / scrollable) * 100), 0, 100) : 100
 }
 
 const updateOutlineByScroll = () => {
   if (viewMode.value !== 'markdown' || !markdownOutline.value.length) return
-  const scroller = getScrollContainer()
+  const scroller = readingScrollRef.value
   if (!scroller) return
-  const scrollerRect = scroller.getBoundingClientRect()
-  const currentY = scrollerRect.top + 120
+  const anchorY = scroller.getBoundingClientRect().top + 120
   let activeId = markdownOutline.value[0].id
   markdownOutline.value.forEach((item) => {
     const element = document.getElementById(item.id)
     if (!element) return
-    const elementTop = element.getBoundingClientRect().top
-    if (elementTop <= currentY) {
+    if (element.getBoundingClientRect().top <= anchorY) {
       activeId = item.id
     }
   })
-  activeHeadingId.value = activeId
   activeOutlineId.value = activeId
 }
 
-const handleWindowScroll = () => {
+const handleContentScroll = () => {
   updateReadingProgress()
   updateOutlineByScroll()
 }
@@ -710,7 +667,6 @@ const loadPage = async () => {
 
   loading.value = true
   errorMessage.value = ''
-  viewMode.value = 'markdown'
 
   try {
     const [databaseData, documentData] = await Promise.all([
@@ -720,7 +676,10 @@ const loadPage = async () => {
     database.value = databaseData
     documentPayload.value = documentData
     initLocalState()
-    activeChunkIndex.value = parsedChunks.value[0]?.chunk_order_index ?? documentData?.target_chunk_index ?? null
+    viewMode.value = hasQaStructured.value ? 'chunks' : 'markdown'
+    activeChunkIndex.value =
+      parsedChunks.value[0]?.chunk_order_index ?? documentData?.target_chunk_index ?? null
+    recordLastDoc()
     await collectMarkdownOutline()
     startReadSession()
     updateReadingProgress()
@@ -729,6 +688,18 @@ const loadPage = async () => {
   } finally {
     loading.value = false
   }
+}
+
+// 直接通过链接打开某篇文档时，也要更新「继续上次学习」的入口
+const recordLastDoc = () => {
+  const entry = { file_id: currentFileId.value, title: currentDocTitle.value }
+  persistLastDoc(dbId.value, entry)
+  persistGlobalLastDoc({
+    dbId: dbId.value,
+    fileId: currentFileId.value,
+    title: currentDocTitle.value,
+    dbName: database.value?.name || ''
+  })
 }
 
 const toggleGroup = (groupKey) => {
@@ -759,7 +730,7 @@ const toggleFavoriteCurrent = () => {
     next.add(id)
   }
   favoriteIds.value = next
-  persistJson(storageKey('favorites'), [...next])
+  persistFavoriteIds(dbId.value, next)
 }
 
 const setMastery = (status) => {
@@ -768,13 +739,14 @@ const setMastery = (status) => {
     ...masteryMap.value,
     [currentFileId.value]: status
   }
-  persistJson(storageKey('mastery'), masteryMap.value)
-  message.success(status === 'mastered' ? '已标记为掌握' : '已标记为复习')
+  persistMasteryMap(dbId.value, masteryMap.value)
+  message.success(
+    status === 'mastered' ? '已标记为掌握' : status === 'review' ? '已标记为复习' : '已取消标记'
+  )
 }
 
 const toggleReviewMark = () => {
-  const current = masteryMap.value[currentFileId.value]
-  setMastery(current === 'review' ? 'todo' : 'review')
+  setMastery(currentMastery.value === 'review' ? 'todo' : 'review')
 }
 
 const askQuestion = async (prefix = '') => {
@@ -806,22 +778,7 @@ const openQaCard = (card) => {
   scrollToChunk(card.chunkIndex)
 }
 
-const focusQaPanel = () => {
-  const panel = document.querySelector('.qa-panel')
-  panel?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-}
-
-const scrollToTop = () => {
-  const scroller = getScrollContainer()
-  if (scroller && 'scrollTo' in scroller) {
-    scroller.scrollTo({ top: 0, behavior: 'smooth' })
-    return
-  }
-  window.scrollTo({ top: 0, behavior: 'smooth' })
-}
-
 const handleOutlineClick = async (item) => {
-  outlineDrawerOpen.value = false
   if (item.type === 'chunk') {
     await scrollToChunk(item.chunkIndex)
     activeOutlineId.value = item.id
@@ -873,167 +830,139 @@ watch(
 )
 
 onMounted(() => {
-  scrollContainer.value = document.getElementById('app-router-view')
-  const scroller = getScrollContainer()
-  scroller?.addEventListener('scroll', handleWindowScroll, { passive: true })
   window.addEventListener('resize', collectMarkdownOutline, { passive: true })
 })
 
 onUnmounted(() => {
   commitReadDuration()
   stopReadSession()
-  const scroller = getScrollContainer()
-  scroller?.removeEventListener('scroll', handleWindowScroll)
   window.removeEventListener('resize', collectMarkdownOutline)
 })
 </script>
 
 <style scoped lang="less">
-.learn-document-page {
-  min-height: 100%;
-  background: var(--gray-25);
-}
-
-.page-shell {
+// 设计稿 [UI v3][2k3] 文档阅读 · 三级
+.learn-document {
   display: flex;
-  min-height: 100%;
-}
-
-.tree-sidebar {
-  width: 320px;
-  border-right: 1px solid var(--gray-150);
-  background: var(--gray-0);
-  padding: 16px 14px;
-  overflow-y: auto;
-}
-
-.tree-header {
-  border-radius: 14px;
-  border: 1px solid var(--gray-150);
-  background: var(--gray-10);
-  padding: 12px;
-}
-
-.tree-header__title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--gray-800);
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.tree-progress {
-  margin-top: 10px;
-}
-
-.tree-progress__meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 12px;
-  color: var(--gray-500);
-}
-
-.tree-progress__track {
-  margin-top: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--gray-100);
+  height: 100%;
   overflow: hidden;
 }
 
-.tree-progress__fill {
+.lab {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: var(--gray-500);
+}
+
+.bar {
+  height: 6px;
+  background: var(--gray-100);
+  margin-top: 7px;
+
+  &--wide {
+    width: 120px;
+    margin-top: 0;
+  }
+}
+
+.bar__fill {
   display: block;
   height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--main-500), var(--main-300));
+  background: var(--main-color);
 }
 
-.tree-groups {
-  margin-top: 14px;
-}
-
-.tree-group + .tree-group {
-  margin-top: 10px;
-}
-
-.tree-group__head {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  color: var(--gray-600);
-  font-size: 12px;
-  cursor: pointer;
-  padding: 4px 2px;
-}
-
-.tree-group__left {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 700;
-}
-
-.tree-group__body {
-  margin-top: 6px;
+// ===================== 左侧目录 =====================
+.doc-tree {
+  flex: 0 0 240px;
+  // 文档标题很长时，flex 项的 min-width: auto 会把这一栏撑宽，必须显式收窄
+  width: 240px;
+  min-width: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--gray-100);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  min-height: 0;
+}
+
+.doc-tree__head {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--gray-100);
+  flex-shrink: 0;
+}
+
+.doc-tree__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gray-1000);
+}
+
+.doc-tree__progress-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--gray-500);
+  margin-top: 10px;
+
+  .strong {
+    color: var(--gray-1000);
+    font-weight: 700;
+  }
+}
+
+.doc-tree__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 0;
+}
+
+.tree-group {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gray-1000);
+  cursor: pointer;
+  text-align: left;
+}
+
+.tree-group__count {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--gray-500);
+  flex-shrink: 0;
 }
 
 .tree-doc {
   width: 100%;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--gray-700);
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  text-align: left;
-  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  padding: 7px 18px 7px 30px;
+  font-size: 13px;
+  color: var(--gray-600);
   cursor: pointer;
-  transition:
-    border-color 0.2s ease,
-    background-color 0.2s ease,
-    color 0.2s ease;
+  text-align: left;
 
   &:hover {
-    border-color: var(--gray-200);
-    background: var(--gray-10);
+    color: var(--gray-1000);
   }
 
-  &.active {
-    border-color: var(--main-200);
-    background: var(--main-50);
-    color: var(--main-700);
+  &.on {
+    background: var(--gray-100);
+    color: var(--gray-1000);
+    font-weight: 700;
   }
-}
-
-.tree-doc__status {
-  width: 14px;
-  display: inline-flex;
-  justify-content: center;
-}
-
-.status-current .tree-doc__status {
-  color: var(--main-600);
-}
-
-.status-mastered .tree-doc__status {
-  color: #16a34a;
-}
-
-.status-review .tree-doc__status {
-  color: #d97706;
-}
-
-.status-todo .tree-doc__status {
-  color: var(--gray-300);
 }
 
 .tree-doc__title {
@@ -1041,168 +970,321 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
 }
 
-.content-panel {
+.tree-doc__dot {
+  width: 6px;
+  height: 6px;
+  background: var(--main-color);
+  flex-shrink: 0;
+}
+
+.tree-doc__tag {
+  font-size: 11px;
+  color: var(--gray-500);
+  flex-shrink: 0;
+}
+
+// ===================== 顶栏 =====================
+.doc-main {
   flex: 1;
   min-width: 0;
-  padding: 18px 22px 32px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.content-header {
+.page-topbar {
   display: flex;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 14px;
-  align-items: center;
-  margin-bottom: 14px;
+  gap: 20px;
+  padding: 20px 32px 16px;
+  border-bottom: 1px solid var(--gray-100);
+  flex-shrink: 0;
 }
 
-.content-header__left {
+.topbar-left {
   min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.back-btn,
-.mobile-btn {
-  color: var(--gray-700);
-}
-
-.mobile-btn {
-  display: none;
 }
 
 .breadcrumbs {
-  min-width: 0;
-  color: var(--gray-500);
-  font-size: 13px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  overflow: hidden;
+  gap: 9px;
+  font-size: 12px;
+  color: var(--gray-500);
+  margin-bottom: 7px;
+}
 
-  span:last-child {
-    overflow: hidden;
-    text-overflow: ellipsis;
+.page-title {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--gray-1000);
+}
+
+.page-subtitle {
+  font-size: 13px;
+  color: var(--gray-500);
+  margin: 6px 0 0;
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-shrink: 0;
+
+  :deep(.btn-secondary.ant-btn) {
+    display: inline-flex;
+    align-items: center;
+    height: 34px;
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid var(--gray-200);
+    background: var(--gray-0);
+    color: var(--gray-700);
+    border-radius: 0;
+    box-shadow: none;
+
+    &:hover,
+    &:focus {
+      border-color: var(--gray-500) !important;
+      color: var(--gray-1000) !important;
+    }
+  }
+
+  :deep(.btn-secondary--on.ant-btn) {
+    background: var(--gray-100);
+    color: var(--gray-1000);
+    font-weight: 700;
+  }
+
+  :deep(.btn-primary.ant-btn) {
+    display: inline-flex;
+    align-items: center;
+    height: 34px;
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 0;
+    background: var(--main-color);
+    border-color: var(--main-color);
+    color: #fff;
+    box-shadow: none;
+
+    &:hover,
+    &:focus {
+      background: var(--main-700) !important;
+      border-color: var(--main-700) !important;
+      color: #fff !important;
+    }
   }
 }
 
-.hero-card {
-  border: 1px solid var(--gray-150);
-  border-radius: 20px;
-  background: var(--gray-0);
-  box-shadow: 0 10px 24px var(--shadow-0);
-  padding: 20px 22px;
+.mobile-only {
+  display: none;
 }
 
-.hero-card__topline {
+// ===================== 正文两栏 =====================
+.doc-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+}
+
+.reading-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  border-right: 1px solid var(--gray-100);
+}
+
+.reading-col__bar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 32px;
+  border-bottom: 1px solid var(--gray-100);
+  flex-shrink: 0;
 }
 
-.hero-badge {
+.mode-tabs {
+  display: flex;
+  gap: 10px;
+}
+
+.opt {
   display: inline-flex;
   align-items: center;
-  border-radius: 999px;
-  padding: 5px 10px;
-  background: var(--main-50);
-  color: var(--main-700);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.hero-estimate {
-  font-size: 12px;
-  color: var(--gray-500);
-}
-
-.hero-card h1 {
-  margin: 12px 0 8px;
-  font-size: 30px;
-  color: var(--gray-2000);
-  line-height: 1.2;
-}
-
-.hero-card p {
-  margin: 0;
-  color: var(--gray-600);
-  line-height: 1.8;
-}
-
-.hero-tags {
-  margin-top: 12px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.hero-tag {
-  border-radius: 999px;
+  height: 28px;
+  padding: 0 12px;
   border: 1px solid var(--gray-200);
-  background: var(--gray-10);
+  background: var(--gray-0);
+  font-size: 12px;
   color: var(--gray-700);
-  padding: 2px 10px;
-  font-size: 12px;
+  cursor: pointer;
+
+  &.on {
+    background: var(--gray-100);
+    color: var(--gray-1000);
+    font-weight: 700;
+  }
 }
 
-.hero-actions {
-  margin-top: 14px;
+.reading-progress {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.hero-reading-progress {
-  margin-top: 12px;
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  font-size: 12px;
-  color: var(--gray-500);
-}
-
-.hero-reading-progress__track {
-  margin-top: 6px;
-  width: 100%;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--gray-50);
-  overflow: hidden;
-}
-
-.hero-reading-progress__fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--main-500), var(--main-300));
-}
-
-.reading-shell {
-  margin-top: 14px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 46px;
   gap: 14px;
 }
 
-.reading-main {
-  min-width: 0;
+.reading-progress__label {
+  font-size: 12px;
+  color: var(--gray-500);
+}
+
+.reading-progress__value {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--gray-1000);
+}
+
+.reading-col__content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px 32px;
+}
+
+.reading-col__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 16px 32px;
+  border-top: 1px solid var(--gray-100);
+  flex-shrink: 0;
+}
+
+.footer-actions,
+.footer-next {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.footer-next__hint {
+  font-size: 13px;
+  color: var(--gray-500);
+}
+
+.row-btn {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--gray-200);
+  background: var(--gray-0);
+  color: var(--gray-700);
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    border-color: var(--gray-500);
+    color: var(--gray-1000);
+  }
+
+  &:disabled {
+    color: var(--gray-500);
+    cursor: not-allowed;
+  }
+
+  &--primary {
+    background: var(--main-color);
+    border-color: var(--main-color);
+    color: #fff;
+
+    &:hover:not(:disabled) {
+      background: var(--main-700);
+      border-color: var(--main-700);
+      color: #fff;
+    }
+
+    &:disabled {
+      background: var(--gray-100);
+      border-color: var(--gray-200);
+      color: var(--gray-500);
+    }
+  }
+}
+
+// ===================== QA 分块 =====================
+.chunk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.chunk-card {
+  border: 1px solid var(--gray-100);
+  padding: 18px 22px;
+
+  &.active {
+    border-color: var(--gray-200);
+  }
+}
+
+.chunk-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--gray-200);
+  color: var(--gray-600);
+
+  &--current {
+    border-color: var(--main-color);
+    color: var(--main-color);
+  }
+}
+
+.qa-question {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.6;
+  color: var(--gray-1000);
+  margin: 8px 0 18px;
+}
+
+.chunk-card__content {
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--gray-700);
 }
 
 .markdown-panel {
-  border: 1px solid var(--gray-150);
-  border-radius: 18px;
-  background: var(--gray-0);
-  box-shadow: 0 10px 22px var(--shadow-0);
-  padding: 20px;
-}
-
-.reading-article {
-  max-width: 760px;
-  margin: 0 auto;
+  max-width: 780px;
 }
 
 :deep(.markdown-preview) {
@@ -1214,28 +1296,22 @@ onUnmounted(() => {
 }
 
 :deep(.markdown-preview h2) {
-  margin-top: 2em;
-  margin-bottom: 0.9em;
-  padding-left: 10px;
-  border-left: 4px solid var(--main-300);
-}
-
-:deep(.markdown-preview h3) {
-  margin-top: 1.5em;
+  margin-top: 1.8em;
   margin-bottom: 0.8em;
+  padding-left: 10px;
+  border-left: 2px solid var(--main-color);
 }
 
 :deep(.markdown-preview p),
 :deep(.markdown-preview li) {
   line-height: 1.85;
-  font-size: 16px;
+  font-size: 15px;
 }
 
 :deep(.markdown-preview pre) {
   border: 1px solid var(--gray-200);
-  border-radius: 14px;
+  border-radius: 0;
   padding: 12px !important;
-  background: #f8fafc !important;
 }
 
 :deep(.markdown-preview pre code) {
@@ -1245,214 +1321,155 @@ onUnmounted(() => {
 }
 
 :deep(.markdown-preview blockquote) {
-  border-left-color: var(--main-300);
-  background: var(--main-10);
-  border-radius: 0 10px 10px 0;
+  border-left-color: var(--gray-200);
+  border-radius: 0;
   padding: 10px 12px;
 }
 
-.chunk-list {
+// ===================== 右侧栏 =====================
+.side-col {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 24px;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 22px;
 }
 
-.chunk-card {
-  border: 1px solid var(--gray-150);
-  border-radius: 18px;
+.side-col__close {
+  align-self: flex-end;
+  border: 1px solid var(--gray-200);
   background: var(--gray-0);
-  box-shadow: 0 8px 20px var(--shadow-0);
-  padding: 18px;
-
-  &.active {
-    border-color: var(--main-300);
-  }
-}
-
-.chunk-card__top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.chunk-index {
-  color: var(--main-700);
-  font-weight: 700;
-  font-size: 13px;
-}
-
-.qa-section + .qa-section {
-  margin-top: 16px;
-}
-
-.qa-label {
-  display: inline-flex;
-  margin-bottom: 8px;
+  color: var(--gray-700);
+  height: 28px;
+  padding: 0 12px;
   font-size: 12px;
-  font-weight: 700;
+  cursor: pointer;
+}
+
+.side-block {
+  flex-shrink: 0;
+}
+
+.side-block--notes {
+  flex: 1;
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+}
+
+.side-block__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.side-block__hint {
+  font-size: 12px;
   color: var(--gray-500);
 }
 
-.qa-content,
-.chunk-card__content {
-  line-height: 1.8;
-  color: var(--gray-800);
-}
-
-.qa-panel {
-  margin-top: 12px;
-  border: 1px solid var(--gray-150);
-  border-radius: 18px;
-  background: var(--gray-0);
-  box-shadow: 0 8px 20px var(--shadow-0);
-  padding: 16px;
-}
-
-.qa-panel__head {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--gray-800);
-  margin-bottom: 10px;
-}
-
-.qa-panel__list {
-  display: grid;
-  grid-template-columns: repeat(1, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.qa-panel__item {
-  border: 1px solid var(--gray-150);
-  border-radius: 12px;
-  background: var(--gray-10);
-  padding: 12px;
-
-  h4 {
-    margin: 0;
-    font-size: 14px;
-    color: var(--gray-800);
-  }
-
-  p {
-    margin: 8px 0 0;
-    color: var(--gray-600);
-    font-size: 13px;
-    line-height: 1.7;
-  }
-}
-
-.study-footer {
-  margin-top: 12px;
-  border: 1px solid var(--gray-150);
-  border-radius: 18px;
-  background: var(--gray-0);
-  box-shadow: 0 8px 20px var(--shadow-0);
-  padding: 14px;
-}
-
-.study-footer__top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-
-  > span {
-    color: var(--gray-700);
-    font-weight: 600;
-  }
-}
-
-.study-footer__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.study-footer__next {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--gray-200);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  color: var(--gray-600);
+.side-empty {
+  margin: 12px 0 0;
   font-size: 13px;
+  color: var(--gray-500);
 }
 
-.tool-rail {
-  position: fixed;
-  right: 20px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 20;
-}
-
-.tool-btn {
-  width: 40px;
-  height: 40px;
-  border: 1px solid var(--gray-200);
-  border-radius: 12px;
-  background: var(--gray-0);
-  color: var(--gray-600);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition:
-    border-color 0.2s ease,
-    background-color 0.2s ease,
-    color 0.2s ease;
-
-  &:hover {
-    border-color: var(--main-200);
-    background: var(--main-50);
-    color: var(--main-700);
-  }
-}
-
-.outline-drawer,
-.drawer-tree {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.outline-list {
+  margin-top: 12px;
 }
 
 .outline-item {
   width: 100%;
-  border: 1px solid transparent;
-  border-radius: 10px;
+  border: none;
+  border-top: 1px solid var(--gray-100);
   background: transparent;
   text-align: left;
-  padding: 8px 10px;
+  padding: 9px 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--gray-600);
   cursor: pointer;
-  color: var(--gray-700);
 
-  &.active {
-    border-color: var(--main-200);
-    background: var(--main-50);
-    color: var(--main-700);
+  &:hover {
+    color: var(--gray-1000);
+  }
+
+  &.on {
+    color: var(--gray-1000);
+    font-weight: 700;
+  }
+
+  &.level-3 {
+    padding-left: 14px;
   }
 }
 
-.outline-item__text.level-3 {
-  padding-left: 14px;
+.qa-list {
+  margin-top: 12px;
+}
+
+.qa-item {
+  width: 100%;
+  border: none;
+  border-top: 1px solid var(--gray-100);
+  background: transparent;
+  text-align: left;
+  padding: 11px 0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  &:hover .qa-item__q {
+    color: var(--main-color);
+  }
+}
+
+.qa-item__q {
   font-size: 13px;
+  line-height: 1.65;
+  color: var(--gray-1000);
 }
 
-.notes-hint {
-  margin: 10px 0 0;
-  color: var(--gray-500);
+.qa-item__a {
   font-size: 12px;
+  color: var(--gray-500);
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
+.notes-input {
+  flex: 1;
+  min-height: 90px;
+  margin-top: 12px;
+  border: 1px solid var(--gray-200);
+  background: var(--gray-25);
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--gray-800);
+  resize: none;
+  outline: none;
+  font-family: inherit;
+
+  &:focus {
+    border-color: var(--main-color);
+  }
+}
+
+.drawer-tree {
+  display: flex;
+  flex-direction: column;
+}
+
+// ===================== 状态 =====================
 .state-panel {
-  min-height: 320px;
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1466,51 +1483,61 @@ onUnmounted(() => {
     display: none;
   }
 
-  .mobile-btn {
+  .mobile-only {
     display: inline-flex;
   }
 
-  .reading-shell {
+  .doc-body {
     grid-template-columns: 1fr;
+  }
+
+  .reading-col {
+    border-right: none;
+  }
+
+  // 窄屏下右栏改为从右侧滑出的面板
+  .side-col {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    width: min(340px, 86vw);
+    background: var(--gray-0);
+    border-left: 1px solid var(--gray-200);
+    transform: translateX(100%);
+    transition: transform 0.2s ease;
+  }
+
+  .side-col--open {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side-col {
+    transition: none;
   }
 }
 
 @media (max-width: 900px) {
-  .content-panel {
-    padding: 16px;
-  }
-
-  .content-header {
+  .page-topbar {
     flex-direction: column;
-    align-items: stretch;
+    align-items: flex-start;
+    padding: 18px;
   }
 
-  .content-header__left {
+  .topbar-actions {
     flex-wrap: wrap;
   }
 
-  .hero-card h1 {
-    font-size: 26px;
+  .reading-col__bar,
+  .reading-col__footer {
+    padding: 12px 18px;
   }
 
-  .hero-actions,
-  .study-footer__actions {
-    width: 100%;
-  }
-
-  .study-footer__top,
-  .study-footer__next {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .markdown-panel {
-    padding: 14px;
-  }
-
-  :deep(.markdown-preview p),
-  :deep(.markdown-preview li) {
-    font-size: 15px;
+  .reading-col__content {
+    padding: 18px;
   }
 }
 </style>

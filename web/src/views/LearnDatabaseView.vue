@@ -1,7 +1,22 @@
 <template>
   <div class="learn-database">
-    <div class="page-header">
-      <a-button type="text" class="back-btn" @click="router.push('/learn')">返回知识专题</a-button>
+    <!-- 顶栏 -->
+    <div class="page-topbar">
+      <div class="topbar-left">
+        <h1 class="page-title">{{ database?.name || '知识专题' }}</h1>
+        <p class="page-subtitle">{{ subtitleText }}</p>
+      </div>
+      <div class="topbar-actions">
+        <a-button class="btn-secondary" @click="router.push('/learn')">返回专题列表</a-button>
+        <a-button
+          type="primary"
+          class="btn-primary"
+          :disabled="!lastLearnDoc"
+          @click="continueLearning"
+        >
+          {{ lastLearnDoc ? `继续学习：${lastLearnDoc.title}` : '尚无学习记录' }}
+        </a-button>
+      </div>
     </div>
 
     <div v-if="loading" class="state-panel">
@@ -16,128 +31,122 @@
       :sub-title="errorMessage"
     />
 
-    <template v-else-if="database">
-      <section class="overview-card">
-        <div class="overview-top">
-          <div class="overview-main">
-            <span class="hero-badge">{{ database.position || '知识专题' }}</span>
-            <h1>{{ database.name }}</h1>
-            <p>{{ database.description || '浏览该专题下的知识文档，进入后可按分块或全文阅读。' }}</p>
-          </div>
-
-          <div class="overview-action">
-            <a-button type="primary" class="continue-btn" :disabled="!lastLearnDoc" @click="continueLearning">
-              继续上次学习
-            </a-button>
-            <p v-if="lastLearnDoc" class="continue-hint">上次学习：{{ lastLearnDoc.title }}</p>
-          </div>
-        </div>
-
-        <div class="stats-row">
-          <div class="stat-card">
-            <FileText :size="16" />
-            <div>
-              <strong>{{ totalDocuments }}</strong>
-              <span>篇文档</span>
-            </div>
-          </div>
-          <div class="stat-card">
-            <Folders :size="16" />
-            <div>
-              <strong>{{ categoryOptions.length - 1 }}</strong>
-              <span>个分类</span>
-            </div>
-          </div>
-          <div class="stat-card">
-            <Clock3 :size="16" />
-            <div>
-              <strong>{{ totalReadHours }}</strong>
-              <span>总阅读时长</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="learning-path">
-          <div class="learning-path__head">
-            <span>推荐学习路径：{{ recommendedPathText }}</span>
-            <span>{{ learnedCount }}/{{ totalDocuments }} 已学习</span>
-          </div>
-          <div class="learning-path__track">
-            <span class="learning-path__fill" :style="{ width: `${pathProgress}%` }"></span>
-          </div>
-        </div>
-
-        <div class="toolbar-grid">
-          <a-input
-            v-model:value="keyword"
-            allow-clear
-            size="large"
-            placeholder="搜索文档名称、摘要或分类"
-          >
-            <template #prefix><SearchOutlined /></template>
-          </a-input>
-
-          <a-select v-model:value="selectedCategory" size="large" :options="categorySelectOptions" />
-
-          <a-select v-model:value="sortMode" size="large" :options="sortOptions" />
-
-          <a-button :type="favoriteOnly ? 'primary' : 'default'" size="large" @click="favoriteOnly = !favoriteOnly">
-            <template #icon>
-              <StarOutlined />
-            </template>
-            我的收藏
-          </a-button>
-        </div>
-
-        <div class="quick-filter-row">
-          <button
-            v-for="tag in quickTags"
-            :key="tag.value"
-            type="button"
-            :class="['quick-tag', { active: activeQuickTag === tag.value }]"
-            @click="activeQuickTag = tag.value"
-          >
-            {{ tag.label }}
-          </button>
-        </div>
-      </section>
-
-      <section class="content-shell">
-        <aside class="category-sidebar desktop-only">
-          <div class="side-title">分类导航</div>
+    <div v-else-if="database" class="page-body">
+      <!-- 左：分类导航 + 专题进度 -->
+      <aside class="side-nav">
+        <div class="side-nav__list">
+          <div class="lab side-nav__lab">分类导航</div>
           <button
             v-for="item in categoryOptions"
             :key="item.value"
             type="button"
-            :class="['category-item', { active: selectedCategory === item.value }]"
+            :class="['nav-item', { on: selectedCategory === item.value }]"
             @click="selectedCategory = item.value"
           >
-            <span>{{ item.label }}</span>
-            <span>{{ item.count }}</span>
+            <span class="nav-item__label">{{ item.label }}</span>
+            <span class="nav-item__count">{{ item.count }}</span>
           </button>
-        </aside>
+        </div>
 
-        <div class="list-panel">
-          <div class="list-meta">
-            <span>共 {{ filteredDocuments.length }} 篇文档</span>
-            <span>已加载 {{ visibleDocuments.length }}/{{ filteredDocuments.length }}</span>
+        <div class="side-nav__progress">
+          <div class="lab">专题进度</div>
+          <div class="progress-number">
+            <span class="progress-number__value">{{ topicProgress }}</span>
+            <span class="progress-number__unit">%</span>
           </div>
+          <div class="bar">
+            <span
+              v-if="topicProgress > 0"
+              class="bar__fill"
+              :style="{ width: `${topicProgress}%` }"
+            ></span>
+          </div>
+          <div class="progress-hint">
+            已读 {{ masteredCount }} / {{ totalDocuments }} 篇<br />
+            累计 {{ readDurationText }}
+          </div>
+        </div>
+      </aside>
 
-          <div v-if="visibleDocuments.length" class="document-list">
-            <article
-              v-for="document in visibleDocuments"
-              :key="document.file_id"
-              class="document-row"
-              @click="goToDocument(document.file_id)"
-            >
-              <div class="doc-type-icon">
-                <component :is="document.typeIcon" :size="18" />
+      <!-- 右：文档列表 -->
+      <section class="doc-panel">
+        <div class="doc-panel__filters">
+          <button
+            v-for="tab in statusTabs"
+            :key="tab.value"
+            type="button"
+            :class="['opt', { on: activeStatus === tab.value }]"
+            @click="activeStatus = tab.value"
+          >
+            {{ tab.label }}{{ tab.value === 'all' ? '' : ` ${tab.count}` }}
+          </button>
+          <div class="doc-panel__spacer"></div>
+          <div class="doc-search">
+            <SearchOutlined class="search-icon" />
+            <input v-model="keyword" class="search-input" placeholder="搜索文档" />
+          </div>
+          <a-select
+            v-model:value="sortMode"
+            :options="sortOptions"
+            :bordered="false"
+            size="small"
+            class="flat-select"
+          />
+        </div>
+
+        <div class="doc-panel__body" @scroll="handleAutoLoad">
+          <template v-if="visibleGroups.length">
+            <div v-for="group in visibleGroups" :key="group.key" class="doc-group">
+              <div class="doc-group__head">
+                <span class="doc-group__title">{{ group.label }}</span>
+                <span class="doc-group__meta"
+                  >{{ group.total }} 篇 · 已读 {{ group.masteredCount }} 篇</span
+                >
               </div>
+              <div class="doc-group__list">
+                <article
+                  v-for="document in group.items"
+                  :key="document.file_id"
+                  class="doc-row"
+                  @click="goToDocument(document.file_id)"
+                >
+                  <div class="doc-row__main">
+                    <div class="doc-row__title">
+                      <span class="doc-title">{{ document.displayName }}</span>
+                      <span :class="['badge', `badge--${document.status}`]">{{
+                        document.statusLabel
+                      }}</span>
+                      <span v-if="document.isFavorite" class="badge badge--fav">已收藏</span>
+                    </div>
+                    <p class="doc-preview">{{ document.preview }}</p>
+                    <div class="doc-meta">
+                      <span>{{ document.categoryLabel }}</span>
+                      <span>{{ document.readMinutes }} 分钟</span>
+                      <a-tooltip :title="document.fullTime">
+                        <span>{{ document.relativeTime }}</span>
+                      </a-tooltip>
+                      <span v-if="document.isReadLater">稍后读</span>
+                    </div>
+                  </div>
 
-              <div class="doc-main">
-                <div class="doc-title-row">
-                  <h3>{{ document.displayName }}</h3>
-                  <div class="doc-actions">
+                  <div class="doc-row__progress">
+                    <div class="doc-row__progress-head">
+                      <span>阅读进度</span>
+                      <span :class="['doc-row__progress-value', { muted: !document.progress }]">
+                        {{ document.progress ? `${document.progress}%` : '—' }}
+                      </span>
+                    </div>
+                    <div class="bar bar--thin">
+                      <span
+                        v-if="document.progress"
+                        class="bar__fill"
+                        :class="{ 'bar__fill--done': document.progress >= 100 }"
+                        :style="{ width: `${document.progress}%` }"
+                      ></span>
+                    </div>
+                  </div>
+
+                  <div class="doc-row__actions">
                     <button
                       type="button"
                       class="icon-btn"
@@ -155,71 +164,71 @@
                     >
                       <ClockCircleOutlined />
                     </button>
-                    <button type="button" class="icon-btn" title="复制学习链接" @click.stop="shareDocument(document)">
+                    <button
+                      type="button"
+                      class="icon-btn"
+                      title="复制学习链接"
+                      @click.stop="shareDocument(document)"
+                    >
                       <ShareAltOutlined />
                     </button>
-                    <a-button type="link" @click.stop="goToDocument(document.file_id)">进入学习</a-button>
+                    <button
+                      type="button"
+                      :class="['row-btn', { 'row-btn--primary': document.status === 'review' }]"
+                      @click.stop="goToDocument(document.file_id)"
+                    >
+                      {{ document.actionLabel }}
+                    </button>
                   </div>
-                </div>
-
-                <p class="doc-preview">{{ document.preview }}</p>
-
-                <div class="doc-meta">
-                  <span class="meta-tag" :style="{ '--tag-color': document.categoryColor, '--tag-bg': document.categoryBg }">
-                    {{ document.categoryLabel }}
-                  </span>
-                  <a-tooltip :title="document.fullTime">
-                    <span>{{ document.relativeTime }}</span>
-                  </a-tooltip>
-                  <span>预计阅读 {{ document.readMinutes }} 分钟</span>
-                  <span v-if="document.isReadLater">稍后读</span>
-                </div>
-
-                <div class="doc-progress">
-                  <span class="doc-progress__fill" :style="{ width: `${document.progress}%` }"></span>
-                </div>
+                </article>
               </div>
-            </article>
-          </div>
+            </div>
 
-          <a-empty v-else>
-            <template #description>
-              <div class="empty-state">
-                <p>未找到“{{ keyword }}”相关文档</p>
-                <div class="empty-suggestions">
-                  <button
-                    v-for="item in emptySuggestions"
-                    :key="item"
-                    type="button"
-                    class="suggest-btn"
-                    @click="keyword = item"
-                  >
-                    {{ item }}
-                  </button>
-                </div>
-              </div>
-            </template>
-          </a-empty>
+            <div class="load-footer">
+              <span>已加载 {{ visibleDocuments.length }} / {{ filteredDocuments.length }} 篇</span>
+              <button v-if="hasMore" type="button" class="row-btn" @click="loadMore">
+                加载更多
+              </button>
+            </div>
+          </template>
 
-          <div v-if="filteredDocuments.length" class="load-footer">
-            <span>已加载 {{ visibleDocuments.length }}/{{ filteredDocuments.length }} 篇</span>
-            <a-button v-if="hasMore" @click="loadMore">加载更多</a-button>
+          <div v-else class="empty-panel">
+            <p>{{ keyword ? `未找到“${keyword}”相关文档` : '当前筛选条件下没有文档' }}</p>
+            <button type="button" class="row-btn" @click="resetFilters">清空筛选</button>
           </div>
         </div>
       </section>
-    </template>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { ClockCircleOutlined, SearchOutlined, ShareAltOutlined, StarFilled, StarOutlined } from '@ant-design/icons-vue'
-import { Clock3, FileCode2, FileText, Folders, Video } from 'lucide-vue-next'
+import {
+  ClockCircleOutlined,
+  SearchOutlined,
+  ShareAltOutlined,
+  StarFilled,
+  StarOutlined
+} from '@ant-design/icons-vue'
 
 import { learnApi } from '@/apis/learn_api'
 import { formatDateTime, formatRelative } from '@/utils/time'
+import {
+  countReadMinutes,
+  persistFavoriteIds,
+  persistGlobalLastDoc,
+  persistLastDoc,
+  persistReadLaterIds,
+  persistVisitCounts,
+  readFavoriteIds,
+  readLastDoc,
+  readMasteryMap,
+  readReadLaterIds,
+  readVisitCounts
+} from '@/utils/learn_progress'
 
 const PAGE_STEP = 40
 
@@ -230,53 +239,32 @@ const loading = ref(false)
 const errorMessage = ref('')
 const keyword = ref('')
 const selectedCategory = ref('all')
-const sortMode = ref('updated_desc')
-const favoriteOnly = ref(false)
-const activeQuickTag = ref('all')
+const sortMode = ref('category')
+const activeStatus = ref('all')
 const visibleCount = ref(PAGE_STEP)
 const database = ref(null)
 const favoriteIds = ref(new Set())
 const readLaterIds = ref(new Set())
+const masteryMap = ref({})
 const visitCounts = ref({})
 const lastLearnDoc = ref(null)
-const previousVisitAt = ref(0)
-
-const quickTags = [
-  { label: '全部文档', value: 'all' },
-  { label: '本周热门', value: 'hot' },
-  { label: '未读更新', value: 'updated' },
-  { label: '面试高频', value: 'interview' }
-]
+const readMinutesTotal = ref(0)
 
 const sortOptions = [
+  { label: '按分类顺序', value: 'category' },
   { label: '最近更新', value: 'updated_desc' },
-  { label: '最早更新', value: 'updated_asc' },
   { label: '名称 A-Z', value: 'title_asc' },
   { label: '阅读时长长优先', value: 'read_desc' }
 ]
 
-const categoryPalette = [
-  { color: '#3B82F6', bg: 'rgba(59, 130, 246, 0.14)' },
-  { color: '#10B981', bg: 'rgba(16, 185, 129, 0.14)' },
-  { color: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.14)' },
-  { color: '#EC4899', bg: 'rgba(236, 72, 153, 0.14)' },
-  { color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.14)' },
-  { color: '#14B8A6', bg: 'rgba(20, 184, 166, 0.14)' },
-  { color: '#64748B', bg: 'rgba(100, 116, 139, 0.14)' }
-]
+const STATUS_LABELS = {
+  mastered: '已读',
+  progress: '进行中',
+  review: '标记复习',
+  todo: '未读'
+}
 
 const dbId = computed(() => String(route.params.db_id || '').trim())
-const totalDocuments = computed(() => normalizedDocuments.value.length)
-const learnedCount = computed(() => normalizedDocuments.value.filter((item) => item.progress >= 100).length)
-const pathProgress = computed(() =>
-  totalDocuments.value ? Math.round((learnedCount.value / totalDocuments.value) * 100) : 0
-)
-const totalReadHours = computed(() => {
-  const totalMinutes = normalizedDocuments.value.reduce((sum, item) => sum + item.readMinutes, 0)
-  const hours = totalMinutes / 60
-  if (hours >= 10) return `${Math.round(hours)} 小时`
-  return `${hours.toFixed(1)} 小时`
-})
 
 const parseTimestamp = (value) => {
   const timestamp = Date.parse(String(value || ''))
@@ -284,29 +272,6 @@ const parseTimestamp = (value) => {
 }
 
 const formatDisplayName = (value) => String(value || '').replace(/\.md$/i, '')
-
-const getStorageKey = (name) => `learn-db-${dbId.value}-${name}`
-
-const readStoredJson = (key, fallback) => {
-  try {
-    const raw = localStorage.getItem(key)
-    if (!raw) return fallback
-    return JSON.parse(raw)
-  } catch {
-    return fallback
-  }
-}
-
-const persistSet = (key, sourceSet) => {
-  localStorage.setItem(key, JSON.stringify([...sourceSet]))
-}
-
-const getDocumentTypeIcon = (filename) => {
-  const lower = String(filename || '').toLowerCase()
-  if (/\.(mp4|mov|avi|mkv|webm)$/.test(lower)) return Video
-  if (/\.(java|py|go|js|ts|sql|sh|yaml|yml|json)$/.test(lower)) return FileCode2
-  return FileText
-}
 
 const estimateReadMinutes = (title, summary) => {
   const text = `${title || ''} ${summary || ''}`
@@ -320,14 +285,6 @@ const getCategoryKey = (document) => {
   return folderPath.split('/').filter(Boolean)[0] || 'root'
 }
 
-const getCategoryColor = (key) => {
-  let hash = 0
-  for (let i = 0; i < key.length; i += 1) {
-    hash = (hash * 31 + key.charCodeAt(i)) >>> 0
-  }
-  return categoryPalette[hash % categoryPalette.length]
-}
-
 const normalizedDocuments = computed(() => {
   const documents = Array.isArray(database.value?.documents) ? database.value.documents : []
   return documents.map((item) => {
@@ -335,12 +292,19 @@ const normalizedDocuments = computed(() => {
     const displayName = formatDisplayName(item.filename)
     const summary = String(item.summary || '').trim()
     const previewBase = summary || '暂无摘要，点击进入学习。'
-    const preview = previewBase.length > 88 ? `${previewBase.slice(0, 88)}...` : previewBase
+    const preview = previewBase.length > 120 ? `${previewBase.slice(0, 120)}...` : previewBase
     const categoryKey = getCategoryKey(item)
-    const categoryLabel = categoryKey === 'root' ? '根目录' : categoryKey
-    const colorToken = getCategoryColor(categoryKey)
-    const readMinutes = estimateReadMinutes(displayName, summary)
-    const progress = Math.min(100, Math.max(0, Number(visitCounts.value[id] || 0) * 25))
+    const mastery = masteryMap.value[id]
+    const visitProgress = Math.min(100, Math.max(0, Number(visitCounts.value[id] || 0) * 25))
+    const progress = mastery === 'mastered' ? 100 : visitProgress
+    const status =
+      mastery === 'mastered'
+        ? 'mastered'
+        : mastery === 'review'
+          ? 'review'
+          : progress > 0
+            ? 'progress'
+            : 'todo'
     const updatedTs = parseTimestamp(item.updated_at)
 
     return {
@@ -348,20 +312,28 @@ const normalizedDocuments = computed(() => {
       displayName,
       preview,
       categoryKey,
-      categoryLabel,
-      categoryColor: colorToken.color,
-      categoryBg: colorToken.bg,
-      typeIcon: getDocumentTypeIcon(item.filename),
-      readMinutes,
+      categoryLabel: categoryKey === 'root' ? '根目录' : categoryKey,
+      readMinutes: estimateReadMinutes(displayName, summary),
       progress,
+      status,
+      statusLabel: STATUS_LABELS[status],
+      actionLabel: status === 'mastered' ? '重读' : status === 'todo' ? '开始学习' : '继续学习',
       updatedTs,
-      relativeTime: updatedTs ? formatRelative(item.updated_at) : '-',
-      fullTime: updatedTs ? formatDateTime(item.updated_at, 'YYYY-MM-DD HH:mm:ss') : '-',
+      relativeTime: updatedTs ? formatRelative(item.updated_at) : '—',
+      fullTime: updatedTs ? formatDateTime(item.updated_at, 'YYYY-MM-DD HH:mm:ss') : '—',
       isFavorite: favoriteIds.value.has(id),
       isReadLater: readLaterIds.value.has(id)
     }
   })
 })
+
+const totalDocuments = computed(() => normalizedDocuments.value.length)
+const masteredCount = computed(
+  () => normalizedDocuments.value.filter((item) => item.status === 'mastered').length
+)
+const topicProgress = computed(() =>
+  totalDocuments.value ? Math.round((masteredCount.value / totalDocuments.value) * 100) : 0
+)
 
 const categoryOptions = computed(() => {
   const counter = new Map()
@@ -377,25 +349,38 @@ const categoryOptions = computed(() => {
     }))
     .sort((a, b) => b.count - a.count)
 
-  return [{ value: 'all', label: '全部分类', count: normalizedDocuments.value.length }, ...entries]
+  return [{ value: 'all', label: '全部文档', count: normalizedDocuments.value.length }, ...entries]
 })
 
-const categorySelectOptions = computed(() =>
-  categoryOptions.value.map((item) => ({
-    value: item.value,
-    label: `${item.label} (${item.count})`
-  }))
-)
-
-const hotDocumentIdSet = computed(() => {
-  const sortedByVisit = [...normalizedDocuments.value]
-    .sort((a, b) => Number(visitCounts.value[b.file_id] || 0) - Number(visitCounts.value[a.file_id] || 0))
-    .filter((item) => Number(visitCounts.value[item.file_id] || 0) > 0)
-  const source = sortedByVisit.length ? sortedByVisit : [...normalizedDocuments.value].sort((a, b) => b.updatedTs - a.updatedTs)
-  return new Set(source.slice(0, 10).map((item) => item.file_id))
+const statusTabs = computed(() => {
+  const countBy = (predicate) => normalizedDocuments.value.filter(predicate).length
+  return [
+    { value: 'all', label: '全部', count: totalDocuments.value },
+    { value: 'todo', label: '未读', count: countBy((item) => item.status === 'todo') },
+    { value: 'progress', label: '进行中', count: countBy((item) => item.status === 'progress') },
+    { value: 'review', label: '标记复习', count: countBy((item) => item.status === 'review') },
+    { value: 'readLater', label: '稍后读', count: countBy((item) => item.isReadLater) },
+    { value: 'favorite', label: '收藏', count: countBy((item) => item.isFavorite) }
+  ]
 })
 
-const interviewKeywords = ['面试', 'interview', 'java', 'jvm', 'mysql', 'redis', '算法', '并发', 'network']
+const readDurationText = computed(() => {
+  const minutes = readMinutesTotal.value
+  if (minutes < 60) return `${minutes} 分钟`
+  return `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分`
+})
+
+const subtitleText = computed(() => {
+  const position = String(database.value?.position || '').trim()
+  const categoryCount = Math.max(0, categoryOptions.value.length - 1)
+  const parts = [
+    position,
+    `${totalDocuments.value} 篇文档`,
+    `${categoryCount} 个分类`,
+    `已读 ${masteredCount.value} 篇`
+  ]
+  return parts.filter(Boolean).join(' · ')
+})
 
 const filteredDocuments = computed(() => {
   const search = keyword.value.trim().toLowerCase()
@@ -403,8 +388,18 @@ const filteredDocuments = computed(() => {
 
   if (search) {
     result = result.filter((item) => {
-      const targets = [item.displayName, item.preview, item.categoryLabel, item.filename, item.folder_path]
-      return targets.some((value) => String(value || '').toLowerCase().includes(search))
+      const targets = [
+        item.displayName,
+        item.preview,
+        item.categoryLabel,
+        item.filename,
+        item.folder_path
+      ]
+      return targets.some((value) =>
+        String(value || '')
+          .toLowerCase()
+          .includes(search)
+      )
     })
   }
 
@@ -412,28 +407,23 @@ const filteredDocuments = computed(() => {
     result = result.filter((item) => item.categoryKey === selectedCategory.value)
   }
 
-  if (favoriteOnly.value) {
+  if (activeStatus.value === 'readLater') {
+    result = result.filter((item) => item.isReadLater)
+  } else if (activeStatus.value === 'favorite') {
     result = result.filter((item) => item.isFavorite)
+  } else if (activeStatus.value !== 'all') {
+    result = result.filter((item) => item.status === activeStatus.value)
   }
 
-  if (activeQuickTag.value === 'hot') {
-    result = result.filter((item) => hotDocumentIdSet.value.has(item.file_id))
+  if (sortMode.value === 'category') {
+    result.sort(
+      (a, b) =>
+        a.categoryLabel.localeCompare(b.categoryLabel, 'zh-Hans-CN') ||
+        a.displayName.localeCompare(b.displayName, 'zh-Hans-CN')
+    )
   }
-  if (activeQuickTag.value === 'updated') {
-    result = result.filter((item) => item.updatedTs && item.updatedTs > previousVisitAt.value && item.progress < 100)
-  }
-  if (activeQuickTag.value === 'interview') {
-    result = result.filter((item) => {
-      const text = `${item.displayName} ${item.preview}`.toLowerCase()
-      return interviewKeywords.some((word) => text.includes(word))
-    })
-  }
-
   if (sortMode.value === 'updated_desc') {
     result.sort((a, b) => b.updatedTs - a.updatedTs)
-  }
-  if (sortMode.value === 'updated_asc') {
-    result.sort((a, b) => a.updatedTs - b.updatedTs)
   }
   if (sortMode.value === 'title_asc') {
     result.sort((a, b) => a.displayName.localeCompare(b.displayName, 'zh-Hans-CN'))
@@ -448,43 +438,41 @@ const filteredDocuments = computed(() => {
 const visibleDocuments = computed(() => filteredDocuments.value.slice(0, visibleCount.value))
 const hasMore = computed(() => visibleCount.value < filteredDocuments.value.length)
 
-const recommendedPathText = computed(() => {
-  const tags = categoryOptions.value.filter((item) => item.value !== 'all').slice(0, 4).map((item) => item.label)
-  if (!tags.length) return 'Java基础 → 集合框架 → 多线程 → JVM'
-  return tags.join(' → ')
+// 列表按分类分组展示（设计稿 2k2），分组内保持当前排序。
+const visibleGroups = computed(() => {
+  const groups = new Map()
+  visibleDocuments.value.forEach((item) => {
+    if (!groups.has(item.categoryKey)) {
+      groups.set(item.categoryKey, { key: item.categoryKey, label: item.categoryLabel, items: [] })
+    }
+    groups.get(item.categoryKey).items.push(item)
+  })
+
+  return [...groups.values()].map((group) => {
+    const all = normalizedDocuments.value.filter((item) => item.categoryKey === group.key)
+    return {
+      ...group,
+      total: all.length,
+      masteredCount: all.filter((item) => item.status === 'mastered').length
+    }
+  })
 })
 
-const emptySuggestions = computed(() => {
-  const value = keyword.value.trim()
-  if (!value) return ['spring-boot', 'MySQL', 'JVM']
-  const variants = [value, value.toLowerCase(), value.replace(/\s+/g, '-')]
-  return [...new Set(variants)].slice(0, 3)
-})
-
-const initPreferences = () => {
+const loadLocalState = () => {
   if (!dbId.value) return
-
-  const favorite = readStoredJson(getStorageKey('favorites'), [])
-  const readLater = readStoredJson(getStorageKey('read-later'), [])
-  const visits = readStoredJson(getStorageKey('visits'), {})
-  const lastDoc = readStoredJson(getStorageKey('last-doc'), null)
-  const prevSeen = Number(localStorage.getItem(getStorageKey('last-open-at')) || 0)
-
-  favoriteIds.value = new Set(Array.isArray(favorite) ? favorite.map(String) : [])
-  readLaterIds.value = new Set(Array.isArray(readLater) ? readLater.map(String) : [])
-  visitCounts.value = visits && typeof visits === 'object' ? visits : {}
-  lastLearnDoc.value = lastDoc && typeof lastDoc === 'object' ? lastDoc : null
-  previousVisitAt.value = Number.isFinite(prevSeen) ? prevSeen : 0
-
-  localStorage.setItem(getStorageKey('last-open-at'), String(Date.now()))
+  favoriteIds.value = readFavoriteIds(dbId.value)
+  readLaterIds.value = readReadLaterIds(dbId.value)
+  masteryMap.value = readMasteryMap(dbId.value)
+  visitCounts.value = readVisitCounts(dbId.value)
+  lastLearnDoc.value = readLastDoc(dbId.value)
+  readMinutesTotal.value = countReadMinutes(dbId.value)
 }
 
 const resetFilters = () => {
   keyword.value = ''
   selectedCategory.value = 'all'
-  sortMode.value = 'updated_desc'
-  favoriteOnly.value = false
-  activeQuickTag.value = 'all'
+  sortMode.value = 'category'
+  activeStatus.value = 'all'
   visibleCount.value = PAGE_STEP
 }
 
@@ -499,7 +487,7 @@ const loadDatabase = async () => {
 
   try {
     database.value = await learnApi.getDatabaseDetail(dbId.value)
-    initPreferences()
+    loadLocalState()
   } catch (error) {
     errorMessage.value = error.message || '请稍后重试'
   } finally {
@@ -507,25 +495,24 @@ const loadDatabase = async () => {
   }
 }
 
-const persistVisits = () => {
-  if (!dbId.value) return
-  localStorage.setItem(getStorageKey('visits'), JSON.stringify(visitCounts.value))
-}
-
 const markDocumentVisited = (document) => {
   const id = String(document.file_id || '')
   if (!id) return
+
   visitCounts.value = {
     ...visitCounts.value,
     [id]: Number(visitCounts.value[id] || 0) + 1
   }
-  persistVisits()
+  persistVisitCounts(dbId.value, visitCounts.value)
 
-  lastLearnDoc.value = {
-    file_id: id,
-    title: document.displayName
-  }
-  localStorage.setItem(getStorageKey('last-doc'), JSON.stringify(lastLearnDoc.value))
+  lastLearnDoc.value = { file_id: id, title: document.displayName }
+  persistLastDoc(dbId.value, lastLearnDoc.value)
+  persistGlobalLastDoc({
+    dbId: dbId.value,
+    fileId: id,
+    title: document.displayName,
+    dbName: database.value?.name || ''
+  })
 }
 
 const goToDocument = (fileId) => {
@@ -550,7 +537,7 @@ const toggleFavorite = (fileId) => {
     next.add(id)
   }
   favoriteIds.value = next
-  persistSet(getStorageKey('favorites'), next)
+  persistFavoriteIds(dbId.value, next)
 }
 
 const toggleReadLater = (fileId) => {
@@ -562,7 +549,7 @@ const toggleReadLater = (fileId) => {
     next.add(id)
   }
   readLaterIds.value = next
-  persistSet(getStorageKey('read-later'), next)
+  persistReadLaterIds(dbId.value, next)
 }
 
 const shareDocument = async (document) => {
@@ -579,10 +566,11 @@ const loadMore = () => {
   visibleCount.value = Math.min(filteredDocuments.value.length, visibleCount.value + PAGE_STEP)
 }
 
-const handleAutoLoad = () => {
+// 列表滚动到底部时自动加载下一页
+const handleAutoLoad = (event) => {
+  const container = event.currentTarget
   if (!hasMore.value || loading.value) return
-  const distanceToBottom = document.documentElement.scrollHeight - (window.scrollY + window.innerHeight)
-  if (distanceToBottom <= 180) {
+  if (container.scrollHeight - (container.scrollTop + container.clientHeight) <= 180) {
     loadMore()
   }
 }
@@ -597,479 +585,575 @@ watch(
 )
 
 watch(
-  () => [keyword.value, selectedCategory.value, sortMode.value, favoriteOnly.value, activeQuickTag.value],
+  () => [keyword.value, selectedCategory.value, sortMode.value, activeStatus.value],
   () => {
     visibleCount.value = PAGE_STEP
   }
 )
 
 onMounted(() => {
-  window.addEventListener('scroll', handleAutoLoad, { passive: true })
-})
-
-onUnmounted(() => {
-  window.removeEventListener('scroll', handleAutoLoad)
+  // 从阅读页返回时同步最新的掌握状态与阅读时长
+  loadLocalState()
 })
 </script>
 
 <style scoped lang="less">
+// 设计稿 [UI v3][2k2] 专题详情 · 二级
 .learn-database {
-  min-height: 100%;
-  padding: 24px 28px 32px;
-  background:
-    linear-gradient(180deg, var(--main-10) 0%, var(--gray-10) 180px, var(--gray-25) 100%);
-}
-
-.page-header {
-  margin-bottom: 14px;
-}
-
-.back-btn {
-  padding-left: 0;
-  color: var(--gray-700);
-}
-
-.overview-card,
-.list-panel,
-.category-sidebar {
-  background: var(--gray-0);
-  border: 1px solid var(--gray-150);
-  border-radius: 20px;
-  box-shadow: 0 10px 26px var(--shadow-0);
-}
-
-.overview-card {
-  padding: 22px 24px;
-  margin-bottom: 16px;
-}
-
-.overview-top {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-}
-
-.overview-main {
-  min-width: 0;
-
-  h1 {
-    margin: 12px 0 10px;
-    font-size: 34px;
-    color: var(--gray-2000);
-    line-height: 1.2;
-  }
-
-  p {
-    margin: 0;
-    color: var(--gray-600);
-    line-height: 1.7;
-    font-size: 15px;
-  }
-}
-
-.hero-badge {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  padding: 6px 12px;
-  background: var(--main-50);
-  color: var(--main-700);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.overview-action {
-  min-width: 220px;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-}
-
-.continue-btn {
-  min-width: 140px;
-}
-
-.continue-hint {
-  margin: 0;
-  max-width: 220px;
-  color: var(--gray-500);
-  font-size: 12px;
-  text-align: right;
-  line-height: 1.6;
-}
-
-.stats-row {
-  margin-top: 18px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.stat-card {
-  border-radius: 14px;
-  border: 1px solid var(--gray-150);
-  background: var(--gray-10);
-  padding: 12px 14px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--gray-700);
-
-  strong {
-    display: block;
-    font-size: 22px;
-    color: var(--gray-2000);
-    line-height: 1.2;
-  }
-
-  span {
-    font-size: 12px;
-    color: var(--gray-600);
-  }
-}
-
-.learning-path {
-  margin-top: 14px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: 1px solid var(--main-100);
-  background: var(--main-10);
-}
-
-.learning-path__head {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  color: var(--main-800);
-  font-size: 13px;
-}
-
-.learning-path__track {
-  margin-top: 8px;
-  width: 100%;
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(59, 130, 246, 0.14);
+  height: 100%;
   overflow: hidden;
 }
 
-.learning-path__fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--main-500), var(--main-300));
-}
-
-.toolbar-grid {
-  margin-top: 16px;
-  display: grid;
-  grid-template-columns: minmax(280px, 1fr) 190px 190px 140px;
-  gap: 10px;
-}
-
-.quick-filter-row {
-  margin-top: 10px;
+// ===================== 顶栏 =====================
+.page-topbar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 32px 16px;
+  border-bottom: 1px solid var(--gray-100);
+  flex-shrink: 0;
 }
 
-.quick-tag {
-  border: 1px solid var(--gray-200);
-  border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 12px;
-  color: var(--gray-600);
-  background: var(--gray-0);
-  cursor: pointer;
-  transition:
-    border-color 0.2s ease,
-    color 0.2s ease,
-    background-color 0.2s ease;
-
-  &.active {
-    border-color: var(--main-300);
-    color: var(--main-700);
-    background: var(--main-50);
-  }
+.topbar-left {
+  min-width: 0;
 }
 
-.content-shell {
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: 14px;
-}
-
-.category-sidebar {
-  padding: 14px;
-  align-self: start;
-  position: sticky;
-  top: 20px;
-}
-
-.side-title {
-  font-size: 13px;
+.page-title {
+  font-size: 24px;
   font-weight: 700;
-  color: var(--gray-700);
-  margin-bottom: 10px;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--gray-1000);
 }
 
-.category-item {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--gray-600);
-  padding: 8px 10px;
-  cursor: pointer;
-  transition:
-    border-color 0.2s ease,
-    background-color 0.2s ease,
-    color 0.2s ease;
-
-  + .category-item {
-    margin-top: 4px;
-  }
-
-  &.active {
-    border-color: var(--main-200);
-    background: var(--main-50);
-    color: var(--main-700);
-  }
-}
-
-.list-panel {
-  padding: 14px;
-}
-
-.list-meta {
-  margin-bottom: 10px;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
+.page-subtitle {
   font-size: 13px;
-  color: var(--gray-600);
+  color: var(--gray-500);
+  margin: 6px 0 0;
 }
 
-.document-list {
+.topbar-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-shrink: 0;
+
+  :deep(.btn-secondary.ant-btn) {
+    display: inline-flex;
+    align-items: center;
+    height: 34px;
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid var(--gray-200);
+    background: var(--gray-0);
+    color: var(--gray-700);
+    border-radius: 0;
+    box-shadow: none;
+
+    &:hover,
+    &:focus {
+      border-color: var(--gray-500) !important;
+      color: var(--gray-1000) !important;
+    }
+  }
+
+  :deep(.btn-primary.ant-btn) {
+    display: inline-flex;
+    align-items: center;
+    max-width: 320px;
+    height: 34px;
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 0;
+    background: var(--main-color);
+    border-color: var(--main-color);
+    color: #fff;
+    box-shadow: none;
+
+    &:hover,
+    &:focus {
+      background: var(--main-700) !important;
+      border-color: var(--main-700) !important;
+      color: #fff !important;
+    }
+  }
+
+  :deep(.btn-primary.ant-btn[disabled]) {
+    background: var(--gray-100);
+    border-color: var(--gray-200);
+    color: var(--gray-500);
+  }
+
+  :deep(.btn-primary.ant-btn > span) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+// ===================== 主体两栏 =====================
+.page-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+
+.lab {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: var(--gray-500);
+}
+
+// ===================== 分类导航 =====================
+.side-nav {
+  // 分类名很长时，网格项的 min-width: auto 会把这一栏撑宽
+  min-width: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--gray-100);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  min-height: 0;
+  padding: 22px 0 0;
 }
 
-.document-row {
-  border: 1px solid var(--gray-150);
-  border-radius: 14px;
-  background: var(--gray-0);
+.side-nav__list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: 18px;
+}
+
+.side-nav__lab {
+  padding: 0 22px 12px;
+}
+
+.nav-item {
+  width: 100%;
   display: flex;
-  gap: 12px;
-  padding: 12px 14px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: none;
+  background: transparent;
+  padding: 9px 22px;
+  font-size: 14px;
+  color: var(--gray-700);
   cursor: pointer;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    background-color 0.2s ease;
+  text-align: left;
 
   &:hover {
-    border-color: var(--main-200);
-    box-shadow: 0 10px 20px var(--shadow-0);
-    background: #fcfdff;
+    color: var(--gray-1000);
+  }
+
+  &.on {
+    background: var(--gray-100);
+    color: var(--gray-1000);
+    font-weight: 700;
   }
 }
 
-.doc-type-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: var(--gray-10);
+.nav-item__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-item__count {
+  font-size: 12px;
+  color: var(--gray-500);
+  flex-shrink: 0;
+}
+
+.side-nav__progress {
+  border-top: 1px solid var(--gray-100);
+  padding: 18px 22px 22px;
+  flex-shrink: 0;
+}
+
+.progress-number {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.progress-number__value {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--gray-1000);
+  line-height: 1;
+}
+
+.progress-number__unit {
+  font-size: 14px;
+  color: var(--gray-600);
+}
+
+.progress-hint {
+  font-size: 12px;
+  color: var(--gray-500);
+  margin-top: 10px;
+  line-height: 1.6;
+}
+
+.bar {
+  height: 6px;
+  background: var(--gray-100);
+  margin-top: 10px;
+
+  &--thin {
+    height: 6px;
+    margin-top: 7px;
+  }
+}
+
+.bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--main-color);
+
+  &--done {
+    background: var(--gray-400);
+  }
+}
+
+// ===================== 文档面板 =====================
+.doc-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.doc-panel__filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 22px 32px 0;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.doc-panel__spacer {
+  flex: 1;
+}
+
+.opt {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--gray-200);
+  background: var(--gray-0);
+  font-size: 13px;
   color: var(--gray-700);
-  flex: 0 0 auto;
-}
+  cursor: pointer;
 
-.doc-main {
-  min-width: 0;
-  width: 100%;
-}
+  &:hover {
+    color: var(--gray-1000);
+  }
 
-.doc-title-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 14px;
-
-  h3 {
-    margin: 0;
-    color: var(--gray-2000);
-    font-size: 18px;
-    line-height: 1.3;
+  &.on {
+    background: var(--gray-100);
+    color: var(--gray-1000);
+    font-weight: 700;
   }
 }
 
-.doc-actions {
+.doc-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  .search-icon {
+    color: var(--gray-500);
+    font-size: 14px;
+  }
+
+  .search-input {
+    width: 150px;
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 13px;
+    color: var(--gray-1000);
+
+    &::placeholder {
+      color: var(--gray-500);
+    }
+  }
+}
+
+.flat-select {
+  min-width: 132px;
+
+  :deep(.ant-select-selector) {
+    padding-right: 0 !important;
+  }
+
+  :deep(.ant-select-selection-item) {
+    font-size: 13px;
+    color: var(--gray-600);
+  }
+}
+
+.doc-panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 32px 24px;
+}
+
+.doc-group {
+  margin-top: 26px;
+}
+
+.doc-group__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.doc-group__title {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--gray-1000);
+}
+
+.doc-group__meta {
+  font-size: 13px;
+  color: var(--gray-600);
+}
+
+.doc-group__list {
+  border-top: 1px solid var(--gray-200);
+  margin-top: 12px;
+}
+
+.doc-row {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--gray-100);
+  cursor: pointer;
+
+  &:hover .doc-title {
+    color: var(--main-color);
+  }
+}
+
+.doc-row__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.doc-row__title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.doc-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--gray-1000);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--gray-200);
+  color: var(--gray-600);
+  white-space: nowrap;
+
+  &--mastered {
+    background: var(--gray-100);
+    color: var(--gray-1000);
+  }
+
+  &--progress,
+  &--review {
+    border-color: var(--main-color);
+    color: var(--main-color);
+  }
+
+  &--fav {
+    color: var(--gray-700);
+  }
+}
+
+.doc-preview {
+  margin: 7px 0 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--gray-600);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.doc-meta {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--gray-500);
+  margin-top: 10px;
+}
+
+.doc-row__progress {
+  flex: 0 0 180px;
+  padding-top: 4px;
+}
+
+.doc-row__progress-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--gray-500);
+}
+
+.doc-row__progress-value {
+  color: var(--gray-1000);
+  font-weight: 700;
+
+  &.muted {
+    color: var(--gray-500);
+    font-weight: 400;
+  }
+}
+
+.doc-row__actions {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 .icon-btn {
   width: 28px;
   height: 28px;
   border: 1px solid transparent;
-  border-radius: 8px;
   background: transparent;
   color: var(--gray-500);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition:
-    color 0.2s ease,
-    border-color 0.2s ease,
-    background-color 0.2s ease;
 
   &:hover {
-    color: var(--main-700);
-    border-color: var(--main-200);
-    background: var(--main-50);
+    border-color: var(--gray-200);
+    color: var(--gray-1000);
   }
 }
 
-.doc-preview {
-  margin: 6px 0 0;
-  color: var(--gray-600);
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.doc-meta {
-  margin-top: 8px;
-  display: flex;
-  flex-wrap: wrap;
+.row-btn {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  font-size: 12px;
-  color: var(--gray-500);
-}
+  height: 32px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--gray-200);
+  background: var(--gray-0);
+  color: var(--gray-700);
+  cursor: pointer;
+  white-space: nowrap;
 
-.meta-tag {
-  border-radius: 999px;
-  padding: 2px 10px;
-  color: var(--tag-color);
-  background: var(--tag-bg);
-}
+  &:hover {
+    border-color: var(--gray-500);
+    color: var(--gray-1000);
+  }
 
-.doc-progress {
-  margin-top: 10px;
-  width: 100%;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--gray-50);
-  overflow: hidden;
-}
+  &--primary {
+    background: var(--main-color);
+    border-color: var(--main-color);
+    color: #fff;
 
-.doc-progress__fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--main-500), var(--main-300));
+    &:hover {
+      background: var(--main-700);
+      border-color: var(--main-700);
+      color: #fff;
+    }
+  }
 }
 
 .load-footer {
-  margin-top: 10px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
-  color: var(--gray-500);
+  padding: 18px 0 0;
   font-size: 13px;
+  color: var(--gray-500);
 }
 
-.empty-state {
-  color: var(--gray-600);
-
-  p {
-    margin: 0 0 8px;
-  }
-}
-
-.empty-suggestions {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.suggest-btn {
-  border: 1px solid var(--gray-200);
-  border-radius: 999px;
-  background: var(--gray-10);
-  color: var(--gray-700);
-  padding: 4px 10px;
-  cursor: pointer;
-}
-
-.state-panel {
-  min-height: 320px;
+// ===================== 状态 =====================
+.state-panel,
+.empty-panel {
+  min-height: 280px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 12px;
   color: var(--gray-600);
+
+  p {
+    margin: 0;
+    font-size: 14px;
+  }
 }
 
-@media (max-width: 1280px) {
-  .desktop-only {
-    display: none;
-  }
-
-  .content-shell {
+@media (max-width: 1100px) {
+  .page-body {
     grid-template-columns: 1fr;
   }
 
-  .toolbar-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .side-nav {
+    display: none;
   }
 }
 
 @media (max-width: 900px) {
-  .learn-database {
+  .page-topbar {
+    flex-direction: column;
+    align-items: flex-start;
     padding: 18px;
   }
 
-  .overview-top,
-  .stats-row,
-  .toolbar-grid {
-    grid-template-columns: 1fr;
+  .doc-panel__filters {
+    padding: 18px 18px 0;
+  }
+
+  .doc-panel__body {
+    padding: 0 18px 24px;
+  }
+
+  .doc-row {
     flex-direction: column;
   }
 
-  .overview-action {
-    align-items: flex-start;
-  }
-
-  .continue-hint {
-    text-align: left;
-  }
-
-  .stats-row {
-    display: grid;
-  }
-
-  .doc-title-row {
-    flex-direction: column;
-  }
-
-  .doc-actions {
+  .doc-row__progress {
+    flex: 1 1 auto;
     width: 100%;
-    justify-content: flex-end;
   }
 }
 </style>
