@@ -26,7 +26,7 @@
       @load-more-chats="loadMoreChats"
     />
     <div class="chat">
-      <div class="chat-header">
+      <div v-if="props.showHeader" class="chat-header">
         <div class="header__left">
           <slot name="header-left" class="nav-btn"></slot>
           <div
@@ -163,17 +163,23 @@
                 :disabled="!currentAgent"
                 :send-button-disabled="(!userInput || !currentAgent) && !isProcessing"
                 :placeholder="inputPlaceholder"
-                :supports-file-upload="supportsFileUpload"
+                :supports-file-upload="
+                  props.conversationVariant === 'interview' ? false : supportsFileUpload
+                "
                 :agent-id="currentAgentId"
                 :thread-id="currentChatId"
                 :ensure-thread="ensureActiveThread"
-                :has-state-content="hasAgentStateContent"
+                :has-state-content="props.showAgentPanel && hasAgentStateContent"
                 :is-panel-open="isAgentPanelOpen"
                 :mention="mentionConfig"
                 @send="handleSendOrStop"
                 @attachment-changed="handleAgentStateRefresh"
                 @toggle-panel="toggleAgentPanel"
-              />
+              >
+                <template v-if="$slots['input-actions-left']" #actions-left>
+                  <slot name="input-actions-left"></slot>
+                </template>
+              </AgentInputArea>
 
               <!-- 示例问题 -->
               <div
@@ -217,7 +223,7 @@
           }"
         >
           <AgentPanel
-            v-if="isAgentPanelOpen && hasAgentStateContent"
+            v-if="props.showAgentPanel && isAgentPanelOpen && hasAgentStateContent"
             :agent-state="currentAgentState"
             :thread-id="currentChatId"
             :panel-ratio="panelRatio"
@@ -254,7 +260,7 @@ import { useAgentStore } from '@/stores/agent'
 import { useChatUIStore } from '@/stores/chatUI'
 import { storeToRefs } from 'pinia'
 import { MessageProcessor } from '@/utils/messageProcessor'
-import { agentApi, threadApi, databaseApi, mcpApi } from '@/apis'
+import { agentApi, threadApi } from '@/apis'
 import HumanApprovalModal from '@/components/HumanApprovalModal.vue'
 import { useApproval } from '@/composables/useApproval'
 import { useAgentStreamHandler } from '@/composables/useAgentStreamHandler'
@@ -295,6 +301,18 @@ const props = defineProps({
   showSidebar: {
     type: Boolean,
     default: true
+  },
+  showHeader: {
+    type: Boolean,
+    default: true
+  },
+  showAgentPanel: {
+    type: Boolean,
+    default: true
+  },
+  conversationVariant: {
+    type: String,
+    default: 'default'
   }
 })
 const emit = defineEmits(['open-config', 'open-agent-modal', 'agent-state-change', 'thread-change'])
@@ -459,7 +477,9 @@ const hasAgentStateContent = computed(() => {
 })
 
 const hasUploadedFiles = computed(() => countFiles(currentAgentState.value?.files) > 0)
-const hasSelectedResumeContext = computed(() => Boolean(runtimeContextOverrides.value.selected_resume_id))
+const hasSelectedResumeContext = computed(() =>
+  Boolean(runtimeContextOverrides.value.selected_resume_id)
+)
 const showInterviewStartupState = computed(() => {
   return isResumeInterviewMode.value && isProcessing.value && visibleConversationCount.value === 0
 })
@@ -481,9 +501,14 @@ watch(
 )
 
 const inputPlaceholder = computed(() => {
+  if (props.conversationVariant === 'interview') {
+    return '输入你的回答，Enter 发送，Shift + Enter 换行'
+  }
   if (!isResumeInterviewMode.value) return '输入问题...'
   if (hasSelectedResumeContext.value) {
-    return isProcessing.value ? '面试正在启动，请稍候...' : '请直接回答面试问题，或补充岗位 / 公司背景...'
+    return isProcessing.value
+      ? '面试正在启动，请稍候...'
+      : '请直接回答面试问题，或补充岗位 / 公司背景...'
   }
   return hasUploadedFiles.value
     ? '请回答当前问题，或补充目标岗位 / 公司 / 面试轮次...'
@@ -519,13 +544,15 @@ const sidebarOpenIcon = computed(() =>
 const runtimeContextOverrides = computed(() => {
   const overrides = props.contextOverrides || {}
   return Object.fromEntries(
-    Object.entries(overrides).filter(([, value]) => value !== undefined && value !== null && `${value}`.trim())
+    Object.entries(overrides).filter(
+      ([, value]) => value !== undefined && value !== null && `${value}`.trim()
+    )
   )
 })
 
 // 监听 hasAgentStateContent 从 false → true 时，自动展开面板
 watch(hasAgentStateContent, (newVal, oldVal) => {
-  if (newVal && !oldVal) {
+  if (props.showAgentPanel && newVal && !oldVal) {
     // 从无状态变为有状态时，自动展开面板
     isAgentPanelOpen.value = true
   }
@@ -1877,13 +1904,6 @@ const selectPreferredThread = async () => {
   }
 }
 
-defineExpose({
-  getExportPayload: buildExportPayload,
-  startInterviewSession,
-  openThread,
-  currentChatId
-})
-
 const toggleSidebar = () => {
   chatUIStore.toggleSidebar()
 }
@@ -1916,6 +1936,14 @@ const handleAgentStateRefresh = async (threadId = null) => {
   await fetchAgentState(currentAgentId.value, chatId)
   await maybeAutoStartInterview(chatId)
 }
+
+defineExpose({
+  getExportPayload: buildExportPayload,
+  startInterviewSession,
+  openThread,
+  refreshAgentState: handleAgentStateRefresh,
+  currentChatId
+})
 
 const toggleAgentPanel = () => {
   isAgentPanelOpen.value = !isAgentPanelOpen.value
@@ -2064,30 +2092,21 @@ watch(
   { immediate: true }
 )
 
-watch(
-  currentChatId,
-  (newThreadId, oldThreadId) => {
-    if (!newThreadId || newThreadId === oldThreadId) return
-    emit('thread-change', currentThread.value || { id: newThreadId })
-  }
-)
+watch(currentChatId, (newThreadId, oldThreadId) => {
+  if (!newThreadId || newThreadId === oldThreadId) return
+  emit('thread-change', currentThread.value || { id: newThreadId })
+})
 
-watch(
-  normalizedPreferredThreadId,
-  async (newThreadId, oldThreadId) => {
-    if (!newThreadId || newThreadId === oldThreadId) return
-    await selectPreferredThread()
-  }
-)
+watch(normalizedPreferredThreadId, async (newThreadId, oldThreadId) => {
+  if (!newThreadId || newThreadId === oldThreadId) return
+  await selectPreferredThread()
+})
 
-watch(
-  currentChatId,
-  async (newThreadId) => {
-    if (!lockedThreadId.value || !newThreadId) return
-    if (newThreadId === lockedThreadId.value) return
-    await selectPreferredThread()
-  }
-)
+watch(currentChatId, async (newThreadId) => {
+  if (!lockedThreadId.value || !newThreadId) return
+  if (newThreadId === lockedThreadId.value) return
+  await selectPreferredThread()
+})
 
 watch(
   conversations,

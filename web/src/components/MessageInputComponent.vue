@@ -8,8 +8,9 @@
       <slot name="top"></slot>
     </div>
 
-    <div class="expand-options" v-if="hasOptionsLeft">
+    <div v-if="hasOptionsLeft || hasActionsLeft" class="expand-options">
       <a-popover
+        v-if="hasOptionsLeft"
         v-model:open="optionsExpanded"
         placement="bottomLeft"
         trigger="click"
@@ -123,16 +124,9 @@ import {
   nextTick,
   watch,
   onBeforeUnmount,
-  useSlots,
-  onUnmounted
+  useSlots
 } from 'vue'
-import {
-  SendOutlined,
-  ArrowUpOutlined,
-  LoadingOutlined,
-  PauseOutlined,
-  PlusOutlined
-} from '@ant-design/icons-vue'
+import { SendOutlined, ArrowUpOutlined, PauseOutlined, PlusOutlined } from '@ant-design/icons-vue'
 
 // 点击外部关闭下拉框
 const mentionDropdownRef = ref(null)
