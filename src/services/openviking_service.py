@@ -38,6 +38,21 @@ else:
 
             VikingFS.exists = _vikingfs_exists
 
+    try:
+        from openviking.models.embedder import OpenAIDenseEmbedder
+    except ImportError:  # pragma: no cover - exercised by runtime env
+        OpenAIDenseEmbedder = None
+    else:
+        _orig_openai_dense_init = OpenAIDenseEmbedder.__init__
+
+        def _patched_openai_dense_init(self, *args, **kwargs):
+            _orig_openai_dense_init(self, *args, **kwargs)
+            # SiliconFlow 的 BAAI/bge-m3 不接受 `dimensions` 参数（HTTP 400, code 20015）。
+            # 保留 `_dimension` 供 get_dimension() 使用，但不再把它转发给 embeddings API。
+            self.dimension = None
+
+        OpenAIDenseEmbedder.__init__ = _patched_openai_dense_init
+
 if TYPE_CHECKING:
     from src.storage.postgres.models_business import UserResume
     from src.storage.postgres.models_knowledge import KnowledgeFile
