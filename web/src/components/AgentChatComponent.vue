@@ -1,11 +1,5 @@
 <template>
-  <div
-    class="chat-container"
-    :class="[
-      { 'sidebar-right': props.sidebarPlacement === 'right' },
-      `conversation-variant--${props.conversationVariant}`
-    ]"
-  >
+  <div class="chat-container" :class="{ 'sidebar-right': props.sidebarPlacement === 'right' }">
     <ChatSidebarComponent
       v-if="props.showSidebar"
       :current-chat-id="currentChatId"
@@ -78,26 +72,19 @@
         <div class="chat-main" ref="chatMainContainer">
           <div class="chat-box" ref="messagesContainer">
             <div class="conv-box" v-for="(conv, index) in conversations" :key="index">
-              <div
+              <AgentMessageComponent
                 v-for="(message, msgIndex) in conv.messages"
+                :message="message"
                 :key="msgIndex"
-                class="agent-message-row"
-                :class="[`agent-message-row--${message.type}`]"
+                :is-processing="
+                  isProcessing &&
+                  conv.status === 'streaming' &&
+                  msgIndex === conv.messages.length - 1
+                "
+                :show-refs="showMsgRefs(message)"
+                @retry="retryMessage(message)"
               >
-                <span v-if="props.conversationVariant === 'interview'" class="message-role-label">
-                  {{ message.type === 'human' ? '我' : '面试官' }}
-                </span>
-                <AgentMessageComponent
-                  :message="message"
-                  :is-processing="
-                    isProcessing &&
-                    conv.status === 'streaming' &&
-                    msgIndex === conv.messages.length - 1
-                  "
-                  :show-refs="showMsgRefs(message)"
-                  @retry="retryMessage(message)"
-                />
-              </div>
+              </AgentMessageComponent>
               <!-- 显示对话最后一个消息使用的模型 -->
               <RefsComponent
                 v-if="shouldShowRefs(conv)"
@@ -176,7 +163,6 @@
                 :disabled="!currentAgent"
                 :send-button-disabled="(!userInput || !currentAgent) && !isProcessing"
                 :placeholder="inputPlaceholder"
-                :send-button-text="props.conversationVariant === 'interview' ? '发送' : ''"
                 :supports-file-upload="
                   props.conversationVariant === 'interview' ? false : supportsFileUpload
                 "
@@ -2437,100 +2423,6 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-
-.agent-message-row {
-  display: contents;
-}
-
-.conversation-variant--interview {
-  .chat-box {
-    max-width: none;
-    padding: 28px 32px;
-    gap: 26px;
-  }
-
-  .conv-box {
-    gap: 26px;
-  }
-
-  .agent-message-row {
-    display: grid;
-    grid-template-columns: 64px minmax(0, 640px);
-    gap: 18px;
-    align-items: start;
-  }
-
-  .message-role-label {
-    padding-top: 3px;
-    font-size: 11px;
-    line-height: 1.2;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--gray-500);
-  }
-
-  .agent-message-row--human .message-role-label {
-    color: var(--main-800);
-  }
-
-  .agent-message-row :deep(.message-box) {
-    width: 100%;
-    max-width: 640px;
-    margin: 0;
-    padding: 0;
-    border-radius: 0;
-    background: transparent;
-    font-size: 16px;
-    line-height: 1.75;
-    color: var(--gray-1000);
-    align-self: auto;
-  }
-
-  .agent-message-row--human :deep(.message-box) {
-    border-left: 2px solid var(--main-color);
-    padding-left: 18px;
-  }
-
-  .bottom {
-    padding: 20px 32px 24px;
-    border-top: 1px solid var(--gray-200);
-  }
-
-  .bottom .message-input-wrapper {
-    max-width: none;
-  }
-
-  .bottom :deep(.input-box) {
-    min-height: 78px;
-    padding: 14px 16px 10px;
-    border: 1px solid var(--gray-400);
-    border-radius: 0;
-    box-shadow: none;
-    background: var(--gray-0);
-  }
-
-  .bottom :deep(.send-button.ant-btn-icon-only) {
-    border-radius: 0;
-    box-shadow: none;
-  }
-
-  .bottom :deep(.send-button) {
-    width: auto;
-    min-width: 64px;
-    height: 32px;
-    padding: 0 14px;
-    border-radius: 0;
-    box-shadow: none;
-    background: var(--main-color);
-    color: var(--gray-0);
-    font-weight: 700;
-  }
-
-  .bottom .note {
-    display: none;
-  }
 }
 
 .bottom {

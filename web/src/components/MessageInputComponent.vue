@@ -103,10 +103,9 @@
           type="link"
           class="send-button"
         >
-          <template v-if="!sendButtonText || isLoading" #icon>
+          <template #icon>
             <component :is="getIcon" class="send-btn" />
           </template>
-          <span v-if="sendButtonText && !isLoading">{{ sendButtonText }}</span>
         </a-button>
       </a-tooltip>
     </div>
@@ -163,10 +162,6 @@ const props = defineProps({
   sendButtonDisabled: {
     type: Boolean,
     default: false
-  },
-  sendButtonText: {
-    type: String,
-    default: ''
   },
   autoSize: {
     type: Object,

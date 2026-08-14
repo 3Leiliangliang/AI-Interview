@@ -8,7 +8,6 @@
     :disabled="disabled"
     :send-button-disabled="sendButtonDisabled"
     :placeholder="placeholder"
-    :send-button-text="sendButtonText"
     :force-multi-line="hasStateContent"
     :mention="mention"
     @send="handleSend"
@@ -66,7 +65,6 @@ const props = defineProps({
   disabled: { type: Boolean, default: false },
   sendButtonDisabled: { type: Boolean, default: false },
   placeholder: { type: String, default: '输入问题...' },
-  sendButtonText: { type: String, default: '' },
   supportsFileUpload: { type: Boolean, default: false },
   agentId: { type: String, default: '' },
   threadId: { type: String, default: null },
