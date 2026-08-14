@@ -1,15 +1,14 @@
 <template>
-  <div class="problemset-page layout-container">
-    <HeaderComponent title="题库管理" :description="headerDescription" :loading="loading">
-      <template #actions>
-        <a-button :loading="loading" @click="loadProblemsets">
-          <template #icon>
-            <ReloadOutlined />
-          </template>
-          刷新
-        </a-button>
-      </template>
-    </HeaderComponent>
+  <div class="problemset-page">
+    <div class="page-topbar">
+      <div class="topbar-left">
+        <h1 class="page-title">题库管理</h1>
+        <p class="page-subtitle">{{ headerDescription }}</p>
+      </div>
+      <div class="topbar-actions">
+        <a-button class="btn-secondary" :loading="loading" @click="loadProblemsets">刷新</a-button>
+      </div>
+    </div>
 
     <div class="summary-grid">
       <div v-for="item in overviewCards" :key="item.key" class="summary-card">
@@ -30,13 +29,19 @@
 
     <div v-else-if="!problems.length" class="empty-state">
       <h3 class="empty-title">暂无已导入题目</h3>
-      <p class="empty-description">请先使用 freeproblemset 导入题包，导入完成后这里会自动生成题库概览。</p>
+      <p class="empty-description">
+        请先使用 freeproblemset 导入题包，导入完成后这里会自动生成题库概览。
+      </p>
     </div>
 
     <div v-else class="page-main">
       <div class="toolbar-panel">
         <div class="toolbar-main">
-          <a-input v-model:value="filters.keyword" allow-clear size="large" placeholder="搜索题目标题、题包路径或主题">
+          <a-input
+            v-model:value="filters.keyword"
+            allow-clear
+            placeholder="搜索题目标题、题包路径或主题"
+          >
             <template #prefix>
               <SearchOutlined />
             </template>
@@ -58,13 +63,16 @@
             </div>
           </div>
 
-          <a-select v-model:value="filters.difficulty" :options="difficultyOptions" size="large" />
+          <a-select v-model:value="filters.difficulty" :options="difficultyOptions" />
 
-          <a-button @click="resetFilters">重置</a-button>
+          <a-button class="btn-secondary" @click="resetFilters">重置</a-button>
         </div>
 
         <div class="toolbar-meta">
-          <span>当前显示 {{ filteredProblemCount }} 道题，覆盖 {{ filteredPackageCount }} 个题包。</span>
+          <span
+            >当前显示 {{ filteredProblemCount }} 道题，覆盖
+            {{ filteredPackageCount }} 个题包。</span
+          >
           <span>{{ trackingSummaryText }}</span>
           <span v-if="hasActiveFilters">筛选仅作为辅助收敛，分类判断仍以三张题库卡片为主。</span>
           <span v-else>支持关键词、题面语言和难度轻筛选，不重复岗位分类。</span>
@@ -72,12 +80,12 @@
       </div>
 
       <div v-if="!filteredProblemCount" class="filter-empty-state">
-        <a-empty description="当前筛选条件下暂无题目">
-          <a-button type="primary" @click="resetFilters">清空筛选</a-button>
-        </a-empty>
+        <p class="empty-title">当前筛选条件下暂无题目</p>
+        <p class="empty-description">调整关键词、题面语言或难度，或直接清空筛选查看全部题目。</p>
+        <a-button class="btn-primary" type="primary" @click="resetFilters">清空筛选</a-button>
       </div>
 
-          <div v-else class="group-grid">
+      <div v-else class="group-grid">
         <div
           v-for="group in problemGroups"
           :key="group.key"
@@ -89,7 +97,7 @@
             <div class="group-icon">
               <component :is="group.icon" />
             </div>
-            <a-tag :color="group.color">{{ group.items.length }} 题</a-tag>
+            <span class="badge badge--solid">{{ group.items.length }} 题</span>
           </div>
 
           <div class="group-title-row">
@@ -114,43 +122,53 @@
           <div class="group-section">
             <div class="section-label">题面语言</div>
             <div class="chip-row">
-              <a-tag
+              <span
                 v-for="item in group.languageStats"
                 :key="`${group.key}-language-${item.key}`"
-                :color="item.color"
+                class="badge"
               >
                 {{ item.label }} · {{ item.count }}
-              </a-tag>
+              </span>
             </div>
           </div>
 
           <div class="group-section">
             <div class="section-label">题目难度</div>
             <div class="chip-row">
-              <a-tag
+              <span
                 v-for="item in group.difficultyStats"
                 :key="`${group.key}-difficulty-${item.key}`"
-                :color="item.color"
+                class="badge"
               >
                 {{ item.label }} · {{ item.count }}
-              </a-tag>
+              </span>
             </div>
           </div>
 
           <div v-if="group.topTopicTags.length" class="group-section">
             <div class="section-label">高频主题</div>
             <div class="chip-row">
-              <a-tag v-for="tag in group.topTopicTags" :key="`${group.key}-topic-${tag.tag}`">
+              <span
+                v-for="tag in group.topTopicTags"
+                :key="`${group.key}-topic-${tag.tag}`"
+                class="badge"
+              >
                 {{ tag.tag }} · {{ tag.count }}
-              </a-tag>
-              <a-tag v-if="group.hiddenTopicCount > 0">+{{ group.hiddenTopicCount }}</a-tag>
+              </span>
+              <span v-if="group.hiddenTopicCount > 0" class="badge badge--muted"
+                >+{{ group.hiddenTopicCount }}</span
+              >
             </div>
           </div>
 
           <div v-if="group.previewTitles.length" class="group-section group-preview">
             <div class="section-label">浏览题目</div>
             <div class="preview-list">
-              <div v-for="title in group.previewTitles" :key="`${group.key}-preview-${title}`" class="preview-item">
+              <div
+                v-for="title in group.previewTitles"
+                :key="`${group.key}-preview-${title}`"
+                class="preview-item"
+              >
                 <span class="preview-dot" />
                 <span class="preview-text">{{ title }}</span>
               </div>
@@ -159,7 +177,11 @@
 
           <div class="group-footer">
             <span class="group-footer-text">进入分类详情，浏览题目列表与题面内容</span>
-            <a-button type="primary" ghost :disabled="!group.items.length" @click.stop="openGroupDetail(group)">
+            <a-button
+              class="btn-secondary"
+              :disabled="!group.items.length"
+              @click.stop="openGroupDetail(group)"
+            >
               查看题目
             </a-button>
           </div>
@@ -181,7 +203,7 @@
       </div>
 
       <div v-else-if="!detailProblems.length" class="drawer-state">
-        <a-empty description="暂无题目详情" />
+        <p class="empty-description">暂无题目详情</p>
       </div>
 
       <div v-else class="detail-layout">
@@ -199,7 +221,11 @@
           </div>
 
           <div class="drawer-filter-stack">
-            <a-input v-model:value="detailFilters.keyword" allow-clear placeholder="搜索题目标题或题包">
+            <a-input
+              v-model:value="detailFilters.keyword"
+              allow-clear
+              placeholder="搜索题目标题或题包"
+            >
               <template #prefix>
                 <SearchOutlined />
               </template>
@@ -230,13 +256,22 @@
 
             <div class="drawer-filter-tip">
               左侧列表会按关键词、题面语言和难度即时过滤。
-              <a-button v-if="hasDetailFilters" type="link" class="drawer-reset-btn" @click="resetDetailFilters">
+              <a-button
+                v-if="hasDetailFilters"
+                type="link"
+                class="drawer-reset-btn"
+                @click="resetDetailFilters"
+              >
                 清空
               </a-button>
             </div>
           </div>
 
-          <div v-if="detailFilteredProblems.length" class="problem-list" @scroll="handleProblemListScroll">
+          <div
+            v-if="detailFilteredProblems.length"
+            class="problem-list"
+            @scroll="handleProblemListScroll"
+          >
             <button
               v-for="problem in displayedDetailProblems"
               :key="problemKey(problem)"
@@ -252,21 +287,20 @@
               <div class="problem-meta-row">
                 <span class="problem-package">{{ problem.packageName }}</span>
                 <span class="meta-tag-group">
-                  <a-tag size="small" :color="statementLanguageColorMap[problem.statement_language] || 'default'">
-                    {{ statementLanguageLabelMap[problem.statement_language] || '未知' }}
-                  </a-tag>
-                  <a-tag size="small" :color="difficultyColorMap[problem.difficulty_tag] || 'default'">
-                    {{ difficultyLabelMap[problem.difficulty_tag] || '中等' }}
-                  </a-tag>
+                  <span class="badge">{{
+                    statementLanguageLabelMap[problem.statement_language] || '未知'
+                  }}</span>
+                  <span class="badge">{{
+                    difficultyLabelMap[problem.difficulty_tag] || '中等'
+                  }}</span>
                 </span>
               </div>
             </button>
           </div>
 
           <div v-else class="drawer-state drawer-state--inner">
-            <a-empty description="筛选后暂无匹配题目">
-              <a-button @click="resetDetailFilters">清空筛选</a-button>
-            </a-empty>
+            <p class="empty-description">筛选后暂无匹配题目</p>
+            <a-button class="btn-secondary" @click="resetDetailFilters">清空筛选</a-button>
           </div>
         </aside>
 
@@ -281,7 +315,9 @@
                 <div class="detail-heading">
                   <div class="detail-eyebrow">题号 #{{ activeProblem.problem_index }}</div>
                   <h2 class="detail-title">{{ activeProblem.displayTitle }}</h2>
-                  <p v-if="activeProblem.displaySummary" class="detail-summary">{{ activeProblem.displaySummary }}</p>
+                  <p v-if="activeProblem.displaySummary" class="detail-summary">
+                    {{ activeProblem.displaySummary }}
+                  </p>
                 </div>
 
                 <div class="detail-info-grid">
@@ -296,7 +332,11 @@
                   <div class="detail-info-item">
                     <span class="detail-info-label">OJ 标识</span>
                     <strong class="detail-info-value">
-                      {{ activeProblem.oj_display_ids?.length ? activeProblem.oj_display_ids.join(', ') : '未标注' }}
+                      {{
+                        activeProblem.oj_display_ids?.length
+                          ? activeProblem.oj_display_ids.join(', ')
+                          : '未标注'
+                      }}
                     </strong>
                   </div>
                   <div class="detail-info-item detail-info-item--wide">
@@ -307,22 +347,22 @@
               </div>
 
               <div class="detail-tag-row">
-                <a-tag
+                <span
                   v-for="tag in activeProblem.position_tags || []"
                   :key="`position-${tag}`"
-                  :color="tag === 'frontend' ? 'geekblue' : tag === 'backend' ? 'green' : 'gold'"
+                  class="badge badge--solid"
                 >
                   {{ positionLabelMap[tag] || tag }}
-                </a-tag>
-                <a-tag :color="statementLanguageColorMap[activeProblem.statement_language] || 'default'">
-                  {{ statementLanguageLabelMap[activeProblem.statement_language] || '未知' }}
-                </a-tag>
-                <a-tag :color="difficultyColorMap[activeProblem.difficulty_tag] || 'default'">
-                  {{ difficultyLabelMap[activeProblem.difficulty_tag] || '中等' }}
-                </a-tag>
-                <a-tag v-for="tag in visibleDetailExtraTags" :key="tag.id" :color="tag.color">
+                </span>
+                <span class="badge">{{
+                  statementLanguageLabelMap[activeProblem.statement_language] || '未知'
+                }}</span>
+                <span class="badge">{{
+                  difficultyLabelMap[activeProblem.difficulty_tag] || '中等'
+                }}</span>
+                <span v-for="tag in visibleDetailExtraTags" :key="tag.id" class="badge">
                   {{ tag.label }}
-                </a-tag>
+                </span>
                 <button
                   v-if="hiddenDetailExtraTagCount > 0"
                   type="button"
@@ -332,7 +372,9 @@
                   +{{ hiddenDetailExtraTagCount }} 更多
                 </button>
                 <button
-                  v-else-if="showAllDetailTags && detailExtraTags.length > DETAIL_EXTRA_TAG_PREVIEW_COUNT"
+                  v-else-if="
+                    showAllDetailTags && detailExtraTags.length > DETAIL_EXTRA_TAG_PREVIEW_COUNT
+                  "
                   type="button"
                   class="detail-tag-toggle"
                   @click="showAllDetailTags = false"
@@ -355,7 +397,11 @@
                 </div>
                 <p
                   class="detail-paragraph"
-                  :class="{ collapsed: canToggleText(activeProblem.displayDescription) && !expandedSections.description }"
+                  :class="{
+                    collapsed:
+                      canToggleText(activeProblem.displayDescription) &&
+                      !expandedSections.description
+                  }"
                 >
                   {{ activeProblem.displayDescription }}
                 </p>
@@ -375,7 +421,11 @@
                 </div>
                 <p
                   class="detail-paragraph"
-                  :class="{ collapsed: canToggleText(activeProblem.displayInputDescription) && !expandedSections.input }"
+                  :class="{
+                    collapsed:
+                      canToggleText(activeProblem.displayInputDescription) &&
+                      !expandedSections.input
+                  }"
                 >
                   {{ activeProblem.displayInputDescription }}
                 </p>
@@ -395,7 +445,11 @@
                 </div>
                 <p
                   class="detail-paragraph"
-                  :class="{ collapsed: canToggleText(activeProblem.displayOutputDescription) && !expandedSections.output }"
+                  :class="{
+                    collapsed:
+                      canToggleText(activeProblem.displayOutputDescription) &&
+                      !expandedSections.output
+                  }"
                 >
                   {{ activeProblem.displayOutputDescription }}
                 </p>
@@ -406,17 +460,21 @@
                   <h3>示例</h3>
                 </div>
                 <div class="example-grid">
-                <div v-for="(example, index) in activeProblem.examples" :key="index" class="example-card">
-                  <div>
-                    <strong>输入</strong>
-                    <pre>{{ example.displayInput }}</pre>
-                  </div>
-                  <div>
-                    <strong>输出</strong>
-                    <pre>{{ example.displayOutput }}</pre>
+                  <div
+                    v-for="(example, index) in activeProblem.examples"
+                    :key="index"
+                    class="example-card"
+                  >
+                    <div>
+                      <strong>输入</strong>
+                      <pre>{{ example.displayInput }}</pre>
+                    </div>
+                    <div>
+                      <strong>输出</strong>
+                      <pre>{{ example.displayOutput }}</pre>
+                    </div>
                   </div>
                 </div>
-              </div>
               </div>
 
               <div v-if="starterCodeEntries.length" class="detail-section">
@@ -424,8 +482,14 @@
                   <h3>模板代码</h3>
                 </div>
                 <div class="starter-grid">
-                  <div v-for="entry in starterCodeEntries" :key="entry.language" class="starter-card">
-                    <div class="starter-header">{{ languageLabelMap[entry.language] || entry.language }}</div>
+                  <div
+                    v-for="entry in starterCodeEntries"
+                    :key="entry.language"
+                    class="starter-card"
+                  >
+                    <div class="starter-header">
+                      {{ languageLabelMap[entry.language] || entry.language }}
+                    </div>
                     <pre>{{ entry.code }}</pre>
                   </div>
                 </div>
@@ -434,7 +498,7 @@
           </div>
 
           <div v-else class="detail-empty">
-            <a-empty description="请选择左侧题目查看详情" />
+            <p class="empty-description">请选择左侧题目查看详情</p>
           </div>
         </section>
       </div>
@@ -451,11 +515,9 @@ import {
   BookOutlined,
   DesktopOutlined,
   InboxOutlined,
-  ReloadOutlined,
   SearchOutlined
 } from '@ant-design/icons-vue'
 
-import HeaderComponent from '@/components/HeaderComponent.vue'
 import { problemsetApi } from '@/apis/problemset_api'
 
 const loading = ref(false)
@@ -513,23 +575,10 @@ const statementLanguageLabelMap = {
   unknown: '语言未知'
 }
 
-const statementLanguageColorMap = {
-  zh: 'blue',
-  en: 'green',
-  mixed: 'cyan',
-  unknown: 'default'
-}
-
 const difficultyLabelMap = {
   easy: '简单',
   medium: '中等',
   hard: '困难'
-}
-
-const difficultyColorMap = {
-  easy: 'green',
-  medium: 'gold',
-  hard: 'red'
 }
 
 const positionLabelMap = {
@@ -542,21 +591,18 @@ const positionGroupDefs = [
   {
     key: 'frontend',
     title: '前端',
-    color: 'geekblue',
     icon: DesktopOutlined,
     description: '优先适配前端岗位的题目，适合页面交互、工程化与浏览器能力考察。'
   },
   {
     key: 'backend',
     title: '后端',
-    color: 'green',
     icon: ApiOutlined,
     description: '优先适配后端岗位的题目，便于快速抽查数据结构、系统设计与服务能力。'
   },
   {
     key: 'algorithm_general',
     title: '通用',
-    color: 'gold',
     icon: AppstoreOutlined,
     description: '算法与通用编程能力题目，适合公共题池和基础能力面试场景。'
   }
@@ -575,7 +621,9 @@ const difficultyOptions = [
 ]
 
 const htmlDecoder =
-  typeof window !== 'undefined' && typeof document !== 'undefined' ? document.createElement('textarea') : null
+  typeof window !== 'undefined' && typeof document !== 'undefined'
+    ? document.createElement('textarea')
+    : null
 
 const decodeHtml = (value) => {
   const text = String(value || '')
@@ -590,7 +638,10 @@ const fileName = (packagePath) => {
   return normalized.split('/').pop() || normalized
 }
 
-const normalizeText = (value) => String(value || '').trim().toLowerCase()
+const normalizeText = (value) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
 
 const normalizeProblemItem = (item) => {
   const packagePath = String(item?.package_path || '')
@@ -627,7 +678,7 @@ const normalizeProblemItem = (item) => {
       packagePath,
       displaySource,
       packageName,
-      ...((item?.topic_tags || []).map((tag) => String(tag || '')))
+      ...(item?.topic_tags || []).map((tag) => String(tag || ''))
     ]
       .map((part) => normalizeText(part))
       .join(' ')
@@ -636,10 +687,16 @@ const normalizeProblemItem = (item) => {
 
 const matchesFilters = (item, currentFilters) => {
   const keyword = normalizeText(currentFilters.keyword)
-  if (currentFilters.statementLanguage && (item.statement_language || 'unknown') !== currentFilters.statementLanguage) {
+  if (
+    currentFilters.statementLanguage &&
+    (item.statement_language || 'unknown') !== currentFilters.statementLanguage
+  ) {
     return false
   }
-  if (currentFilters.difficulty !== 'all' && (item.difficulty_tag || 'medium') !== currentFilters.difficulty) {
+  if (
+    currentFilters.difficulty !== 'all' &&
+    (item.difficulty_tag || 'medium') !== currentFilters.difficulty
+  ) {
     return false
   }
   if (!keyword) {
@@ -675,7 +732,6 @@ const buildProblemGroups = (items) =>
       .map((key) => ({
         key,
         label: statementLanguageLabelMap[key],
-        color: statementLanguageColorMap[key],
         count: groupItems.filter((item) => (item.statement_language || 'unknown') === key).length
       }))
       .filter((item) => item.count > 0)
@@ -684,7 +740,6 @@ const buildProblemGroups = (items) =>
       .map((key) => ({
         key,
         label: difficultyLabelMap[key],
-        color: difficultyColorMap[key],
         count: groupItems.filter((item) => (item.difficulty_tag || 'medium') === key).length
       }))
       .filter((item) => item.count > 0)
@@ -705,20 +760,27 @@ const buildProblemGroups = (items) =>
     }
   })
 
-const uniquePackageCount = (items) => new Set(items.map((item) => item.package_path).filter(Boolean)).size
+const uniquePackageCount = (items) =>
+  new Set(items.map((item) => item.package_path).filter(Boolean)).size
 
 const allProblemGroups = computed(() => buildProblemGroups(problems.value))
-const filteredProblems = computed(() => problems.value.filter((item) => matchesFilters(item, filters)))
+const filteredProblems = computed(() =>
+  problems.value.filter((item) => matchesFilters(item, filters))
+)
 const filteredProblemCount = computed(() => filteredProblems.value.length)
 const filteredPackageCount = computed(() => uniquePackageCount(filteredProblems.value))
 const problemGroups = computed(() => buildProblemGroups(filteredProblems.value))
 
 const hasActiveFilters = computed(
-  () => Boolean(filters.keyword) || Boolean(filters.statementLanguage) || filters.difficulty !== 'all'
+  () =>
+    Boolean(filters.keyword) || Boolean(filters.statementLanguage) || filters.difficulty !== 'all'
 )
 
 const hasDetailFilters = computed(
-  () => Boolean(detailFilters.keyword) || Boolean(detailFilters.statementLanguage) || detailFilters.difficulty !== 'all'
+  () =>
+    Boolean(detailFilters.keyword) ||
+    Boolean(detailFilters.statementLanguage) ||
+    detailFilters.difficulty !== 'all'
 )
 
 const headerDescription = computed(() => {
@@ -730,7 +792,8 @@ const headerDescription = computed(() => {
 })
 
 const trackingSummaryText = computed(
-  () => `已追踪 ${summary.value.tracked_problem_count || 0} 道题 / ${summary.value.tracked_package_count || 0} 个题包`
+  () =>
+    `已追踪 ${summary.value.tracked_problem_count || 0} 道题 / ${summary.value.tracked_package_count || 0} 个题包`
 )
 
 const overviewCards = computed(() => [
@@ -738,14 +801,18 @@ const overviewCards = computed(() => [
     key: 'problem-count',
     label: '总题量',
     value: summary.value.imported_problem_count || problems.value.length,
-    hint: hasActiveFilters.value ? `当前筛选命中 ${filteredProblemCount.value} 道题` : '按岗位方向快速浏览',
+    hint: hasActiveFilters.value
+      ? `当前筛选命中 ${filteredProblemCount.value} 道题`
+      : '按岗位方向快速浏览',
     icon: BookOutlined
   },
   {
     key: 'package-count',
     label: '题包数',
     value: summary.value.imported_package_count || uniquePackageCount(problems.value),
-    hint: hasActiveFilters.value ? `当前筛选覆盖 ${filteredPackageCount.value} 个题包` : trackingSummaryText.value,
+    hint: hasActiveFilters.value
+      ? `当前筛选覆盖 ${filteredPackageCount.value} 个题包`
+      : trackingSummaryText.value,
     icon: InboxOutlined
   },
   {
@@ -757,8 +824,12 @@ const overviewCards = computed(() => [
   }
 ])
 
-const detailFilteredProblems = computed(() => detailProblems.value.filter((item) => matchesFilters(item, detailFilters)))
-const displayedDetailProblems = computed(() => detailFilteredProblems.value.slice(0, detailListRenderCount.value))
+const detailFilteredProblems = computed(() =>
+  detailProblems.value.filter((item) => matchesFilters(item, detailFilters))
+)
+const displayedDetailProblems = computed(() =>
+  detailFilteredProblems.value.slice(0, detailListRenderCount.value)
+)
 
 const detailExtraTags = computed(() => {
   if (!activeProblem.value) {
@@ -768,19 +839,19 @@ const detailExtraTags = computed(() => {
   return [
     ...(activeProblem.value.topic_tags || []).map((tag) => ({
       id: `topic-${tag}`,
-      label: tag,
-      color: undefined
+      label: tag
     })),
     ...(activeProblem.value.allowed_languages || []).map((language) => ({
       id: `lang-${language}`,
-      label: languageLabelMap[language] || language,
-      color: 'cyan'
+      label: languageLabelMap[language] || language
     }))
   ]
 })
 
 const visibleDetailExtraTags = computed(() =>
-  showAllDetailTags.value ? detailExtraTags.value : detailExtraTags.value.slice(0, DETAIL_EXTRA_TAG_PREVIEW_COUNT)
+  showAllDetailTags.value
+    ? detailExtraTags.value
+    : detailExtraTags.value.slice(0, DETAIL_EXTRA_TAG_PREVIEW_COUNT)
 )
 
 const hiddenDetailExtraTagCount = computed(() =>
@@ -873,11 +944,17 @@ const loadProblemDetail = async (item) => {
     const data = await problemsetApi.getProblemsetDetail(item.package_path)
     packageDetailCache.set(
       item.package_path,
-      (data?.problems || []).map((problem) => normalizeProblemItem({ ...problem, package_path: item.package_path }))
+      (data?.problems || []).map((problem) =>
+        normalizeProblemItem({ ...problem, package_path: item.package_path })
+      )
     )
   }
   const packageProblems = packageDetailCache.get(item.package_path) || []
-  return packageProblems.find((problem) => Number(problem.problem_index) === Number(item.problem_index)) || null
+  return (
+    packageProblems.find(
+      (problem) => Number(problem.problem_index) === Number(item.problem_index)
+    ) || null
+  )
 }
 
 const selectProblem = async (problemSummary) => {
@@ -958,7 +1035,9 @@ watch(
       return
     }
 
-    const hasActiveItem = detailFilteredProblems.value.some((item) => problemKey(item) === activeProblemKey.value)
+    const hasActiveItem = detailFilteredProblems.value.some(
+      (item) => problemKey(item) === activeProblemKey.value
+    )
     if (!hasActiveItem) {
       selectProblem(detailFilteredProblems.value[0])
     }
@@ -971,39 +1050,140 @@ onMounted(() => {
 </script>
 
 <style scoped lang="less">
+// 视觉风格对齐设计稿 [UI v3]：零圆角、1px 分隔线、扁平徽章、蓝色只用于主操作与强调
 .problemset-page {
-  height: 100vh;
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
+  height: 100%;
   overflow: hidden;
-  background: var(--gray-50);
 }
 
+// ===================== 顶栏 =====================
+.page-topbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 20px 32px 16px;
+  border-bottom: 1px solid var(--gray-100);
+  flex-shrink: 0;
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--gray-1000);
+}
+
+.page-subtitle {
+  font-size: 13px;
+  color: var(--gray-500);
+  margin: 6px 0 0;
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+// ===================== 按钮（深度覆盖 Ant Design） =====================
+.topbar-actions,
+.group-footer,
+.filter-empty-state,
+.drawer-state,
+.toolbar-main {
+  :deep(.btn-secondary.ant-btn) {
+    display: inline-flex;
+    align-items: center;
+    height: 34px;
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid var(--gray-200);
+    background: var(--gray-0);
+    color: var(--gray-700);
+    border-radius: 0;
+    box-shadow: none;
+
+    &:hover,
+    &:focus {
+      border-color: var(--gray-500) !important;
+      color: var(--gray-1000) !important;
+    }
+  }
+
+  :deep(.btn-primary.ant-btn) {
+    display: inline-flex;
+    align-items: center;
+    height: 34px;
+    padding: 0 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 0;
+    background: var(--main-color);
+    border-color: var(--main-color);
+    color: #fff;
+    box-shadow: none;
+
+    &:hover,
+    &:focus {
+      background: var(--main-700) !important;
+      border-color: var(--main-700) !important;
+      color: #fff !important;
+    }
+  }
+
+  :deep(.ant-btn[disabled]) {
+    background: var(--gray-100);
+    border-color: var(--gray-200);
+    color: var(--gray-500);
+  }
+}
+
+// ===================== 输入控件（扁平化） =====================
+.problemset-page,
+.problemset-drawer {
+  :deep(.ant-input-affix-wrapper),
+  :deep(.ant-input),
+  :deep(.ant-select-selector) {
+    border-radius: 0 !important;
+    border-color: var(--gray-200);
+    box-shadow: none !important;
+  }
+
+  :deep(.ant-input-affix-wrapper),
+  :deep(.ant-select-single .ant-select-selector) {
+    height: 34px;
+  }
+
+  :deep(.ant-input-affix-wrapper:hover),
+  :deep(.ant-input:hover),
+  :deep(.ant-select:hover .ant-select-selector) {
+    border-color: var(--gray-500) !important;
+  }
+
+  :deep(.ant-input-affix-wrapper-focused),
+  :deep(.ant-select-focused .ant-select-selector) {
+    border-color: var(--main-color) !important;
+  }
+}
+
+// ===================== 概览指标 =====================
 .summary-grid,
 .toolbar-panel,
 .group-grid {
-  padding-left: 20px;
-  padding-right: 20px;
+  padding-left: 32px;
+  padding-right: 32px;
 }
 
 .summary-grid {
-  padding-top: 14px;
+  padding-top: 18px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.summary-card,
-.toolbar-panel,
-.state-panel,
-.empty-state,
-.filter-empty-state,
-.problem-list-panel,
-.problem-detail-panel {
-  background: var(--color-bg-container);
-  border: 1px solid var(--gray-200);
-  border-radius: 16px;
+  border-bottom: 1px solid var(--gray-200);
+  flex-shrink: 0;
 }
 
 .page-main {
@@ -1015,22 +1195,29 @@ onMounted(() => {
 }
 
 .summary-card {
-  padding: 14px 16px;
+  padding: 4px 24px 18px;
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  border-right: 1px solid var(--gray-100);
+
+  &:first-child {
+    padding-left: 0;
+  }
+
+  &:last-child {
+    padding-right: 0;
+    border-right: none;
+  }
 }
 
 .summary-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
-  background: var(--main-50);
-  color: var(--main-color);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  margin-top: 2px;
+  font-size: 16px;
+  color: var(--gray-500);
   flex-shrink: 0;
 }
 
@@ -1039,169 +1226,176 @@ onMounted(() => {
 }
 
 .summary-label,
-.secondary-label,
 .section-label,
-.group-footer-text,
-.drawer-group-meta,
-.drawer-group-caption,
-.problem-package,
-.toolbar-meta,
-.detail-path-label {
-  font-size: 13px;
-  color: var(--gray-600);
+.metric-label,
+.drawer-field-label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: var(--gray-500);
 }
 
 .summary-value {
-  margin-top: 4px;
-  font-size: 24px;
-  line-height: 1.2;
-  font-weight: 700;
+  margin-top: 6px;
+  font-size: 36px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   color: var(--gray-1000);
 }
 
 .summary-hint {
-  margin-top: 6px;
+  margin-top: 8px;
   font-size: 12px;
-  line-height: 1.5;
-  color: var(--gray-700);
+  line-height: 1.6;
+  color: var(--gray-600);
 }
 
+// ===================== 筛选工具条 =====================
 .toolbar-panel {
-  margin: 12px 20px 12px;
-  padding-top: 12px;
-  padding-bottom: 12px;
+  padding-top: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--gray-200);
+  flex-shrink: 0;
 }
 
 .toolbar-main {
   display: grid;
   grid-template-columns: minmax(260px, 2fr) minmax(260px, 1.4fr) minmax(160px, 1fr) auto;
   gap: 12px;
+  align-items: center;
 }
 
 .toolbar-inline-filters,
 .filter-chip-group {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
-.filter-chip-group.compact {
-  gap: 8px;
-}
-
 .filter-chip-label {
-  font-size: 12px;
-  color: var(--gray-600);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: var(--gray-500);
   white-space: nowrap;
 }
 
 .filter-chip-button {
-  padding: 7px 12px;
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 14px;
   border: 1px solid var(--gray-200);
-  border-radius: 999px;
-  background: var(--gray-25);
+  border-radius: 0;
+  background: var(--gray-0);
   color: var(--gray-700);
-  font-size: 13px;
-  line-height: 1.2;
-  cursor: pointer;
   font: inherit;
-  transition:
-    border-color 0.2s ease,
-    background-color 0.2s ease,
-    color 0.2s ease;
+  font-size: 13px;
+  cursor: pointer;
 }
 
 .filter-chip-button:hover {
-  border-color: var(--main-300);
-  color: var(--main-color);
+  border-color: var(--gray-500);
+  color: var(--gray-1000);
 }
 
 .filter-chip-button.active {
-  border-color: var(--main-400);
-  background: var(--main-20);
-  color: var(--main-color);
+  background: var(--gray-100);
+  color: var(--gray-1000);
+  font-weight: 700;
+}
+
+.filter-chip-group.compact .filter-chip-button {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 12px;
 }
 
 .toolbar-meta {
-  margin-top: 10px;
+  margin-top: 12px;
   display: flex;
-  justify-content: flex-start;
-  gap: 12px;
+  gap: 16px;
   flex-wrap: wrap;
+  font-size: 12px;
   line-height: 1.6;
+  color: var(--gray-600);
 }
 
+// ===================== 状态占位 =====================
 .state-panel,
 .empty-state,
 .filter-empty-state {
-  margin: 0 20px 20px;
-  min-height: 260px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px;
-}
-
-.empty-state {
-  flex-direction: column;
+  gap: 12px;
+  padding: 96px 32px;
   text-align: center;
-  gap: 8px;
 }
 
 .empty-title {
   margin: 0;
-  font-size: 20px;
+  font-size: 16px;
+  font-weight: 700;
   color: var(--gray-1000);
 }
 
 .empty-description {
-  max-width: 560px;
+  max-width: 460px;
   margin: 0;
+  font-size: 13px;
   line-height: 1.7;
-  color: var(--gray-600);
+  color: var(--gray-500);
 }
 
+// ===================== 分类卡片 =====================
 .group-grid {
   flex: 1;
   min-height: 0;
-  padding-bottom: 12px;
+  padding-top: 20px;
+  padding-bottom: 20px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 0;
   overflow: hidden;
 }
 
 .group-card {
   min-height: 0;
   height: 100%;
-  padding: 14px;
-  border: 1px solid var(--gray-200);
-  border-radius: 16px;
-  background: var(--color-bg-container);
+  padding: 0 24px;
+  border-right: 1px solid var(--gray-100);
+  background: var(--gray-0);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
   cursor: pointer;
   overflow: hidden;
-  transition:
-    border-color 0.2s ease,
-    background-color 0.2s ease;
+
+  &:first-child {
+    padding-left: 0;
+  }
+
+  &:last-child {
+    padding-right: 0;
+    border-right: none;
+  }
 }
 
-.group-card:hover {
-  border-color: var(--main-300);
-  background: var(--main-5);
+.group-card:hover .group-title {
+  color: var(--main-800);
 }
 
 .group-card.empty {
   cursor: default;
-  opacity: 0.82;
+  opacity: 0.7;
 }
 
-.group-card.empty:hover {
-  border-color: var(--gray-200);
-  background: var(--color-bg-container);
+.group-card.empty:hover .group-title {
+  color: var(--gray-1000);
 }
 
 .group-card-top,
@@ -1215,89 +1409,117 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
+.group-card-top {
+  align-items: center;
+}
+
 .group-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 18px;
+  color: var(--gray-500);
 }
 
-.group-card--frontend .group-icon {
+.group-card:hover .group-icon {
   color: var(--main-color);
-  background: var(--main-50);
-}
-
-.group-card--backend .group-icon {
-  color: var(--color-success-700);
-  background: #f2fbeb;
-}
-
-.group-card--algorithm_general .group-icon {
-  color: var(--color-warning-700);
-  background: #fff8e6;
 }
 
 .group-title {
   margin: 0;
   font-size: 17px;
+  font-weight: 800;
   color: var(--gray-1000);
 }
 
 .group-description {
-  margin: 4px 0 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--gray-700);
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--gray-600);
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
 
-.group-package-count {
+.group-package-count,
+.group-footer-text,
+.drawer-group-caption,
+.problem-package {
   font-size: 12px;
-  color: var(--gray-700);
+  color: var(--gray-500);
+  white-space: nowrap;
 }
 
 .group-metric-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  border-top: 1px solid var(--gray-100);
+  border-bottom: 1px solid var(--gray-100);
 }
 
 .group-metric-card {
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: var(--gray-25);
-  border: 1px solid var(--gray-200);
+  padding: 12px 16px 12px 0;
+
+  & + .group-metric-card {
+    padding-left: 16px;
+    border-left: 1px solid var(--gray-100);
+  }
 }
 
 .metric-label {
   display: block;
-  font-size: 12px;
-  color: var(--gray-600);
 }
 
 .group-metric-card strong {
   display: block;
   margin-top: 4px;
-  font-size: 18px;
+  font-size: 22px;
+  font-weight: 800;
   color: var(--gray-1000);
 }
 
 .group-section {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .chip-row {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+// ===================== 徽章 =====================
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--gray-200);
+  color: var(--gray-600);
+  white-space: nowrap;
+
+  &--solid {
+    background: var(--gray-100);
+    color: var(--gray-1000);
+  }
+
+  &--accent {
+    background: var(--main-color);
+    border-color: var(--main-color);
+    color: #fff;
+  }
+
+  &--muted {
+    border-color: var(--gray-400);
+    color: var(--gray-500);
+  }
 }
 
 .group-preview {
@@ -1307,7 +1529,6 @@ onMounted(() => {
 .preview-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
 }
 
 .preview-item {
@@ -1315,17 +1536,18 @@ onMounted(() => {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 8px;
   align-items: start;
-  padding: 7px 10px;
-  border-radius: 12px;
-  background: var(--gray-25);
-  border: 1px solid var(--gray-150);
+  padding: 8px 0;
+  border-top: 1px solid var(--gray-100);
+
+  &:last-child {
+    border-bottom: 1px solid var(--gray-100);
+  }
 }
 
 .preview-dot {
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
   margin-top: 8px;
-  border-radius: 999px;
   background: var(--gray-500);
 }
 
@@ -1343,18 +1565,35 @@ onMounted(() => {
 .group-footer {
   margin-top: auto;
   align-items: center;
-  padding-top: 2px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--gray-200);
 }
 
-.problemset-drawer :deep(.ant-drawer-header) {
-  border-bottom: 1px solid var(--gray-150);
+// ===================== 抽屉 =====================
+.problemset-drawer {
+  :deep(.ant-drawer-content) {
+    border-radius: 0;
+  }
+
+  :deep(.ant-drawer-header) {
+    border-bottom: 1px solid var(--gray-200);
+    padding: 16px 24px;
+  }
+
+  :deep(.ant-drawer-title) {
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--gray-1000);
+  }
 }
 
 .drawer-state {
   min-height: 300px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 12px;
   padding: 24px;
 }
 
@@ -1369,13 +1608,13 @@ onMounted(() => {
 }
 
 .problem-list-panel {
-  border-radius: 0;
-  border-width: 0 1px 0 0;
+  border-right: 1px solid var(--gray-200);
   background: var(--gray-25);
-  padding: 20px 16px;
+  padding: 20px 20px 16px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-height: 0;
 }
 
 .problem-list-header {
@@ -1386,13 +1625,15 @@ onMounted(() => {
 }
 
 .drawer-group-title {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: 19px;
+  font-weight: 800;
   color: var(--gray-1000);
 }
 
-.drawer-group-caption {
-  white-space: nowrap;
+.drawer-group-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--gray-500);
 }
 
 .drawer-filter-stack {
@@ -1415,11 +1656,6 @@ onMounted(() => {
   min-width: 0;
 }
 
-.drawer-field-label {
-  font-size: 12px;
-  color: var(--gray-600);
-}
-
 .drawer-filter-field :deep(.ant-select) {
   width: 100%;
 }
@@ -1431,46 +1667,45 @@ onMounted(() => {
   gap: 12px;
   font-size: 12px;
   line-height: 1.6;
-  color: var(--gray-600);
+  color: var(--gray-500);
 }
 
 .drawer-reset-btn,
 .section-toggle-btn {
   padding: 0;
   height: auto;
+  font-size: 12px;
+  color: var(--main-800);
 }
 
 .problem-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
   overflow: auto;
-  padding-right: 4px;
+  border-top: 1px solid var(--gray-200);
 }
 
 .problem-list-item {
   width: 100%;
   text-align: left;
-  padding: 12px;
-  border-radius: 14px;
-  border: 1px solid var(--gray-200);
-  background: var(--color-bg-container);
+  padding: 12px 14px;
+  border: none;
+  border-bottom: 1px solid var(--gray-150);
+  border-left: 3px solid transparent;
+  background: transparent;
   cursor: pointer;
   content-visibility: auto;
   contain-intrinsic-size: 84px;
-  transition:
-    border-color 0.2s ease,
-    background-color 0.2s ease;
+  font: inherit;
 }
 
 .problem-list-item:hover {
-  border-color: var(--main-300);
-  background: var(--main-5);
+  background: var(--gray-100);
 }
 
 .problem-list-item.active {
-  border-color: var(--main-400);
-  background: var(--main-20);
+  background: var(--gray-0);
+  border-left-color: var(--main-color);
 }
 
 .problem-list-item-top {
@@ -1481,19 +1716,24 @@ onMounted(() => {
 
 .problem-index {
   flex-shrink: 0;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--main-50);
-  color: var(--main-color);
-  font-size: 12px;
-  line-height: 1.5;
+  padding: 1px 6px;
+  background: var(--gray-100);
+  color: var(--gray-700);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.6;
 }
 
 .problem-name {
   font-size: 14px;
-  font-weight: 600;
-  line-height: 1.6;
+  font-weight: 700;
+  line-height: 1.5;
   color: var(--gray-1000);
+}
+
+.problem-meta-row {
+  margin-top: 8px;
+  align-items: center;
 }
 
 .meta-tag-group,
@@ -1504,12 +1744,12 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
+// ===================== 题目详情 =====================
 .problem-detail-panel {
   position: relative;
-  border: none;
-  border-radius: 0;
-  padding: 24px;
+  padding: 28px 32px 32px;
   overflow: auto;
+  background: var(--gray-0);
 }
 
 .detail-loading-mask {
@@ -1535,8 +1775,8 @@ onMounted(() => {
 }
 
 .detail-hero {
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--gray-150);
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--gray-200);
 }
 
 .detail-heading {
@@ -1546,52 +1786,64 @@ onMounted(() => {
 }
 
 .detail-eyebrow {
-  font-size: 12px;
-  color: var(--main-color);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: var(--main-800);
 }
 
 .detail-title {
   margin: 0;
-  font-size: 24px;
-  line-height: 1.45;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
   color: var(--gray-1000);
 }
 
 .detail-summary {
   margin: 0;
   font-size: 14px;
-  line-height: 1.8;
-  color: var(--gray-700);
+  line-height: 1.75;
+  color: var(--gray-600);
 }
 
 .detail-info-grid {
   margin-top: 20px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  border-top: 1px solid var(--gray-100);
 }
 
 .detail-info-item {
-  padding: 14px 16px;
-  border-radius: 14px;
-  border: 1px solid var(--gray-200);
-  background: var(--gray-10);
+  padding: 12px 16px 12px 0;
+  border-bottom: 1px solid var(--gray-100);
+
+  &:nth-child(2n) {
+    padding-left: 16px;
+    border-left: 1px solid var(--gray-100);
+  }
 }
 
 .detail-info-item--wide {
   grid-column: 1 / -1;
+  padding-left: 0;
+  border-left: none;
 }
 
 .detail-info-label {
   display: block;
   margin-bottom: 6px;
-  font-size: 12px;
-  color: var(--gray-600);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: var(--gray-500);
 }
 
 .detail-info-value {
   display: block;
   font-size: 13px;
+  font-weight: 600;
   line-height: 1.7;
   color: var(--gray-900);
   word-break: break-word;
@@ -1599,37 +1851,28 @@ onMounted(() => {
 
 .detail-tag-row {
   margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--gray-150);
 }
 
 .detail-tag-toggle {
-  padding: 0 10px;
-  height: 28px;
-  border: 1px dashed var(--gray-300);
-  border-radius: 999px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px dashed var(--gray-400);
   background: transparent;
-  color: var(--gray-600);
-  font-size: 12px;
+  color: var(--gray-500);
+  font: inherit;
+  font-size: 11px;
   cursor: pointer;
-  transition:
-    border-color 0.2s ease,
-    color 0.2s ease,
-    background-color 0.2s ease;
 }
 
 .detail-tag-toggle:hover {
-  border-color: var(--main-300);
+  border-color: var(--main-color);
   color: var(--main-color);
-  background: var(--main-5);
 }
 
 .detail-section {
-  margin-top: 20px;
-  padding: 20px;
-  border-radius: 16px;
-  border: 1px solid var(--gray-200);
-  background: var(--gray-25);
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--gray-200);
 }
 
 .detail-section-header {
@@ -1637,10 +1880,10 @@ onMounted(() => {
   margin-bottom: 12px;
 }
 
-.detail-section-header h3,
-.starter-header {
+.detail-section-header h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
+  font-weight: 800;
   color: var(--gray-1000);
 }
 
@@ -1670,9 +1913,8 @@ onMounted(() => {
 .example-card,
 .starter-card {
   padding: 14px;
-  border-radius: 14px;
   border: 1px solid var(--gray-200);
-  background: var(--color-bg-container);
+  background: var(--gray-25);
 }
 
 .example-card {
@@ -1685,8 +1927,10 @@ onMounted(() => {
 .starter-header {
   display: block;
   margin-bottom: 8px;
-  font-size: 13px;
-  color: var(--gray-900);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: var(--gray-500);
 }
 
 .example-card pre,
@@ -1712,6 +1956,15 @@ onMounted(() => {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .group-card:nth-child(2n) {
+    padding-right: 0;
+    border-right: none;
+  }
+
+  .group-card:nth-child(2n + 1) {
+    padding-left: 0;
+  }
+
   .toolbar-main {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
@@ -1722,6 +1975,23 @@ onMounted(() => {
   .group-grid,
   .detail-info-grid {
     grid-template-columns: 1fr;
+  }
+
+  .summary-card,
+  .group-card {
+    padding-left: 0;
+    padding-right: 0;
+    border-right: none;
+  }
+
+  .summary-card + .summary-card {
+    border-top: 1px solid var(--gray-100);
+    padding-top: 16px;
+  }
+
+  .detail-info-item:nth-child(2n) {
+    padding-left: 0;
+    border-left: none;
   }
 
   .page-main {
@@ -1739,23 +2009,12 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
+  .page-topbar,
   .summary-grid,
   .toolbar-panel,
   .group-grid {
-    padding-left: 12px;
-    padding-right: 12px;
-  }
-
-  .summary-grid {
-    padding-top: 12px;
-  }
-
-  .toolbar-panel,
-  .state-panel,
-  .empty-state,
-  .filter-empty-state {
-    margin-left: 12px;
-    margin-right: 12px;
+    padding-left: 16px;
+    padding-right: 16px;
   }
 
   .group-grid {
@@ -1768,12 +2027,18 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 
+  .group-metric-card + .group-metric-card {
+    padding-left: 0;
+    border-left: none;
+    border-top: 1px solid var(--gray-100);
+  }
+
   .filter-chip-group {
     align-items: flex-start;
   }
 
   .problem-detail-panel {
-    padding: 16px;
+    padding: 20px 16px;
   }
 }
 </style>
