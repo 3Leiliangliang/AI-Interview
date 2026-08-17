@@ -524,7 +524,7 @@ const weaknessRecs = computed(() =>
 )
 
 // 逐题覆盖度：matched / (matched + 未覆盖建议关键词)，近似值非 SEP 精确覆盖率
-const isLowScore = (item) => Number(item.score) < REPORT_SCORE_THRESHOLD
+const isLowScore = (item) => item.score !== null && Number(item.score) < REPORT_SCORE_THRESHOLD
 const questionOpen = (item) => openQuestions.value.has(item.question_index)
 const toggleQuestion = (item) => {
   const next = new Set(openQuestions.value)

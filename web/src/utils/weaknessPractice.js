@@ -32,7 +32,7 @@ export const extractReportWeaknesses = ({ technicalReviews = [], dimensions = []
 
   // 1) 低分技术题——最具体的可行动信号。query 缺失则跳过该候选，不用完整题干制造无效专题。
   const sortedReviews = [...technicalReviews]
-    .filter((review) => Number(review.score) < REPORT_SCORE_THRESHOLD)
+    .filter((review) => review.score !== null && Number(review.score) < REPORT_SCORE_THRESHOLD)
     .sort((a, b) => Number(a.score ?? 100) - Number(b.score ?? 100))
     .slice(0, 3)
 
