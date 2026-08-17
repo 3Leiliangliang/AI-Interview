@@ -720,11 +720,24 @@ const getThreadState = (threadId) => {
       activeRunId: null,
       runLastSeq: '0',
       lastRetryableJobTry: null,
+      messageSyncEpoch: 0,
       onGoingConv: createOnGoingConvState(),
       agentState: null // 添加 agentState 字段
     }
   }
   return chatState.threadStates[threadId]
+}
+
+const beginThreadMessageSync = (threadId) => {
+  const threadState = getThreadState(threadId)
+  if (!threadState) return null
+  threadState.messageSyncEpoch += 1
+  return threadState.messageSyncEpoch
+}
+
+const isCurrentThreadMessageSync = (threadId, syncEpoch) => {
+  const threadState = chatState.threadStates[threadId]
+  return Boolean(threadState && threadState.messageSyncEpoch === syncEpoch)
 }
 
 // 清理指定线程的状态
@@ -907,7 +920,7 @@ const updateThread = async (threadId, title, is_pinned) => {
 }
 
 // 获取线程消息
-const fetchThreadMessages = async ({ agentId, threadId, delay = 0 }) => {
+const fetchThreadMessages = async ({ agentId, threadId, delay = 0, syncEpoch = null }) => {
   if (!threadId || !agentId) return
 
   // 如果指定了延迟，等待指定时间（用于确保后端数据库事务提交）
@@ -917,10 +930,30 @@ const fetchThreadMessages = async ({ agentId, threadId, delay = 0 }) => {
 
   try {
     const response = await agentApi.getAgentHistory(agentId, threadId)
+    if (syncEpoch !== null && !isCurrentThreadMessageSync(threadId, syncEpoch)) return
     threadMessages.value[threadId] = response.history || []
   } catch (error) {
+    if (syncEpoch !== null && !isCurrentThreadMessageSync(threadId, syncEpoch)) return
     handleChatError(error, 'load')
     throw error
+  }
+}
+
+const syncThreadMessages = async ({
+  agentId,
+  threadId,
+  delay = 0,
+  syncEpoch = null,
+  onSettled = null
+}) => {
+  if (syncEpoch === null) return
+
+  try {
+    await fetchThreadMessages({ agentId, threadId, delay, syncEpoch })
+  } finally {
+    if (isCurrentThreadMessageSync(threadId, syncEpoch)) {
+      onSettled?.()
+    }
   }
 }
 
@@ -1220,10 +1253,12 @@ const stopRunStreamSubscription = (threadId) => {
   }
 }
 
-const startRunStream = async (threadId, runId, afterSeq = '0') => {
+const startRunStream = async (threadId, runId, afterSeq = '0', syncEpoch = null) => {
   if (!threadId || !runId || !useRunsApi) return
   const ts = getThreadState(threadId)
   if (!ts) return
+  const streamAgentId = currentAgentId.value
+  const streamSyncEpoch = syncEpoch ?? beginThreadMessageSync(threadId)
 
   stopRunStreamSubscription(threadId)
   const runController = new AbortController()
@@ -1287,11 +1322,15 @@ const startRunStream = async (threadId, runId, afterSeq = '0') => {
           ts.activeRunId = null
           ts.lastRetryableJobTry = null
           clearActiveRunSnapshot(threadId)
-          fetchThreadMessages({ agentId: currentAgentId.value, threadId, delay: 200 }).finally(
-            () => {
-              fetchAgentState(currentAgentId.value, threadId)
+          void syncThreadMessages({
+            agentId: streamAgentId,
+            threadId,
+            delay: 200,
+            syncEpoch: streamSyncEpoch,
+            onSettled: () => {
+              fetchAgentState(streamAgentId, threadId)
             }
-          )
+          })
         } else if (ts.activeRunId === runId) {
           window.setTimeout(() => {
             if (ts.activeRunId === runId && !ts.runStreamAbortController) {
@@ -1312,10 +1351,16 @@ const startRunStream = async (threadId, runId, afterSeq = '0') => {
         ts.activeRunId = null
         ts.lastRetryableJobTry = null
         clearActiveRunSnapshot(threadId)
-        fetchThreadMessages({ agentId: currentAgentId.value, threadId, delay: 300 }).finally(() => {
-          resetOnGoingConv(threadId)
-          fetchAgentState(currentAgentId.value, threadId)
-          scrollController.scrollToBottom()
+        void syncThreadMessages({
+          agentId: streamAgentId,
+          threadId,
+          delay: 300,
+          syncEpoch: streamSyncEpoch,
+          onSettled: () => {
+            resetOnGoingConv(threadId)
+            fetchAgentState(streamAgentId, threadId)
+            scrollController.scrollToBottom()
+          }
         })
       }
     })
@@ -1666,6 +1711,9 @@ const handleSendMessage = async ({ image, textOverride = '', skipAutoTitle = fal
 
   const threadState = getThreadState(threadId)
   if (!threadState) return
+  const interactionEpoch = beginThreadMessageSync(threadId)
+  if (interactionEpoch === null) return
+  const targetAgentId = currentAgentId.value
 
   if (useRunsApi) {
     if (!skipAutoTitle && (threadMessages.value[threadId] || []).length === 0) {
@@ -1678,7 +1726,7 @@ const handleSendMessage = async ({ image, textOverride = '', skipAutoTitle = fal
     resetOnGoingConv(threadId)
     threadState.isStreaming = true
     try {
-      const runResp = await agentApi.createAgentRun(currentAgentId.value, {
+      const runResp = await agentApi.createAgentRun(targetAgentId, {
         query: text,
         config: buildAgentRequestConfig(threadId),
         image_content: image?.imageContent
@@ -1687,24 +1735,27 @@ const handleSendMessage = async ({ image, textOverride = '', skipAutoTitle = fal
       if (!runId) {
         throw new Error('创建 run 失败：缺少 run_id')
       }
-      await startRunStream(threadId, runId, 0)
+      await startRunStream(threadId, runId, 0, interactionEpoch)
     } catch (error) {
-      threadState.isStreaming = false
-      handleChatError(error, 'send')
+      if (isCurrentThreadMessageSync(threadId, interactionEpoch)) {
+        threadState.isStreaming = false
+        handleChatError(error, 'send')
+      }
     }
     return
   }
 
   threadState.isStreaming = true
   resetOnGoingConv(threadId)
-  threadState.streamAbortController = new AbortController()
+  const streamController = new AbortController()
+  threadState.streamAbortController = streamController
 
   try {
     const response = await sendMessage({
-      agentId: currentAgentId.value,
+      agentId: targetAgentId,
       threadId: threadId,
       text: text,
-      signal: threadState.streamAbortController?.signal,
+      signal: streamController.signal,
       imageData: image,
       skipAutoTitle
     })
@@ -1717,16 +1768,27 @@ const handleSendMessage = async ({ image, textOverride = '', skipAutoTitle = fal
     } else {
       console.warn('[Interrupted] Catch')
     }
-    threadState.isStreaming = false
+    if (isCurrentThreadMessageSync(threadId, interactionEpoch)) {
+      threadState.isStreaming = false
+    }
   } finally {
-    threadState.streamAbortController = null
-    // 异步加载历史记录，保持当前消息显示直到历史记录加载完成
-    fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId }).finally(() => {
-      // 历史记录加载完成后，安全地清空当前进行中的对话
-      resetOnGoingConv(threadId)
-      fetchAgentState(currentAgentId.value, threadId)
-      scrollController.scrollToBottom()
-    })
+    if (isCurrentThreadMessageSync(threadId, interactionEpoch)) {
+      if (threadState.streamAbortController === streamController) {
+        threadState.streamAbortController = null
+      }
+      // 异步加载历史记录，保持当前消息显示直到历史记录加载完成
+      void syncThreadMessages({
+        agentId: targetAgentId,
+        threadId,
+        syncEpoch: interactionEpoch,
+        onSettled: () => {
+          // 历史记录加载完成后，安全地清空当前进行中的对话
+          resetOnGoingConv(threadId)
+          fetchAgentState(targetAgentId, threadId)
+          scrollController.scrollToBottom()
+        }
+      })
+    }
   }
 }
 
@@ -1751,7 +1813,16 @@ const handleSendOrStop = async (payload) => {
 
       // 中断后刷新消息历史，确保显示最新的状态
       try {
-        await fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId, delay: 500 })
+        const syncEpoch = beginThreadMessageSync(threadId)
+        const targetAgentId = currentAgentId.value
+        if (syncEpoch !== null) {
+          await fetchThreadMessages({
+            agentId: targetAgentId,
+            threadId,
+            delay: 500,
+            syncEpoch
+          })
+        }
         message.info('已中断对话生成')
       } catch (error) {
         console.error('刷新消息历史失败:', error)
@@ -1778,30 +1849,41 @@ const handleApprovalWithStream = async (answer) => {
     approvalState.showModal = false
     return
   }
+  const interactionEpoch = beginThreadMessageSync(threadId)
+  if (interactionEpoch === null) return
+  const targetAgentId = currentAgentId.value
+  const targetConfigId = selectedAgentConfigId.value
 
   try {
     // 使用审批 composable 处理审批
-    const response = await handleApproval(answer, currentAgentId.value, selectedAgentConfigId.value)
+    const response = await handleApproval(answer, targetAgentId, targetConfigId)
 
     if (!response) return // 如果 handleApproval 抛出错误，这里不会执行
 
     // 处理流式响应
     await handleAgentResponse(response, threadId)
   } catch (error) {
-    if (error.name !== 'AbortError') {
+    if (error.name !== 'AbortError' && isCurrentThreadMessageSync(threadId, interactionEpoch)) {
       console.error('Resume approval error:', error)
     }
   } finally {
-    if (threadState) {
-      threadState.isStreaming = false
-      threadState.streamAbortController = null
-    }
+    if (isCurrentThreadMessageSync(threadId, interactionEpoch)) {
+      if (threadState) {
+        threadState.isStreaming = false
+        threadState.streamAbortController = null
+      }
 
-    // 异步加载历史记录，保持当前消息显示直到历史记录加载完成
-    fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId }).finally(() => {
-      resetOnGoingConv(threadId)
-      scrollController.scrollToBottom()
-    })
+      // 异步加载历史记录，保持当前消息显示直到历史记录加载完成
+      void syncThreadMessages({
+        agentId: targetAgentId,
+        threadId,
+        syncEpoch: interactionEpoch,
+        onSettled: () => {
+          resetOnGoingConv(threadId)
+          scrollController.scrollToBottom()
+        }
+      })
+    }
   }
 }
 

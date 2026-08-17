@@ -39,6 +39,7 @@ export const useAgentStore = defineStore(
     // 初始化状态
     const isInitialized = ref(false)
     const isInitializing = ref(false)
+    let agentConfigLoadSeq = 0
 
     // ==================== 计算属性 ====================
     const selectedAgent = computed(() =>
@@ -315,12 +316,14 @@ export const useAgentStore = defineStore(
       const targetAgentId = agentId || selectedAgentId.value
       const targetConfigId = configId || selectedAgentConfigId.value
       if (!targetAgentId || !targetConfigId) return
+      const requestSeq = ++agentConfigLoadSeq
 
       isLoadingConfig.value = true
       error.value = null
 
       try {
         const response = await agentApi.getAgentConfigProfile(targetAgentId, targetConfigId)
+        if (requestSeq !== agentConfigLoadSeq) return
         const configJson = response.config?.config_json || {}
         const contextConfig = configJson.context || configJson
         const loadedConfig = { ...contextConfig }
@@ -329,28 +332,50 @@ export const useAgentStore = defineStore(
         if (!agentDetails.value[targetAgentId]) {
           await fetchAgentDetail(targetAgentId)
         }
+        if (requestSeq !== agentConfigLoadSeq) return
+        if (
+          selectedAgentId.value !== targetAgentId ||
+          selectedAgentConfigId.value !== targetConfigId
+        ) {
+          return
+        }
 
         // 使用 configurableItems 中的默认值补全缺失的配置项
-        const items = configurableItems.value
+        const detailItems = agentDetails.value[targetAgentId]?.configurable_items || {}
+        const items = { ...detailItems }
         Object.keys(items).forEach((key) => {
           const item = items[key]
+          if (item && item.x_oap_ui_config) {
+            items[key] = { ...item, ...item.x_oap_ui_config }
+            delete items[key].x_oap_ui_config
+          }
           if (loadedConfig[key] === undefined || loadedConfig[key] === null) {
             // 只有当默认值存在时才设置
-            if (item.default !== undefined) {
-              loadedConfig[key] = item.default
+            if (items[key].default !== undefined) {
+              loadedConfig[key] = items[key].default
             }
           }
         })
 
+        if (requestSeq !== agentConfigLoadSeq) return
+        if (
+          selectedAgentId.value !== targetAgentId ||
+          selectedAgentConfigId.value !== targetConfigId
+        ) {
+          return
+        }
         agentConfig.value = loadedConfig
         originalAgentConfig.value = { ...loadedConfig }
       } catch (err) {
+        if (requestSeq !== agentConfigLoadSeq) return
         console.error('Failed to load agent config profile:', err)
         handleChatError(err, 'load')
         error.value = err.message
         throw err
       } finally {
-        isLoadingConfig.value = false
+        if (requestSeq === agentConfigLoadSeq) {
+          isLoadingConfig.value = false
+        }
       }
     }
 
@@ -363,9 +388,8 @@ export const useAgentStore = defineStore(
 
     /**
      * 保存智能体配置
-     * @param {Object} options - 额外参数 (e.g., { reload_graph: true })
      */
-    async function saveAgentConfig(options = {}) {
+    async function saveAgentConfig() {
       const targetAgentId = selectedAgentId.value
       const targetConfigId = selectedAgentConfigId.value
       if (!targetAgentId || !targetConfigId) return

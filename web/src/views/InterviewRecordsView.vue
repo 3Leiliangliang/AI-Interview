@@ -18,8 +18,12 @@
           :filter-option="filterUserOption"
         />
         <a-button class="btn-secondary" :loading="loading" @click="loadHistory">刷新</a-button>
-        <a-button class="btn-secondary" :disabled="!weakestDimension" @click="goPractice">按弱项练习</a-button>
-        <a-button type="primary" class="btn-primary" @click="startNewInterview">开始新面试</a-button>
+        <a-button class="btn-secondary" :disabled="!weakestDimension" @click="goPractice"
+          >按弱项练习</a-button
+        >
+        <a-button type="primary" class="btn-primary" @click="startNewInterview"
+          >开始新面试</a-button
+        >
       </div>
     </div>
 
@@ -31,8 +35,12 @@
 
       <div v-else-if="!records.length" class="state-panel">
         <p class="state-panel__title">还没有面试记录</p>
-        <p class="state-panel__hint">在工作台选择岗位与轮次并上传简历，完成第一场模拟面试后，成长轨迹与报告会出现在这里。</p>
-        <a-button type="primary" class="btn-primary" @click="startNewInterview">开始第一场面试</a-button>
+        <p class="state-panel__hint">
+          在工作台选择岗位与轮次并上传简历，完成第一场模拟面试后，成长轨迹与报告会出现在这里。
+        </p>
+        <a-button type="primary" class="btn-primary" @click="startNewInterview"
+          >开始第一场面试</a-button
+        >
       </div>
 
       <template v-else>
@@ -42,7 +50,11 @@
             <div class="lab">当前水平</div>
             <div class="level-row__score">
               <span class="level-row__num">{{ latestScore ?? '--' }}</span>
-              <span v-if="totalDelta !== null" class="level-row__delta" :class="{ down: totalDelta < 0 }">
+              <span
+                v-if="totalDelta !== null"
+                class="level-row__delta"
+                :class="{ down: totalDelta < 0 }"
+              >
                 {{ formatDelta(totalDelta) }}
               </span>
             </div>
@@ -53,7 +65,9 @@
               <span class="level-row__trend-title">成长轨迹</span>
               <div class="legend">
                 <span class="legend__item"><i class="legend__line"></i>总分</span>
-                <span class="legend__item"><i class="legend__line legend__line--dash"></i>初试通过线 {{ PASS_LINE }}</span>
+                <span class="legend__item"
+                  ><i class="legend__line legend__line--dash"></i>初试通过线 {{ PASS_LINE }}</span
+                >
               </div>
             </div>
             <div v-if="scoredRecords.length" ref="chartRef" class="trend-chart"></div>
@@ -71,14 +85,28 @@
           >
             <div class="dim-cell__hd">
               <span class="dim-cell__label">{{ dim.label }}</span>
-              <span v-if="dim.delta !== null" class="dim-cell__delta" :class="{ down: dim.delta < 0 }">
+              <span
+                v-if="dim.delta !== null"
+                class="dim-cell__delta"
+                :class="{ down: dim.delta < 0 }"
+              >
                 {{ formatDelta(dim.delta) }}
               </span>
             </div>
             <div class="dim-cell__body">
               <span class="dim-cell__num">{{ dim.latest ?? '--' }}</span>
-              <svg v-if="dim.spark" class="dim-cell__spark" viewBox="0 0 120 34" preserveAspectRatio="none">
-                <polyline :points="dim.spark" fill="none" stroke="var(--main-color)" stroke-width="2" />
+              <svg
+                v-if="dim.spark"
+                class="dim-cell__spark"
+                viewBox="0 0 120 34"
+                preserveAspectRatio="none"
+              >
+                <polyline
+                  :points="dim.spark"
+                  fill="none"
+                  stroke="var(--main-color)"
+                  stroke-width="2"
+                />
               </svg>
             </div>
             <div class="dim-cell__hint">{{ dim.hint }}</div>
@@ -96,7 +124,9 @@
               <div class="milestone__cell-hd">
                 <span class="milestone__date">{{ formatShortTime(item.record.created_at) }}</span>
                 <span class="milestone__title">{{ item.title }}</span>
-                <span class="milestone__score" :class="{ highlight: item.highlight }">{{ item.record.overall_score }}</span>
+                <span class="milestone__score" :class="{ highlight: item.highlight }">{{
+                  item.record.overall_score
+                }}</span>
               </div>
               <p class="milestone__desc">{{ item.desc }}</p>
             </div>
@@ -106,10 +136,18 @@
         <!-- 历史表 -->
         <section class="history">
           <div class="history__toolbar">
-            <button type="button" :class="['opt', { on: activeTab === 'scored' }]" @click="activeTab = 'scored'">
+            <button
+              type="button"
+              :class="['opt', { on: activeTab === 'scored' }]"
+              @click="activeTab = 'scored'"
+            >
               已出报告 {{ scoredRecords.length }}
             </button>
-            <button type="button" :class="['opt', { on: activeTab === 'unfinished' }]" @click="activeTab = 'unfinished'">
+            <button
+              type="button"
+              :class="['opt', { on: activeTab === 'unfinished' }]"
+              @click="activeTab = 'unfinished'"
+            >
               未完成 {{ unfinishedRecords.length }}
             </button>
             <div class="history__toolbar-spacer"></div>
@@ -136,7 +174,12 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="row in visibleRows" :key="row.record.thread_id" class="history__row" @click="openRecord(row.record)">
+              <tr
+                v-for="row in visibleRows"
+                :key="row.record.thread_id"
+                class="history__row"
+                @click="openRecord(row.record)"
+              >
                 <td class="col-time">
                   <span class="history__time">{{ formatShortTime(row.record.created_at) }}</span>
                   <span class="history__note">{{ row.note }}</span>
@@ -145,8 +188,19 @@
                 <td>{{ getInterviewModeLabel(row.record.interview_mode) }}</td>
                 <td :class="{ muted: !row.weakText }">{{ row.weakText || '尚未评分' }}</td>
                 <td :class="row.deltaClass">{{ row.deltaText }}</td>
-                <td class="col-score" :class="{ muted: row.record.overall_score === null || row.record.overall_score === undefined }">
-                  <span v-if="row.record.overall_score !== null && row.record.overall_score !== undefined" class="history__score">
+                <td
+                  class="col-score"
+                  :class="{
+                    muted:
+                      row.record.overall_score === null || row.record.overall_score === undefined
+                  }"
+                >
+                  <span
+                    v-if="
+                      row.record.overall_score !== null && row.record.overall_score !== undefined
+                    "
+                    class="history__score"
+                  >
                     {{ Math.round(row.record.overall_score) }}
                   </span>
                   <span v-else>—</span>
@@ -154,14 +208,21 @@
               </tr>
               <tr v-if="!visibleRows.length">
                 <td colspan="6" class="history__empty">
-                  {{ activeTab === 'scored' ? '当前筛选下还没有已出报告的面试。' : '当前筛选下没有未完成的面试。' }}
+                  {{
+                    activeTab === 'scored'
+                      ? '当前筛选下还没有已出报告的面试。'
+                      : '当前筛选下没有未完成的面试。'
+                  }}
                 </td>
               </tr>
             </tbody>
           </table>
 
           <div class="history__ft">
-            <span>共 {{ records.length }} 场面试，其中 {{ unfinishedRecords.length }} 场未完成、未计入轨迹</span>
+            <span
+              >共 {{ records.length }} 场面试，其中
+              {{ unfinishedRecords.length }} 场未完成、未计入轨迹</span
+            >
           </div>
         </section>
       </template>
@@ -193,14 +254,24 @@ const selectedPosition = ref('all')
 const activeTab = ref('scored')
 const chartRef = ref(null)
 let chartInstance = null
+let historyLoadSeq = 0
 
 const records = computed(() => historyPayload.value?.records || [])
-const targetUserLabel = computed(() => String(historyPayload.value?.target_user?.username || userStore.username || '').trim() || '当前用户')
+const targetUserLabel = computed(
+  () =>
+    String(historyPayload.value?.target_user?.username || userStore.username || '').trim() ||
+    '当前用户'
+)
 
 // 按时间正序排列的、已出报告且有总分的记录：成长轨迹与所有对比都基于它
 const scoredAsc = computed(() =>
   records.value
-    .filter((item) => item.has_result && typeof item.overall_score === 'number' && Number.isFinite(item.overall_score))
+    .filter(
+      (item) =>
+        item.has_result &&
+        typeof item.overall_score === 'number' &&
+        Number.isFinite(item.overall_score)
+    )
     .slice()
     .sort((l, r) => String(l.created_at || '').localeCompare(String(r.created_at || '')))
 )
@@ -214,21 +285,32 @@ const latestScore = computed(() => {
   const last = scoredAsc.value[scoredAsc.value.length - 1]
   return last ? Math.round(last.overall_score) : null
 })
-const firstScore = computed(() => (scoredAsc.value.length ? Math.round(scoredAsc.value[0].overall_score) : null))
-const totalDelta = computed(() => (scoredAsc.value.length >= 2 ? latestScore.value - firstScore.value : null))
-const passedCount = computed(() => scoredAsc.value.filter((item) => item.overall_score >= PASS_LINE).length)
+const firstScore = computed(() =>
+  scoredAsc.value.length ? Math.round(scoredAsc.value[0].overall_score) : null
+)
+const totalDelta = computed(() =>
+  scoredAsc.value.length >= 2 ? latestScore.value - firstScore.value : null
+)
+const passedCount = computed(
+  () => scoredAsc.value.filter((item) => item.overall_score >= PASS_LINE).length
+)
 
 const subtitleText = computed(() => {
   if (!records.value.length) return `${targetUserLabel.value} · 还没有面试记录`
-  if (!scoredAsc.value.length) return `${targetUserLabel.value} · ${records.value.length} 场面试 · 还没有已出报告的场次`
+  if (!scoredAsc.value.length)
+    return `${targetUserLabel.value} · ${records.value.length} 场面试 · 还没有已出报告的场次`
   return `${targetUserLabel.value} · ${scoredAsc.value.length} 场已出报告 · 首次 ${firstScore.value} 分，最新 ${latestScore.value} 分`
 })
 
 const levelDescription = computed(() => {
   if (!scoredAsc.value.length) return '完成一场面试并生成报告后，这里会显示你的当前水平。'
   if (scoredAsc.value.length === 1) return `首场 ${latestScore.value} 分，再面几场才能看出趋势。`
-  const days = diffDays(scoredAsc.value[0].created_at, scoredAsc.value[scoredAsc.value.length - 1].created_at)
-  const trend = totalDelta.value >= 0 ? `涨了 ${totalDelta.value} 分` : `掉了 ${Math.abs(totalDelta.value)} 分`
+  const days = diffDays(
+    scoredAsc.value[0].created_at,
+    scoredAsc.value[scoredAsc.value.length - 1].created_at
+  )
+  const trend =
+    totalDelta.value >= 0 ? `涨了 ${totalDelta.value} 分` : `掉了 ${Math.abs(totalDelta.value)} 分`
   const span = days > 0 ? `${days} 天内` : '至今'
   return `从首次 ${firstScore.value} 分起，${span}${trend}；${scoredAsc.value.length} 场已出报告，${passedCount.value} 场过线。`
 })
@@ -247,7 +329,14 @@ const dimensionStats = computed(() =>
       .filter((score) => typeof score === 'number' && Number.isFinite(score))
     const latest = series.length ? Math.round(series[series.length - 1]) : null
     const delta = series.length >= 2 ? Math.round(series[series.length - 1] - series[0]) : null
-    return { key, label, latest, delta, spark: buildSparkPoints(series), hint: buildDimensionHint(series, latest, delta) }
+    return {
+      key,
+      label,
+      latest,
+      delta,
+      spark: buildSparkPoints(series),
+      hint: buildDimensionHint(series, latest, delta)
+    }
   })
 )
 
@@ -263,34 +352,65 @@ const milestones = computed(() => {
   const items = []
   const push = (key, record, title, desc, highlight = false) => {
     if (!record || items.some((item) => item.record.thread_id === record.thread_id)) return
-    items.push({ key, record: { ...record, overall_score: Math.round(record.overall_score) }, title, desc, highlight })
+    items.push({
+      key,
+      record: { ...record, overall_score: Math.round(record.overall_score) },
+      title,
+      desc,
+      highlight
+    })
   }
 
-  push('first', list[0], '首次面试', `基线 ${Math.round(list[0].overall_score)} 分，后面每一场都和它比。`)
+  push(
+    'first',
+    list[0],
+    '首次面试',
+    `基线 ${Math.round(list[0].overall_score)} 分，后面每一场都和它比。`
+  )
 
   let bestJump = null
   for (let i = 1; i < list.length; i += 1) {
     const gain = list[i].overall_score - list[i - 1].overall_score
-    if (gain > 0 && (!bestJump || gain > bestJump.gain)) bestJump = { record: list[i], gain: Math.round(gain) }
+    if (gain > 0 && (!bestJump || gain > bestJump.gain))
+      bestJump = { record: list[i], gain: Math.round(gain) }
   }
-  if (bestJump) push('jump', bestJump.record, '涨幅最大', `相比上一场提升 ${bestJump.gain} 分，是目前效果最好的一次调整。`)
+  if (bestJump)
+    push(
+      'jump',
+      bestJump.record,
+      '涨幅最大',
+      `相比上一场提升 ${bestJump.gain} 分，是目前效果最好的一次调整。`
+    )
 
   const firstPass = list.find((item) => item.overall_score >= PASS_LINE)
   if (firstPass) push('pass', firstPass, '首次过线', `总分越过 ${PASS_LINE} 分通过线。`)
 
   const best = list.reduce((top, item) => (item.overall_score > top.overall_score ? item : top))
-  const weakText = weakestDimension.value ? `；${weakestDimension.value.label}仍是 ${weakestDimension.value.latest} 分，下一步就练这块` : ''
+  const weakText = weakestDimension.value
+    ? `；${weakestDimension.value.label}仍是 ${weakestDimension.value.latest} 分，下一步就练这块`
+    : ''
   push('best', best, '目前最好', `${Math.round(best.overall_score)} 分${weakText}。`, true)
 
-  return items.sort((l, r) => String(l.record.created_at || '').localeCompare(String(r.record.created_at || ''))).slice(0, 4)
+  return items
+    .sort((l, r) =>
+      String(l.record.created_at || '').localeCompare(String(r.record.created_at || ''))
+    )
+    .slice(0, 4)
 })
 
 const positionOptions = computed(() => {
-  const positions = [...new Set(records.value.map((item) => String(item.position || '').trim()).filter(Boolean))]
-  return [{ label: '全部岗位', value: 'all' }, ...positions.map((item) => ({ label: item, value: item }))]
+  const positions = [
+    ...new Set(records.value.map((item) => String(item.position || '').trim()).filter(Boolean))
+  ]
+  return [
+    { label: '全部岗位', value: 'all' },
+    ...positions.map((item) => ({ label: item, value: item }))
+  ]
 })
 
-const matchPosition = (record) => selectedPosition.value === 'all' || String(record.position || '').trim() === selectedPosition.value
+const matchPosition = (record) =>
+  selectedPosition.value === 'all' ||
+  String(record.position || '').trim() === selectedPosition.value
 
 const scoredRows = computed(() => {
   const indexInAsc = new Map(scoredAsc.value.map((item, index) => [item.thread_id, index]))
@@ -319,7 +439,9 @@ const unfinishedRows = computed(() =>
   }))
 )
 
-const visibleRows = computed(() => (activeTab.value === 'scored' ? scoredRows.value : unfinishedRows.value))
+const visibleRows = computed(() =>
+  activeTab.value === 'scored' ? scoredRows.value : unfinishedRows.value
+)
 
 function buildSparkPoints(series) {
   if (series.length < 2) return ''
@@ -327,7 +449,12 @@ function buildSparkPoints(series) {
   const max = Math.max(...series)
   const range = max - min || 1
   const step = 112 / (series.length - 1)
-  return series.map((score, index) => `${(4 + index * step).toFixed(1)},${(30 - ((score - min) / range) * 26).toFixed(1)}`).join(' ')
+  return series
+    .map(
+      (score, index) =>
+        `${(4 + index * step).toFixed(1)},${(30 - ((score - min) / range) * 26).toFixed(1)}`
+    )
+    .join(' ')
 }
 
 function buildDimensionHint(series, latest, delta) {
@@ -341,7 +468,9 @@ function buildDimensionHint(series, latest, delta) {
 }
 
 function pickWeakestDimension(record) {
-  const dims = (record.dimensions || []).filter((dim) => typeof dim.score === 'number' && Number.isFinite(dim.score))
+  const dims = (record.dimensions || []).filter(
+    (dim) => typeof dim.score === 'number' && Number.isFinite(dim.score)
+  )
   if (!dims.length) return null
   return dims.reduce((low, dim) => (dim.score < low.score ? dim : low))
 }
@@ -368,9 +497,14 @@ const formatShortTime = (value) => {
   return parsed ? parsed.format('MM/DD HH:mm') : '--'
 }
 const getStatusLabel = (status) =>
-  ({ in_progress: '进行中', generating: '报告生成中', completed: '已完成', failed: '生成失败' })[status] || '进行中'
+  ({ in_progress: '进行中', generating: '报告生成中', completed: '已完成', failed: '生成失败' })[
+    status
+  ] || '进行中'
 const getInterviewModeLabel = (mode) => (String(mode || '').trim() === 'voice' ? '语音' : '文本')
-const filterUserOption = (input, option) => String(option?.label || '').toLowerCase().includes(String(input || '').toLowerCase())
+const filterUserOption = (input, option) =>
+  String(option?.label || '')
+    .toLowerCase()
+    .includes(String(input || '').toLowerCase())
 
 const buildChartOption = () => {
   const scores = scoredAsc.value.map((item) => Math.round(item.overall_score))
@@ -445,6 +579,7 @@ const loadUsers = async () => {
 }
 
 const loadHistory = async () => {
+  const requestSeq = ++historyLoadSeq
   loading.value = true
   // loading 期间图表容器会被卸载，先销毁实例避免复用到已脱离文档的节点
   chartInstance?.dispose()
@@ -452,6 +587,7 @@ const loadHistory = async () => {
   try {
     const userId = userStore.isAdmin ? selectedUserId.value : userStore.userId
     const payload = await interviewHistoryApi.getHistory({ userId })
+    if (requestSeq !== historyLoadSeq) return
     const normalized = (payload?.records || []).map((item) => ({
       ...item,
       title: decodeHtmlEntities(item?.title),
@@ -461,24 +597,35 @@ const loadHistory = async () => {
     historyPayload.value = { ...payload, records: normalized }
     selectedPosition.value = 'all'
   } catch (error) {
+    if (requestSeq !== historyLoadSeq) return
     message.error(error.message)
   } finally {
-    loading.value = false
-    // 图表容器在 loading 结束后才挂载，需等 DOM 更新完再初始化
-    await nextTick()
-    await renderChart()
+    if (requestSeq === historyLoadSeq) {
+      loading.value = false
+      // 图表容器在 loading 结束后才挂载，需等 DOM 更新完再初始化
+      await nextTick()
+      await renderChart()
+    }
   }
 }
 
 const openRecord = (record) => {
   if (record.has_result) {
-    router.push({ name: 'InterviewResultPage', query: { threadId: record.thread_id, position: record.position, round: record.round } })
+    router.push({
+      name: 'InterviewResultPage',
+      query: { threadId: record.thread_id, position: record.position, round: record.round }
+    })
     return
   }
   const isVoice = record.interview_mode === 'voice'
   router.push({
     name: isVoice ? 'AgentVoiceInterviewComp' : 'AgentInterviewComp',
-    query: { threadId: record.thread_id, mode: isVoice ? 'voice' : 'text', position: record.position, round: record.round }
+    query: {
+      threadId: record.thread_id,
+      mode: isVoice ? 'voice' : 'text',
+      position: record.position,
+      round: record.round
+    }
   })
 }
 const startNewInterview = () => router.push({ name: 'InterviewWorkbench' })
