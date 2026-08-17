@@ -98,6 +98,15 @@
       </section>
 
       <aside class="observation-column">
+        <div v-if="isAgentStatePanelVisible" class="agent-workbench-panel">
+          <AgentPanel
+            :agent-state="agentState"
+            :thread-id="currentThreadId"
+            @refresh="handleAgentStateRefresh"
+            @close="showAgentStatePanel = false"
+          />
+        </div>
+
         <div v-if="showCameraPreview" class="camera-block">
           <div class="camera-stage">
             <video
@@ -180,6 +189,8 @@ import { message } from 'ant-design-vue'
 import { CameraOutlined } from '@ant-design/icons-vue'
 import { storeToRefs } from 'pinia'
 
+import AgentPanel from '@/components/AgentPanel.vue'
+import { agentApi } from '@/apis/agent_api'
 import { interviewVoiceApi } from '@/apis/interview_voice'
 import { videoApi } from '@/apis/video_api'
 import { useVideoEventStream } from '@/composables/useVideoEventStream'
@@ -223,6 +234,7 @@ const preloadingVoice = ref(false)
 const preloadedSession = ref(null)
 const hasStartedOpeningTurn = ref(false)
 const startedAt = ref(Date.now())
+const showAgentStatePanel = ref(true)
 const backendVideoStatus = ref({ session_id: '', events_in_buffer: 0, status: 'inactive' })
 const backendVideoAggregate = ref({ has_data: false, event_count: 0, recent_alerts: [] })
 
@@ -295,12 +307,14 @@ const {
   isCameraSupported,
   isStreaming: isCameraStreaming,
   isVideoMode,
-  postureScore,
   resolution: cameraResolution,
   videoRef: cameraVideoRef
 } = videoEventStream
 
 const currentThreadId = computed(() => threadId.value || routeThreadId.value)
+const isAgentStatePanelVisible = computed(
+  () => showAgentStatePanel.value && Boolean(currentThreadId.value)
+)
 const visibleMessages = computed(() => messages.value)
 const lastVisibleMessage = computed(
   () => visibleMessages.value[visibleMessages.value.length - 1] || null
@@ -585,6 +599,22 @@ const stopVideoStatusPolling = () => {
 const resetVideoBackendState = () => {
   backendVideoStatus.value = { session_id: '', events_in_buffer: 0, status: 'inactive' }
   backendVideoAggregate.value = { has_data: false, event_count: 0, recent_alerts: [] }
+}
+
+const handleAgentStateRefresh = async () => {
+  const activeThreadId = currentThreadId.value
+  if (!activeThreadId || !interviewAgentId.value) {
+    message.warning('当前没有可刷新的会话状态')
+    return
+  }
+
+  try {
+    const data = await agentApi.getAgentState(interviewAgentId.value, activeThreadId)
+    agentState.value = data?.agent_state || {}
+    message.success('状态已刷新')
+  } catch (err) {
+    message.error(err?.message || '刷新状态工作台失败')
+  }
 }
 
 const refreshVideoBackendState = async () => {
@@ -1039,6 +1069,16 @@ watch(
   min-width: 0;
   overflow-y: auto;
   padding-bottom: 24px;
+}
+
+.agent-workbench-panel {
+  position: relative;
+  height: 280px;
+  border-bottom: 1px solid var(--gray-200);
+
+  :deep(.resize-handle) {
+    display: none;
+  }
 }
 
 .camera-block {

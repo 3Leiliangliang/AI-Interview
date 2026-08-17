@@ -488,7 +488,22 @@ onMounted(async () => {
   loading.value = true
   try {
     await loadPositionTypes()
-    selectedPosition.value = normalizePositionType(selectedPosition.value, positionTypes.value).label
+    const routeMode = String(route.query.mode || '').trim()
+    if (interviewModeOptions.some((item) => item.value === routeMode)) {
+      selectedInterviewMode.value = routeMode
+    }
+
+    const routePosition = String(route.query.position || '').trim()
+    selectedPosition.value = normalizePositionType(
+      routePosition || selectedPosition.value,
+      positionTypes.value
+    ).label
+
+    const routeRound = String(route.query.round || '').trim()
+    if (roundOptions.some((item) => item.value === routeRound)) {
+      selectedRound.value = routeRound
+    }
+
     await Promise.all([loadHistory(), loadResumes(), loadKnowledgeDatabases()])
   } catch (error) {
     message.error(error.message || '加载面试工作台数据失败')
